@@ -1,7 +1,21 @@
-import { PrismaClient, Role, Status } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
+
+// Types als Strings, da sie nicht als Enums im Schema definiert sind
+const Role = {
+    ADMIN: 'ADMIN',
+    TEAMLEAD: 'TEAMLEAD',
+    EMPLOYEE: 'EMPLOYEE'
+} as const
+
+const Status = {
+    PLANNED: 'PLANNED',
+    CONFIRMED: 'CONFIRMED',
+    CHANGED: 'CHANGED',
+    SUBMITTED: 'SUBMITTED'
+} as const
 
 async function main() {
     const hashedPassword = await bcrypt.hash('password123', 10)
