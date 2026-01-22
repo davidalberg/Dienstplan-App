@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id         String      @id @default(cuid())
+  email      String      @unique
+  password   String
+  name       String?
+  role       String      @default("EMPLOYEE")
+  employeeId String?     @unique
+  teamId     String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  auditLogs  AuditLog[]
+  timesheets Timesheet[]
+  team       Team?       @relation(fields: [teamId], references: [id])
+
+  // Neue Felder für Mitarbeiter-Verwaltung
+  entryDate                DateTime?
+  exitDate                 DateTime?
+  hourlyWage               Float?       @default(0)
+  travelCostType           String       @default("NONE")
+  nightPremiumEnabled      Boolean      @default(true)
+  nightPremiumPercent      Float        @default(25)
+  sundayPremiumEnabled     Boolean      @default(true)
+  sundayPremiumPercent     Float        @default(30)
+  holidayPremiumEnabled    Boolean      @default(true)
+  holidayPremiumPercent    Float        @default(125)
+
+  // Dienstplan-Zuweisung
+  assignedSheetId          String?
+  assignedPlanTab          String?
+}
+
+model Team {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  timesheets Timesheet[]
+  members    User[]
+}
+
+model Timesheet {
+  id            String   @id @default(cuid())
+  date          DateTime
+  plannedStart  String?
+  plannedEnd    String?
+  actualStart   String?
+  actualEnd     String?
+  breakMinutes  Int      @default(0)
+  note          String?
+  absenceType   String?
+  status        String   @default("PLANNED")
+  employeeId    String
+  teamId        String?
+  month         Int
+  year          Int
+  lastUpdatedAt DateTime @updatedAt
+  lastUpdatedBy String?
+  source        String?
+  sheetFileName String?
+  sheetId       String?
+  syncVerified  Boolean  @default(false)
+  team          Team?    @relation(fields: [teamId], references: [id])
+  employee      User     @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+  @@index([source, syncVerified])
+  @@index([month, year, employeeId])
+  @@index([date, status])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  employeeId String
+  date       DateTime
+  changedAt  DateTime @default(now())
+  changedBy  String
+  field      String?
+  oldValue   String?
+  newValue   String?
+  employee   User     @relation(fields: [employeeId], references: [id])
+}
+
+model SyncLog {
+  id            String    @id @default(cuid())
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  status        String
+  message       String?
+  rowsProcessed Int       @default(0)
+}

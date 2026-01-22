@@ -1,0 +1,183 @@
+"use client"
+
+import { useState } from "react"
+import { format } from "date-fns"
+import { de } from "date-fns/locale"
+import { CheckCircle2, AlertCircle, Clock, Edit3, RotateCcw } from "lucide-react"
+
+export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, onUpdate: () => void }) {
+    const [isEditing, setIsEditing] = useState(false)
+    const [loading, setLoading] = useState(false)
+    const [editData, setEditData] = useState({
+        actualStart: timesheet.actualStart || timesheet.plannedStart || "",
+        actualEnd: timesheet.actualEnd || timesheet.plannedEnd || "",
+        note: timesheet.note || "",
+        absenceType: timesheet.absenceType || "",
+    })
+
+    const handleAction = async (action: "CONFIRM" | "UPDATE" | "UNCONFIRM") => {
+        setLoading(true)
+        try {
+            const res = await fetch("/api/timesheets", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: timesheet.id,
+                    action,
+                    ...editData
+                })
+            })
+            if (res.ok) {
+                setIsEditing(false)
+                onUpdate()
+            }
+        } catch (err) {
+            console.error(err)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const getStatusColor = () => {
+        switch (timesheet.status) {
+            case "SUBMITTED": return "bg-blue-100 text-blue-700"
+            case "CONFIRMED": return "bg-green-100 text-green-700"
+            case "CHANGED": return "bg-amber-100 text-amber-700"
+            default: return "bg-gray-100 text-gray-700"
+        }
+    }
+
+    const getStatusLabel = () => {
+        switch (timesheet.status) {
+            case "SUBMITTED": return "Eingereicht"
+            case "CONFIRMED": return "Bestätigt"
+            case "CHANGED": return "Geändert"
+            default: return "Geplant"
+        }
+    }
+
+    return (
+        <div className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 transition-all ${isEditing ? 'ring-2 ring-blue-500' : ''}`}>
+            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 p-4">
+                <div>
+                    <p className="font-bold text-black">
+                        {format(new Date(timesheet.date), "EEEE, dd.MM.", { locale: de })}
+                    </p>
+                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold ${getStatusColor()}`}>
+                        {getStatusLabel()}
+                    </span>
+                </div>
+                <div className="text-right text-sm">
+                    <p className="text-gray-900 font-bold">Plan</p>
+                    <p className="font-black text-black">{timesheet.plannedStart} - {timesheet.plannedEnd}</p>
+                </div>
+            </div>
+
+            <div className="p-4">
+                {!isEditing ? (
+                    <div className="flex items-end justify-between">
+                        <div className="space-y-1">
+                            <p className="text-xs text-gray-900 uppercase tracking-tight font-black">Tatsächlich</p>
+                            <p className="text-lg font-black text-black">
+                                {timesheet.actualStart ? `${timesheet.actualStart} - ${timesheet.actualEnd}` : "-- : --"}
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                            {timesheet.status === "PLANNED" && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleAction("CONFIRM")}
+                                    disabled={loading}
+                                    className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700"
+                                >
+                                    <CheckCircle2 size={16} /> Bestätigen
+                                </button>
+                            )}
+                            {(timesheet.status === "CONFIRMED" || timesheet.status === "CHANGED") && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleAction("UNCONFIRM")}
+                                    disabled={loading}
+                                    className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-700"
+                                >
+                                    <RotateCcw size={16} /> Zurücksetzen
+                                </button>
+                            )}
+                            {timesheet.status !== "SUBMITTED" && (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsEditing(true)}
+                                    className="rounded-lg bg-gray-100 p-2 text-gray-600 hover:bg-gray-200"
+                                >
+                                    <Edit3 size={18} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs font-semibold text-black uppercase">Beginn</label>
+                                <input
+                                    type="time"
+                                    value={editData.actualStart}
+                                    onChange={e => setEditData({ ...editData, actualStart: e.target.value })}
+                                    className="w-full rounded-lg border border-gray-300 p-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-black uppercase">Ende</label>
+                                <input
+                                    type="time"
+                                    value={editData.actualEnd}
+                                    onChange={e => setEditData({ ...editData, actualEnd: e.target.value })}
+                                    className="w-full rounded-lg border border-gray-300 p-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs font-semibold text-black uppercase">Abwesenheit</label>
+                            <select
+                                value={editData.absenceType}
+                                onChange={e => setEditData({ ...editData, absenceType: e.target.value })}
+                                className="w-full rounded-lg border border-gray-300 p-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            >
+                                <option value="">Keine</option>
+                                <option value="SICK">Krank</option>
+                                <option value="VACATION">Urlaub</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-semibold text-black uppercase">Notiz</label>
+                            <textarea
+                                value={editData.note}
+                                onChange={e => setEditData({ ...editData, note: e.target.value })}
+                                placeholder="Optional..."
+                                className="h-20 w-full rounded-lg border border-gray-300 p-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            />
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => handleAction("UPDATE")}
+                                disabled={loading}
+                                className="flex-1 rounded-xl bg-blue-600 py-2.5 font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:bg-blue-300"
+                            >
+                                Speichern
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsEditing(false)}
+                                className="rounded-xl border border-gray-200 px-6 py-2.5 font-semibold text-gray-600 hover:bg-gray-50"
+                            >
+                                Abbruch
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}

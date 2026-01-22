@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Überschreibe Browser-Autocomplete Styles */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #111827 !important;
+  -webkit-box-shadow: 0 0 0 30px white inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Dark mode Autocomplete */
+@media (prefers-color-scheme: dark) {
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-text-fill-color: #ededed !important;
+    -webkit-box-shadow: 0 0 0 30px #0a0a0a inset !important;
+  }
+}
+
+/* Stelle sicher, dass Input-Felder immer gut lesbar sind */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+textarea {
+  color: #111827 !important;
+}
+
+/* Stelle sicher, dass Select-Dropdowns dunklen Text haben */
+select,
+select option {
+  color: #111827 !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  select,
+  select option {
+    color: #ededed !important;
+  }
+}
