@@ -3,8 +3,6 @@
 import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button" // Assuming I'll create a simple button component
-import { Input } from "@/components/ui/input"
 
 export default function LoginPage() {
     const [email, setEmail] = useState("")
