@@ -60,3 +60,4 @@ Produktionsbereiter MVP für die Zeiterfassung und Google Sheets Synchronisierun
 - `src/lib`: Bibliotheken (Prisma, Auth, Google Sheets).
 - `prisma/`: Datenbank Schema und Seed Skript.
 - `legacy_prototype/`: Archivierter ursprünglicher Prototyp.
+# Build trigger
