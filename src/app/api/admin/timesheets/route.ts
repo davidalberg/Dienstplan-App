@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         })
 
         // Fetch unique sources, teams, and employees for the filter menu
-        const [sourcesData, teams, employees, gsClient] = await Promise.all([
+        const [sourcesData, teams, employees] = await Promise.all([
             prisma.timesheet.findMany({
                 select: { source: true },
                 distinct: ["source"],
@@ -50,29 +50,14 @@ export async function GET(req: NextRequest) {
             prisma.user.findMany({
                 where: { role: "EMPLOYEE" },
                 select: { id: true, name: true }
-            }),
-            getGoogleSheetsClient()
+            })
         ])
-
-        // Fetch actual tab names from all configured sheets
-        const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "").split(",").filter(Boolean)
-        let allTabs: { sheetId: string, tab: string }[] = []
-        for (const sid of sheetIds) {
-            try {
-                const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
-                const tabs = res.data.sheets?.map(s => s.properties?.title).filter(Boolean) as string[]
-                allTabs.push(...tabs.map(t => ({ sheetId: sid, tab: t })))
-            } catch (e) {
-                console.error(`Error fetching tabs for ${sid}:`, e)
-            }
-        }
 
         return NextResponse.json({
             timesheets,
             sources: sourcesData.map((s: { source: string | null }) => s.source || "").filter(Boolean),
             teams,
-            employees,
-            availableTabs: allTabs
+            employees
         })
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 })

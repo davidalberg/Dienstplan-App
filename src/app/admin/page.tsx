@@ -21,7 +21,6 @@ export default function AdminPage() {
         employeeId: "",
         source: ""
     })
-    const [availableTabs, setAvailableTabs] = useState<any[]>([])
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
     const [editingShift, setEditingShift] = useState<any | null>(null)
     const [editData, setEditData] = useState({
@@ -53,7 +52,6 @@ export default function AdminPage() {
                 setSources(data.sources || [])
                 setTeams(data.teams || [])
                 setEmployees(data.employees || [])
-                setAvailableTabs(data.availableTabs || [])
 
                 // Initialize expanded groups for service plans (default to collapsed/false)
                 const newGroups = { ...expandedGroups }
