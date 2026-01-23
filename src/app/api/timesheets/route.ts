@@ -204,10 +204,10 @@ export async function POST(req: NextRequest) {
             plannedStart: updated.plannedStart,
             plannedEnd: updated.plannedEnd,
             note: updated.note
-        }
+        };
 
         // Fire-and-forget: Nicht auf Sync warten, um Response schnell zurückzusenden
-        (async () => {
+        ;(async () => {
             try {
                 const { appendShiftToSheet } = await import("@/lib/google-sheets")
 
