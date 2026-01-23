@@ -193,9 +193,9 @@ export async function POST(req: NextRequest) {
     // Sync zu Google Sheets - nur bei wichtigen Änderungen (nicht bei CONFIRM)
     // Dies verhindert langsame Responses auf Mobilgeräten
     if (updated.source && updated.sheetId && action !== "CONFIRM") {
-        // Type-safe variables for async IIFE
-        const sheetId = updated.sheetId
-        const source = updated.source
+        // Type-safe variables for async IIFE to avoid type narrowing issues
+        const syncSheetId = updated.sheetId
+        const syncSource = updated.source
 
         // Fire-and-forget: Nicht auf Sync warten, um Response schnell zurückzusenden
         (async () => {
@@ -207,7 +207,7 @@ export async function POST(req: NextRequest) {
                     select: { name: true }
                 })
 
-                await appendShiftToSheet(sheetId, source, {
+                await appendShiftToSheet(syncSheetId, syncSource, {
                     date: updated.date,
                     name: employee?.name || "Unknown",
                     start: updated.actualStart || updated.plannedStart || "",
