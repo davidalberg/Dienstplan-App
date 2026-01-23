@@ -241,7 +241,7 @@ export async function exportConfirmedShifts(sheetId: string, month: number, year
     }
 }
 
-async function findRowIndex(sheets: any, spreadsheetId: string, tabName: string, date: Date, name: string) {
+async function findRowIndex(sheets: any, spreadsheetId: string, tabName: string, date: Date, name: string | null) {
     const range = `'${tabName}'!A3:C200` // Check more rows
     console.log(`[SYNC DEBUG] Searching for existing row for ${name} on ${date.toDateString()}...`)
 
@@ -324,7 +324,7 @@ export async function appendShiftToSheet(sheetId: string, tabName: string, shift
     }
 }
 
-export async function clearShiftInSheet(sheetId: string, tabName: string, date: Date, name: string) {
+export async function clearShiftInSheet(sheetId: string, tabName: string, date: Date, name: string | null) {
     const sheets = await getGoogleSheetsClient()
     const rowIndex = await findRowIndex(sheets, sheetId, tabName, date, name)
 
