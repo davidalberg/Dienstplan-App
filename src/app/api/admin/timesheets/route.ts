@@ -112,8 +112,7 @@ export async function DELETE(req: NextRequest) {
                             const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
                             const tabs = res.data.sheets?.map(s => s.properties?.title)
                             if (tabs?.includes(shift.source)) {
-                                const employeeName: string = shift.employee.name ?? "Unknown"
-                                await clearShiftInSheet(sid, shift.source, shift.date, employeeName)
+                                await clearShiftInSheet(sid, shift.source, shift.date, (shift.employee.name || "Unknown") as string)
                                 break
                             }
                         } catch (e) {
