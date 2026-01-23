@@ -252,7 +252,7 @@ async function findRowIndex(sheets: any, spreadsheetId: string, tabName: string,
         const searchD = date.getDate().toString().padStart(2, '0')
         const searchM = (date.getMonth() + 1).toString().padStart(2, '0')
         const searchDatePrefix = `${searchD}.${searchM}.`
-        const searchName = name.toLowerCase().replace(/[.,\s]/g, '')
+        const searchName = (name || "").toLowerCase().replace(/[.,\s]/g, '')
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i]

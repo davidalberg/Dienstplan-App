@@ -112,7 +112,7 @@ export async function DELETE(req: NextRequest) {
                             const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
                             const tabs = res.data.sheets?.map(s => s.properties?.title)
                             if (tabs?.includes(shift.source)) {
-                                await clearShiftInSheet(sid, shift.source, shift.date, shift.employee.name || "Unknown")
+                                await clearShiftInSheet(sid, shift.source as string, shift.date, (shift.employee?.name || "Unknown") as string)
                                 break
                             }
                         } catch (e) {
@@ -179,7 +179,7 @@ export async function PUT(req: NextRequest) {
                                     select: { name: true }
                                 })
 
-                                await appendShiftToSheet(sid, updated.source, {
+                                await appendShiftToSheet(sid, updated.source as string, {
                                     date: updated.date,
                                     name: employee?.name || "Unknown",
                                     start: updated.actualStart || updated.plannedStart || "",
