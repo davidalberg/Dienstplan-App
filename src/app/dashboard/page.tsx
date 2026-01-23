@@ -44,6 +44,23 @@ export default function DashboardPage() {
         }
     }
 
+    const updateSingleTimesheet = (updatedTimesheet: any) => {
+        setTimesheets(prevTimesheets => {
+            const updated = prevTimesheets.map(ts =>
+                ts.id === updatedTimesheet.id ? updatedTimesheet : ts
+            )
+
+            // Fallback: Falls ID nicht gefunden, full refresh
+            if (!updated.some(ts => ts.id === updatedTimesheet.id)) {
+                console.warn("Timesheet ID not found, triggering full refresh")
+                fetchTimesheets()
+                return prevTimesheets
+            }
+
+            return updated
+        })
+    }
+
     const fetchTimesheets = async () => {
         setLoading(true)
         const month = currentDate.getMonth() + 1
@@ -167,7 +184,11 @@ export default function DashboardPage() {
                                 <div className="py-10 text-center text-black font-medium">Lade Daten...</div>
                             ) : (
                                 timesheets.map((ts) => (
-                                    <TimesheetDay key={ts.id} timesheet={ts} onUpdate={fetchTimesheets} />
+                                    <TimesheetDay
+                                        key={ts.id}
+                                        timesheet={ts}
+                                        onUpdate={updateSingleTimesheet}
+                                    />
                                 ))
                             )}
 

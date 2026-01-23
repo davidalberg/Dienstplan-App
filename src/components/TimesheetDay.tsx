@@ -3,9 +3,10 @@
 import { useState } from "react"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
-import { CheckCircle2, AlertCircle, Clock, Edit3, RotateCcw } from "lucide-react"
+import { CheckCircle2, AlertCircle, Clock, Edit3, RotateCcw, Loader2 } from "lucide-react"
+import { showToast } from '@/lib/toast-utils'
 
-export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, onUpdate: () => void }) {
+export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, onUpdate: (updatedTimesheet: any) => void }) {
     const [isEditing, setIsEditing] = useState(false)
     const [loading, setLoading] = useState(false)
     const [editData, setEditData] = useState({
@@ -14,8 +15,24 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
         note: timesheet.note || "",
         absenceType: timesheet.absenceType || "",
     })
+    const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null)
+    const [isOptimistic, setIsOptimistic] = useState(false)
 
     const handleAction = async (action: "CONFIRM" | "UPDATE" | "UNCONFIRM") => {
+        // Optimistic UI update
+        if (action === "CONFIRM") {
+            setOptimisticStatus("CONFIRMED")
+            setIsOptimistic(true)
+            setEditData({
+                ...editData,
+                actualStart: timesheet.plannedStart,
+                actualEnd: timesheet.plannedEnd,
+            })
+        } else if (action === "UNCONFIRM") {
+            setOptimisticStatus("PLANNED")
+            setIsOptimistic(true)
+        }
+
         setLoading(true)
         try {
             const res = await fetch("/api/timesheets", {
@@ -27,19 +44,43 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
                     ...editData
                 })
             })
+
             if (res.ok) {
+                const updatedTimesheet = await res.json()
+                onUpdate(updatedTimesheet)
                 setIsEditing(false)
-                onUpdate()
+                setIsOptimistic(false)
+                setOptimisticStatus(null)
+
+                // Success-Toast
+                if (action === "CONFIRM") {
+                    showToast("success", "Dienst erfolgreich bestätigt")
+                } else if (action === "UPDATE") {
+                    showToast("success", "Änderungen gespeichert")
+                }
+            } else {
+                // Rollback bei Fehler
+                setOptimisticStatus(null)
+                setIsOptimistic(false)
+                const error = await res.json()
+                showToast("error", error.error || "Fehler beim Speichern")
             }
         } catch (err) {
+            // Rollback bei Netzwerkfehler
+            setOptimisticStatus(null)
+            setIsOptimistic(false)
+            showToast("error", "Netzwerkfehler. Bitte erneut versuchen.")
             console.error(err)
         } finally {
             setLoading(false)
         }
     }
 
+    const getCurrentStatus = () => optimisticStatus || timesheet.status
+
     const getStatusColor = () => {
-        switch (timesheet.status) {
+        const status = getCurrentStatus()
+        switch (status) {
             case "SUBMITTED": return "bg-blue-100 text-blue-700"
             case "CONFIRMED": return "bg-green-100 text-green-700"
             case "CHANGED": return "bg-amber-100 text-amber-700"
@@ -48,9 +89,10 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
     }
 
     const getStatusLabel = () => {
-        switch (timesheet.status) {
+        const status = getCurrentStatus()
+        switch (status) {
             case "SUBMITTED": return "Eingereicht"
-            case "CONFIRMED": return "Bestätigt"
+            case "CONFIRMED": return isOptimistic ? "Wird bestätigt..." : "Bestätigt"
             case "CHANGED": return "Geändert"
             default: return "Geplant"
         }
@@ -88,10 +130,20 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
                                 <button
                                     type="button"
                                     onClick={() => handleAction("CONFIRM")}
-                                    disabled={loading}
-                                    className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700"
+                                    disabled={loading || isOptimistic}
+                                    className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 disabled:bg-green-400 transition-colors"
                                 >
-                                    <CheckCircle2 size={16} /> Bestätigen
+                                    {loading ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin" />
+                                            Bestätigen...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 size={16} />
+                                            Bestätigen
+                                        </>
+                                    )}
                                 </button>
                             )}
                             {(timesheet.status === "CONFIRMED" || timesheet.status === "CHANGED") && (

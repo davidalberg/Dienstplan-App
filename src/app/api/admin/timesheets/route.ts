@@ -84,36 +84,48 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
     try {
-        // 1. Fetch shift details for sync
+        // 1. Fetch shift details
         const shift = await prisma.timesheet.findUnique({
             where: { id },
             include: { employee: true }
         })
 
-        if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 })
-
-        if (shift.source) {
-            const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "").split(",").map(id => id.trim()).filter(Boolean)
-            const gsClient = await getGoogleSheetsClient()
-
-            // Try to find which sheet contains this tab
-            for (const sid of sheetIds) {
-                try {
-                    const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
-                    const tabs = res.data.sheets?.map(s => s.properties?.title)
-                    if (tabs?.includes(shift.source)) {
-                        await clearShiftInSheet(sid, shift.source, shift.date, shift.employee.name || "")
-                        break
-                    }
-                } catch (e) {
-                    console.error(`Error searching tab ${shift.source} in ${sid}:`, e)
-                }
-            }
+        if (!shift) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 })
         }
 
-        // 2. Delete from DB
+        // 2. Delete from database FIRST (fast)
         await prisma.timesheet.delete({ where: { id } })
-        return NextResponse.json({ success: true })
+
+        // 3. Response sofort zurücksenden
+        const response = NextResponse.json({ success: true })
+
+        // 4. Google Sheets Sync async (nicht blockierend)
+        if (shift.source) {
+            ;(async () => {
+                try {
+                    const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "").split(",").map(s => s.trim()).filter(Boolean)
+                    const gsClient = await getGoogleSheetsClient()
+
+                    for (const sid of sheetIds) {
+                        try {
+                            const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
+                            const tabs = res.data.sheets?.map(s => s.properties?.title)
+                            if (tabs?.includes(shift.source)) {
+                                await clearShiftInSheet(sid, shift.source, shift.date, shift.employee.name)
+                                break
+                            }
+                        } catch (e) {
+                            console.error(`Error searching tab ${shift.source} in sheet ${sid}:`, e)
+                        }
+                    }
+                } catch (error) {
+                    console.error("Google Sheets sync failed (non-critical):", error)
+                }
+            })()
+        }
+
+        return response
     } catch (error: any) {
         console.error("Error in refined delete:", error)
         return NextResponse.json({ error: error.message }, { status: 500 })
@@ -145,40 +157,48 @@ export async function PUT(req: NextRequest) {
             }
         })
 
-        // Sync zu Google Sheets
+        // Response vorbereiten
+        const response = NextResponse.json(updated)
+
+        // Google Sheets Sync async (nicht blockierend)
         if (updated.source) {
-            try {
-                const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "").split(",").filter(Boolean)
-                const gsClient = await getGoogleSheetsClient()
+            ;(async () => {
+                try {
+                    const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "")
+                        .split(",").map(s => s.trim()).filter(Boolean)
+                    const gsClient = await getGoogleSheetsClient()
 
-                const employee = await prisma.user.findUnique({
-                    where: { id: updated.employeeId },
-                    select: { name: true }
-                })
+                    for (const sid of sheetIds) {
+                        try {
+                            const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
+                            const tabs = res.data.sheets?.map(s => s.properties?.title)
 
-                // Finde Sheet mit diesem Tab
-                for (const sid of sheetIds) {
-                    const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
-                    const tabs = res.data.sheets?.map(s => s.properties?.title)
+                            if (tabs?.includes(updated.source)) {
+                                const employee = await prisma.user.findUnique({
+                                    where: { id: updated.employeeId },
+                                    select: { name: true }
+                                })
 
-                    if (tabs?.includes(updated.source)) {
-                        await appendShiftToSheet(sid, updated.source, {
-                            date: updated.date,
-                            name: employee?.name || "Unknown",
-                            start: updated.actualStart || updated.plannedStart || "",
-                            end: updated.actualEnd || updated.plannedEnd || "",
-                            note: updated.note || ""
-                        }, 'partial') // Only update C, D, E when editing
-                        break
+                                await appendShiftToSheet(sid, updated.source, {
+                                    date: updated.date,
+                                    name: employee?.name || "Unknown",
+                                    start: updated.actualStart || updated.plannedStart || "",
+                                    end: updated.actualEnd || updated.plannedEnd || "",
+                                    note: updated.note || ""
+                                }, 'partial')
+                                break
+                            }
+                        } catch (error) {
+                            console.error(`Error syncing to sheet ${sid}:`, error)
+                        }
                     }
+                } catch (error) {
+                    console.error("Google Sheets sync failed (non-critical):", error)
                 }
-            } catch (error) {
-                console.error("Fehler beim Sync zu Google Sheets:", error)
-                // Fehler nicht werfen - DB-Update ist wichtiger
-            }
+            })()
         }
 
-        return NextResponse.json(updated)
+        return response
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }

@@ -165,30 +165,59 @@ export async function POST(req: NextRequest) {
         updateData.status = isChanged ? "CHANGED" : "CONFIRMED"
     }
 
-    // Audit Log Entry
-    await prisma.auditLog.create({
-        data: {
-            employeeId: existing.employeeId,
-            date: existing.date,
-            changedBy: user.email,
-            field: "TIMESHEET_UPDATE",
-            oldValue: JSON.stringify({
-                actualStart: existing.actualStart,
-                actualEnd: existing.actualEnd,
-                status: existing.status
-            }),
-            newValue: JSON.stringify({
-                actualStart: updateData.actualStart,
-                actualEnd: updateData.actualEnd,
-                status: updateData.status
-            }),
-        }
-    })
-
     const updated = await prisma.timesheet.update({
         where: { id },
         data: updateData,
     })
+
+    // Audit Log Entry - für CONFIRM asynchron (fire-and-forget), für UPDATE/UNCONFIRM synchron
+    if (action === "CONFIRM") {
+        // Fire-and-forget Audit Log für CONFIRM (nicht blockierend)
+        ;(async () => {
+            try {
+                await prisma.auditLog.create({
+                    data: {
+                        employeeId: existing.employeeId,
+                        date: existing.date,
+                        changedBy: user.email,
+                        field: "TIMESHEET_UPDATE",
+                        oldValue: JSON.stringify({
+                            actualStart: existing.actualStart,
+                            actualEnd: existing.actualEnd,
+                            status: existing.status
+                        }),
+                        newValue: JSON.stringify({
+                            actualStart: updated.actualStart,
+                            actualEnd: updated.actualEnd,
+                            status: updated.status
+                        }),
+                    }
+                })
+            } catch (error) {
+                console.error("Audit log failed (non-critical):", error)
+            }
+        })()
+    } else {
+        // Für UPDATE/UNCONFIRM: Synchroner Audit Log (wie bisher)
+        await prisma.auditLog.create({
+            data: {
+                employeeId: existing.employeeId,
+                date: existing.date,
+                changedBy: user.email,
+                field: "TIMESHEET_UPDATE",
+                oldValue: JSON.stringify({
+                    actualStart: existing.actualStart,
+                    actualEnd: existing.actualEnd,
+                    status: existing.status
+                }),
+                newValue: JSON.stringify({
+                    actualStart: updated.actualStart,
+                    actualEnd: updated.actualEnd,
+                    status: updated.status
+                }),
+            }
+        })
+    }
 
     // Sync zu Google Sheets - nur bei wichtigen Änderungen (nicht bei CONFIRM)
     // Dies verhindert langsame Responses auf Mobilgeräten

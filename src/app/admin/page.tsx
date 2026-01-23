@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { Database, RefreshCw, Download, Terminal, CheckCircle, AlertCircle, Search, Trash2, Edit2, Filter, Users, User, ChevronDown, ChevronUp, ExternalLink } from "lucide-react"
+import { showToast } from '@/lib/toast-utils'
 
 export default function AdminPage() {
     const { data: session } = useSession()
@@ -57,11 +58,14 @@ export default function AdminPage() {
                 setEmployees(data.employees || [])
 
                 // Initialize expanded groups for service plans (default to collapsed/false)
-                const newGroups = { ...expandedGroups }
-                ;(data.sheetFileNames || []).forEach((s: string) => {
-                    if (newGroups[s] === undefined) newGroups[s] = false
+                // KORREKT: Verwendet functional update um aktuelle State zu erhalten
+                setExpandedGroups(prev => {
+                    const newGroups = { ...prev }
+                    ;(data.sheetFileNames || []).forEach((s: string) => {
+                        if (newGroups[s] === undefined) newGroups[s] = false
+                    })
+                    return newGroups
                 })
-                setExpandedGroups(newGroups)
             }
         } catch (err) {
             console.error(err)
@@ -70,11 +74,36 @@ export default function AdminPage() {
 
     const handleDelete = async (id: string) => {
         if (!confirm("Dies löscht den Schichteintrag dauerhaft. Fortfahren?")) return
+
+        // Optimistic UI: Sofort aus Liste entfernen
+        const deletedItem = timesheets.find(ts => ts.id === id)
+        setTimesheets(prev => prev.filter(ts => ts.id !== id))
         setIsDeleting(id)
+
         try {
             const res = await fetch(`/api/admin/timesheets?id=${id}`, { method: "DELETE" })
-            if (res.ok) fetchAdminData()
+
+            if (res.ok) {
+                showToast("success", "Eintrag erfolgreich gelöscht")
+                // Kein fetchAdminData() mehr nötig - UI ist schon aktualisiert!
+            } else {
+                // Rollback bei Fehler: Eintrag wieder hinzufügen
+                if (deletedItem) {
+                    setTimesheets(prev => [...prev, deletedItem].sort((a, b) =>
+                        new Date(a.date).getTime() - new Date(b.date).getTime()
+                    ))
+                }
+                const error = await res.json()
+                showToast("error", error.error || "Löschen fehlgeschlagen")
+            }
         } catch (err) {
+            // Rollback bei Netzwerkfehler
+            if (deletedItem) {
+                setTimesheets(prev => [...prev, deletedItem].sort((a, b) =>
+                    new Date(a.date).getTime() - new Date(b.date).getTime()
+                ))
+            }
+            showToast("error", "Netzwerkfehler beim Löschen")
             console.error(err)
         } finally {
             setIsDeleting(null)
@@ -134,18 +163,55 @@ export default function AdminPage() {
 
     const handleEditSave = async () => {
         if (!editingShift) return
+
+        // Optimistic UI: Sofort in Liste aktualisieren
+        const oldShift = timesheets.find(ts => ts.id === editingShift.id)
+        const optimisticUpdate = {
+            ...editingShift,
+            ...editData,
+        }
+
+        setTimesheets(prev => prev.map(ts =>
+            ts.id === editingShift.id ? optimisticUpdate : ts
+        ))
+        setEditingShift(null) // Dialog schließen
         setLoading(true)
+
         try {
             const res = await fetch("/api/admin/timesheets", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ id: editingShift.id, ...editData })
             })
+
             if (res.ok) {
-                setEditingShift(null)
-                fetchAdminData()
+                const updated = await res.json()
+                // Finale Daten vom Server übernehmen
+                setTimesheets(prev => prev.map(ts =>
+                    ts.id === updated.id ? updated : ts
+                ))
+                showToast("success", "Änderungen gespeichert")
+                // Kein fetchAdminData() mehr nötig!
+            } else {
+                // Rollback bei Fehler
+                if (oldShift) {
+                    setTimesheets(prev => prev.map(ts =>
+                        ts.id === oldShift.id ? oldShift : ts
+                    ))
+                }
+                const error = await res.json()
+                showToast("error", error.error || "Speichern fehlgeschlagen")
+                setEditingShift(oldShift) // Dialog wieder öffnen
             }
         } catch (err) {
+            // Rollback bei Netzwerkfehler
+            if (oldShift) {
+                setTimesheets(prev => prev.map(ts =>
+                    ts.id === oldShift.id ? oldShift : ts
+                ))
+            }
+            showToast("error", "Netzwerkfehler beim Speichern")
+            setEditingShift(oldShift)
             console.error(err)
         } finally {
             setLoading(false)
