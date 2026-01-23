@@ -3,26 +3,43 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 
 export async function GET(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    try {
+        const session = await auth()
+        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const user = session.user as any
-    if (user.role !== "TEAMLEAD" && user.role !== "ADMIN") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+        const user = session.user as any
+        if (user.role !== "TEAMLEAD" && user.role !== "ADMIN") {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        }
 
-    const { searchParams } = new URL(req.url)
-    const month = parseInt(searchParams.get("month") || "")
-    const year = parseInt(searchParams.get("year") || "")
+        const { searchParams } = new URL(req.url)
+        const month = parseInt(searchParams.get("month") || "", 10)
+        const year = parseInt(searchParams.get("year") || "", 10)
 
-    if (isNaN(month) || isNaN(year)) {
-        return NextResponse.json({ error: "Invalid month/year" }, { status: 400 })
-    }
+        if (isNaN(month) || isNaN(year) || month < 1 || month > 12) {
+            return NextResponse.json({ error: "Invalid month/year" }, { status: 400 })
+        }
 
     // Get all employees in the team
+    let teamIdFilter = undefined
+
+    if (user.role === "TEAMLEAD") {
+        // Validate teamId from database to prevent token manipulation
+        const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { teamId: true, role: true }
+        })
+
+        if (!dbUser || dbUser.role !== "TEAMLEAD" || !dbUser.teamId) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        }
+
+        teamIdFilter = dbUser.teamId
+    }
+
     const members = await prisma.user.findMany({
         where: {
-            teamId: user.role === "ADMIN" ? undefined : user.teamId,
+            teamId: teamIdFilter,
             role: "EMPLOYEE"
         },
         include: {
@@ -49,4 +66,11 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json(report)
+    } catch (error: any) {
+        console.error("[GET /api/team/overview] Error:", error)
+        return NextResponse.json(
+            { error: "Internal server error", details: error.message },
+            { status: 500 }
+        )
+    }
 }

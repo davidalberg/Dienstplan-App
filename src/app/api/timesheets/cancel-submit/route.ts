@@ -29,12 +29,23 @@ export async function POST(req: NextRequest) {
             )
         }
 
+        // Validate and parse month/year
+        const parsedMonth = parseInt(month, 10)
+        const parsedYear = parseInt(year, 10)
+
+        if (isNaN(parsedMonth) || isNaN(parsedYear) || parsedMonth < 1 || parsedMonth > 12) {
+            return NextResponse.json(
+                { error: "Ungültiger Monat oder Jahr" },
+                { status: 400 }
+            )
+        }
+
         // Finde alle SUBMITTED Timesheets für diesen Mitarbeiter und Monat
         const submittedShifts = await prisma.timesheet.findMany({
             where: {
                 employeeId: user.id,
-                month: parseInt(month),
-                year: parseInt(year),
+                month: parsedMonth,
+                year: parsedYear,
                 status: "SUBMITTED"
             }
         })

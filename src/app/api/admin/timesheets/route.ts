@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const month = parseInt(searchParams.get("month") || "")
     const year = parseInt(searchParams.get("year") || "")
     const source = searchParams.get("source")
+    const sheetFileName = searchParams.get("sheetFileName")
     const employeeId = searchParams.get("employeeId")
     const teamId = searchParams.get("teamId")
 
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
     if (!isNaN(month)) where.month = month
     if (!isNaN(year)) where.year = year
     if (source) where.source = source
+    if (sheetFileName) where.sheetFileName = sheetFileName
     if (employeeId) where.employeeId = employeeId
     if (teamId) where.teamId = teamId
 
@@ -37,12 +39,17 @@ export async function GET(req: NextRequest) {
             orderBy: [{ date: "asc" }, { employee: { name: "asc" } }]
         })
 
-        // Fetch unique sources, teams, and employees for the filter menu
-        const [sourcesData, teams, employees] = await Promise.all([
+        // Fetch unique sources, sheet file names, teams, and employees for the filter menu
+        const [sourcesData, sheetFileNamesData, teams, employees] = await Promise.all([
             prisma.timesheet.findMany({
                 select: { source: true },
                 distinct: ["source"],
                 where: { source: { not: null } }
+            }),
+            prisma.timesheet.findMany({
+                select: { sheetFileName: true },
+                distinct: ["sheetFileName"],
+                where: { sheetFileName: { not: null } }
             }),
             prisma.team.findMany({
                 select: { id: true, name: true }
@@ -56,6 +63,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
             timesheets,
             sources: sourcesData.map((s: { source: string | null }) => s.source || "").filter(Boolean),
+            sheetFileNames: sheetFileNamesData.map((s: { sheetFileName: string | null }) => s.sheetFileName || "").filter(Boolean),
             teams,
             employees
         })

@@ -12,6 +12,7 @@ export default function AdminPage() {
     const [loading, setLoading] = useState(false)
     const [timesheets, setTimesheets] = useState<any[]>([])
     const [sources, setSources] = useState<string[]>([])
+    const [sheetFileNames, setSheetFileNames] = useState<string[]>([])
     const [teams, setTeams] = useState<any[]>([])
     const [employees, setEmployees] = useState<any[]>([])
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
@@ -19,7 +20,8 @@ export default function AdminPage() {
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
         employeeId: "",
-        source: ""
+        source: "",
+        sheetFileName: ""
     })
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
     const [editingShift, setEditingShift] = useState<any | null>(null)
@@ -42,7 +44,7 @@ export default function AdminPage() {
         try {
             const [logsRes, tsRes] = await Promise.all([
                 fetch("/api/admin/sync"),
-                fetch(`/api/admin/timesheets?month=${filters.month}&year=${filters.year}&employeeId=${filters.employeeId}&source=${filters.source}`)
+                fetch(`/api/admin/timesheets?month=${filters.month}&year=${filters.year}&employeeId=${filters.employeeId}&source=${filters.source}&sheetFileName=${filters.sheetFileName}`)
             ])
 
             if (logsRes.ok) setLogs(await logsRes.ok ? await logsRes.json() : [])
@@ -50,12 +52,13 @@ export default function AdminPage() {
                 const data = await tsRes.json()
                 setTimesheets(data.timesheets || [])
                 setSources(data.sources || [])
+                setSheetFileNames(data.sheetFileNames || [])
                 setTeams(data.teams || [])
                 setEmployees(data.employees || [])
 
                 // Initialize expanded groups for service plans (default to collapsed/false)
                 const newGroups = { ...expandedGroups }
-                ;(data.sources || []).forEach((s: string) => {
+                ;(data.sheetFileNames || []).forEach((s: string) => {
                     if (newGroups[s] === undefined) newGroups[s] = false
                 })
                 setExpandedGroups(newGroups)
@@ -285,20 +288,30 @@ export default function AdminPage() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                             <select
-                                value={filters.source}
-                                onChange={e => setFilters({ ...filters, source: e.target.value })}
-                                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={filters.sheetFileName}
+                                onChange={e => setFilters({ ...filters, sheetFileName: e.target.value })}
+                                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                style={{ color: '#000000' }}
                             >
-                                <option value="">Alle Dienstpläne</option>
-                                {sources.map(s => <option key={s} value={s}>{s}</option>)}
+                                <option value="" style={{ color: '#000000' }} className="text-black">Alle Dienstpläne</option>
+                                {sheetFileNames.map(s => (
+                                    <option key={s} value={s} style={{ color: '#000000' }} className="text-black">
+                                        {s}
+                                    </option>
+                                ))}
                             </select>
                             <select
                                 value={filters.employeeId}
                                 onChange={e => setFilters({ ...filters, employeeId: e.target.value })}
-                                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                style={{ color: '#000000' }}
                             >
-                                <option value="">Alle Mitarbeiter</option>
-                                {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                <option value="" style={{ color: '#000000' }} className="text-black">Alle Mitarbeiter</option>
+                                {employees.map(e => (
+                                    <option key={e.id} value={e.id} style={{ color: '#000000' }} className="text-black">
+                                        {e.name}
+                                    </option>
+                                ))}
                             </select>
                             <div className="flex gap-1 items-center bg-gray-50 rounded-lg border border-gray-200 px-2">
                                 <span className="text-[10px] font-black uppercase text-black">Monat:</span>
@@ -306,14 +319,14 @@ export default function AdminPage() {
                                     type="number"
                                     value={filters.month}
                                     onChange={e => setFilters({ ...filters, month: parseInt(e.target.value) })}
-                                    className="w-10 bg-transparent py-1.5 text-xs font-bold text-gray-900 focus:outline-none"
+                                    className="w-10 bg-transparent py-1.5 text-xs font-bold text-black focus:outline-none"
                                 />
                                 <span className="text-gray-300">/</span>
                                 <input
                                     type="number"
                                     value={filters.year}
                                     onChange={e => setFilters({ ...filters, year: parseInt(e.target.value) })}
-                                    className="w-14 bg-transparent py-1.5 text-xs font-bold text-gray-900 focus:outline-none"
+                                    className="w-14 bg-transparent py-1.5 text-xs font-bold text-black focus:outline-none"
                                 />
                             </div>
                         </div>
@@ -581,12 +594,13 @@ export default function AdminPage() {
                                     <select
                                         value={editData.status}
                                         onChange={e => setEditData({ ...editData, status: e.target.value })}
-                                        className="w-full rounded-lg border border-gray-200 p-2 text-sm font-bold"
+                                        className="w-full rounded-lg border border-gray-200 p-2 text-sm font-bold text-black"
+                                        style={{ color: '#000000' }}
                                     >
-                                        <option value="PLANNED">GEPLANT</option>
-                                        <option value="CONFIRMED">BESTÄTIGT</option>
-                                        <option value="CHANGED">GEÄNDERT</option>
-                                        <option value="SUBMITTED">EINGEREICHT</option>
+                                        <option value="PLANNED" style={{ color: '#000000' }} className="text-black">GEPLANT</option>
+                                        <option value="CONFIRMED" style={{ color: '#000000' }} className="text-black">BESTÄTIGT</option>
+                                        <option value="CHANGED" style={{ color: '#000000' }} className="text-black">GEÄNDERT</option>
+                                        <option value="SUBMITTED" style={{ color: '#000000' }} className="text-black">EINGEREICHT</option>
                                     </select>
                                 </div>
                                 <div>
@@ -635,10 +649,11 @@ export default function AdminPage() {
                                         <select
                                             value={exportMonth}
                                             onChange={e => setExportMonth(parseInt(e.target.value))}
-                                            className="w-full rounded-lg border border-gray-200 p-2 text-sm font-bold text-gray-900"
+                                            className="w-full rounded-lg border border-gray-200 p-2 text-sm font-bold text-black"
+                                            style={{ color: '#000000' }}
                                         >
                                             {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
-                                                <option key={m} value={m}>
+                                                <option key={m} value={m} style={{ color: '#000000' }} className="text-black">
                                                     {new Date(2000, m - 1, 1).toLocaleDateString('de-DE', { month: 'long' })}
                                                 </option>
                                             ))}
@@ -650,7 +665,7 @@ export default function AdminPage() {
                                             type="number"
                                             value={exportYear}
                                             onChange={e => setExportYear(parseInt(e.target.value))}
-                                            className="w-full rounded-lg border border-gray-200 p-2 text-sm font-bold text-gray-900"
+                                            className="w-full rounded-lg border border-gray-200 p-2 text-sm font-bold text-black"
                                         />
                                     </div>
                                 </div>

@@ -21,9 +21,14 @@ export async function GET(req: NextRequest) {
 
     try {
         // Get all timesheets for this source/plan
+        // Note: 'source' can be either the tab name OR the sheet file name
+        // We need to search for both to support the new sheetFileName grouping
         const timesheets = await prisma.timesheet.findMany({
             where: {
-                source,
+                OR: [
+                    { source }, // Tab name like "Januar"
+                    { sheetFileName: source } // File name like "Dienstplan Sarah Erbach 2026"
+                ],
                 month,
                 year
             },

@@ -3,6 +3,18 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 
+// Helper function to safely parse float values
+function safeParseFloat(value: any, defaultValue: number, fieldName: string): number {
+    if (value === undefined || value === null) {
+        return defaultValue
+    }
+    const parsed = parseFloat(value)
+    if (isNaN(parsed)) {
+        throw new Error(`Invalid ${fieldName}: must be a valid number`)
+    }
+    return parsed
+}
+
 // GET - Liste aller Mitarbeiter
 export async function GET(req: NextRequest) {
     const session = await auth()
@@ -123,14 +135,14 @@ export async function POST(req: NextRequest) {
                 employeeId: employeeId || null,
                 entryDate: entryDate ? new Date(entryDate) : null,
                 exitDate: exitDate ? new Date(exitDate) : null,
-                hourlyWage: hourlyWage !== undefined ? parseFloat(hourlyWage) : 0,
+                hourlyWage: safeParseFloat(hourlyWage, 0, "hourlyWage"),
                 travelCostType: travelCostType || "NONE",
                 nightPremiumEnabled: nightPremiumEnabled !== undefined ? nightPremiumEnabled : true,
-                nightPremiumPercent: nightPremiumPercent !== undefined ? parseFloat(nightPremiumPercent) : 25,
+                nightPremiumPercent: safeParseFloat(nightPremiumPercent, 25, "nightPremiumPercent"),
                 sundayPremiumEnabled: sundayPremiumEnabled !== undefined ? sundayPremiumEnabled : true,
-                sundayPremiumPercent: sundayPremiumPercent !== undefined ? parseFloat(sundayPremiumPercent) : 30,
+                sundayPremiumPercent: safeParseFloat(sundayPremiumPercent, 30, "sundayPremiumPercent"),
                 holidayPremiumEnabled: holidayPremiumEnabled !== undefined ? holidayPremiumEnabled : true,
-                holidayPremiumPercent: holidayPremiumPercent !== undefined ? parseFloat(holidayPremiumPercent) : 125,
+                holidayPremiumPercent: safeParseFloat(holidayPremiumPercent, 125, "holidayPremiumPercent"),
                 assignedSheetId: assignedSheetId || null,
                 assignedPlanTab: assignedPlanTab || null,
                 teamId: teamId || null
@@ -218,14 +230,22 @@ export async function PUT(req: NextRequest) {
         if (employeeId !== undefined) updateData.employeeId = employeeId || null
         if (entryDate !== undefined) updateData.entryDate = entryDate ? new Date(entryDate) : null
         if (exitDate !== undefined) updateData.exitDate = exitDate ? new Date(exitDate) : null
-        if (hourlyWage !== undefined) updateData.hourlyWage = parseFloat(hourlyWage)
+        if (hourlyWage !== undefined) {
+            updateData.hourlyWage = safeParseFloat(hourlyWage, 0, "hourlyWage")
+        }
         if (travelCostType !== undefined) updateData.travelCostType = travelCostType
         if (nightPremiumEnabled !== undefined) updateData.nightPremiumEnabled = nightPremiumEnabled
-        if (nightPremiumPercent !== undefined) updateData.nightPremiumPercent = parseFloat(nightPremiumPercent)
+        if (nightPremiumPercent !== undefined) {
+            updateData.nightPremiumPercent = safeParseFloat(nightPremiumPercent, 25, "nightPremiumPercent")
+        }
         if (sundayPremiumEnabled !== undefined) updateData.sundayPremiumEnabled = sundayPremiumEnabled
-        if (sundayPremiumPercent !== undefined) updateData.sundayPremiumPercent = parseFloat(sundayPremiumPercent)
+        if (sundayPremiumPercent !== undefined) {
+            updateData.sundayPremiumPercent = safeParseFloat(sundayPremiumPercent, 30, "sundayPremiumPercent")
+        }
         if (holidayPremiumEnabled !== undefined) updateData.holidayPremiumEnabled = holidayPremiumEnabled
-        if (holidayPremiumPercent !== undefined) updateData.holidayPremiumPercent = parseFloat(holidayPremiumPercent)
+        if (holidayPremiumPercent !== undefined) {
+            updateData.holidayPremiumPercent = safeParseFloat(holidayPremiumPercent, 125, "holidayPremiumPercent")
+        }
         if (assignedSheetId !== undefined) updateData.assignedSheetId = assignedSheetId || null
         if (assignedPlanTab !== undefined) updateData.assignedPlanTab = assignedPlanTab || null
         if (teamId !== undefined) updateData.teamId = teamId || null

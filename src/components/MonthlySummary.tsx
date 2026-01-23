@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Send, Clock, CheckCircle, X } from "lucide-react"
+import { calculateTotalHoursFromTimesheets } from "@/lib/time-utils"
 
 export default function MonthlySummary({ timesheets, onRefresh }: { timesheets: any[], onRefresh: () => void }) {
     const [loading, setLoading] = useState(false)
@@ -9,19 +10,7 @@ export default function MonthlySummary({ timesheets, onRefresh }: { timesheets: 
     const [error, setError] = useState("")
 
     const calculateTotalHours = () => {
-        let totalMinutes = 0
-        timesheets.forEach(ts => {
-            if (ts.actualStart && ts.actualEnd) {
-                const [startH, startM] = ts.actualStart.split(":").map(Number)
-                const [endH, endM] = ts.actualEnd.split(":").map(Number)
-
-                let diff = (endH * 60 + endM) - (startH * 60 + startM)
-                if (diff < 0) diff += 24 * 60 // Handling overnight if applicable, though spec implies daily
-
-                totalMinutes += diff
-            }
-        })
-        return (totalMinutes / 60).toFixed(2)
+        return calculateTotalHoursFromTimesheets(timesheets)
     }
 
     const isReadyToSubmit = () => {
@@ -35,6 +24,11 @@ export default function MonthlySummary({ timesheets, onRefresh }: { timesheets: 
     }
 
     const handleSubmit = async () => {
+        if (timesheets.length === 0) {
+            setError("Keine Zeiterfassungen vorhanden")
+            return
+        }
+
         if (!confirm("Möchten Sie den aktuellen Monat wirklich abschließen? Eine Änderung ist danach nur noch über den Admin möglich.")) return
 
         setLoading(true)
@@ -64,6 +58,11 @@ export default function MonthlySummary({ timesheets, onRefresh }: { timesheets: 
     }
 
     const handleCancelSubmit = async () => {
+        if (timesheets.length === 0) {
+            setError("Keine Zeiterfassungen vorhanden")
+            return
+        }
+
         if (!confirm("Möchten Sie die Einreichung wirklich rückgängig machen? Sie können den Monat dann erneut bearbeiten.")) return
 
         setCancelling(true)

@@ -11,12 +11,12 @@ export async function GET(req: NextRequest) {
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
-    const month = parseInt(searchParams.get("month") || "")
-    const year = parseInt(searchParams.get("year") || "")
+    const month = parseInt(searchParams.get("month") || "", 10)
+    const year = parseInt(searchParams.get("year") || "", 10)
     const employeeId = searchParams.get("employeeId")
     const source = searchParams.get("source")
 
-    if (isNaN(month) || isNaN(year)) {
+    if (isNaN(month) || isNaN(year) || month < 1 || month > 12) {
         return NextResponse.json({ error: "Invalid month/year" }, { status: 400 })
     }
 
@@ -27,11 +27,38 @@ export async function GET(req: NextRequest) {
         let targetEmployeeId = employeeId
         if (user.role === "EMPLOYEE") {
             targetEmployeeId = user.id // Employees can only export their own data
+        } else if (user.role === "TEAMLEAD" && targetEmployeeId) {
+            // Validate teamId from database and ensure employee belongs to teamlead's team
+            const dbUser = await prisma.user.findUnique({
+                where: { id: user.id },
+                select: { teamId: true, role: true }
+            })
+
+            if (!dbUser || dbUser.role !== "TEAMLEAD" || !dbUser.teamId) {
+                return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+            }
+
+            // Verify the target employee belongs to this teamlead's team
+            const targetEmployee = await prisma.user.findUnique({
+                where: { id: targetEmployeeId },
+                select: { teamId: true }
+            })
+
+            if (!targetEmployee || targetEmployee.teamId !== dbUser.teamId) {
+                return NextResponse.json({ error: "Forbidden - Employee not in your team" }, { status: 403 })
+            }
         }
 
         const where: any = { month, year }
         if (targetEmployeeId) where.employeeId = targetEmployeeId
-        if (source) where.source = source
+
+        // Support filtering by source (tab name) OR sheetFileName (file name)
+        if (source) {
+            where.OR = [
+                { source }, // Tab name like "Januar"
+                { sheetFileName: source } // File name like "Dienstplan Sarah Erbach 2026"
+            ]
+        }
 
         // Fetch timesheets with full employee data (including new premium fields)
         const timesheets = await prisma.timesheet.findMany({
@@ -77,7 +104,8 @@ export async function GET(req: NextRequest) {
 
         byEmployee.forEach((empTimesheets, empId) => {
             const employee = empTimesheets[0].employee
-            const primarySource = source || empTimesheets[0].source || "-"
+            // Prefer sheetFileName (new grouping) over source (tab name)
+            const primarySource = source || empTimesheets[0].sheetFileName || empTimesheets[0].source || "-"
 
             // Aggregate monthly data using premium calculator
             const aggregated = aggregateMonthlyData(empTimesheets, {
@@ -142,17 +170,17 @@ export async function GET(req: NextRequest) {
             // O: Urlaubsstunden
             row["O_Urlaubsstunden"] = aggregated.vacationHours
 
-            // P: Fahrtkosten-Typ
+            // P: Reserve (LEER)
+            row["P_Reserve"] = ""
+
+            // Q: Fahrtkosten-Typ
             let travelCostLabel = ""
             if (employee.travelCostType === "DEUTSCHLANDTICKET") {
                 travelCostLabel = "Deutschlandticket"
             } else if (employee.travelCostType === "AUTO") {
                 travelCostLabel = "Auto"
             }
-            row["P_Fahrtkosten"] = travelCostLabel
-
-            // Q: Reserve (LEER)
-            row["Q_Reserve"] = ""
+            row["Q_Fahrtkosten"] = travelCostLabel
 
             excelData.push(row)
         })
@@ -178,15 +206,15 @@ export async function GET(req: NextRequest) {
             { wch: 15 },  // M: Krankstunden
             { wch: 15 },  // N: Urlaubstage
             { wch: 15 },  // O: Urlaubsstunden
-            { wch: 20 },  // P: Fahrtkosten
-            { wch: 12 }   // Q: Reserve
+            { wch: 12 },  // P: Reserve
+            { wch: 20 }   // Q: Fahrtkosten
         ]
 
-        // Apply red background to column P (Fahrtkosten) if value is not empty
-        // Find row indices where P has a value
+        // Apply red background to column Q (Fahrtkosten) if value is not empty
+        // Find row indices where Q has a value
         const range = XLSX.utils.decode_range(ws['!ref'] || "A1")
         for (let rowNum = range.s.r + 1; rowNum <= range.e.r; rowNum++) {
-            const cellAddress = XLSX.utils.encode_cell({ r: rowNum, c: 15 }) // Column P (index 15)
+            const cellAddress = XLSX.utils.encode_cell({ r: rowNum, c: 16 }) // Column Q (index 16)
             const cell = ws[cellAddress]
 
             if (cell && cell.v && cell.v !== "") {

@@ -3,13 +3,18 @@ import prisma from "@/lib/prisma"
 
 /**
  * Google Sheets Service
- * 
+ *
  * Note: Requires GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY in .env
  */
 export async function getGoogleSheetsClient() {
+    // Validate environment variables
+    if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+        throw new Error("Google Sheets credentials not configured. Missing GOOGLE_CLIENT_EMAIL or GOOGLE_PRIVATE_KEY")
+    }
+
     const auth = new google.auth.JWT({
         email: process.env.GOOGLE_CLIENT_EMAIL,
-        key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+        key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
         scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     })
 
@@ -45,6 +50,11 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
         console.log(`[SYNC DEBUG] Tab "${tabName}" returned ${rows.length} rows.`)
         let processed = 0
 
+        // Fetch all employees once to avoid N+1 query problem
+        const allEmployees = await prisma.user.findMany({
+            where: { role: "EMPLOYEE" }
+        })
+
         for (const [index, row] of rows.entries()) {
             const rowNum = index + 3
             if (row.length < 2) {
@@ -67,11 +77,7 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
             // We'll try exact match first, then parts
             const searchName = name.toLowerCase().replace(/[.,\s]/g, '')
 
-            const users = await prisma.user.findMany({
-                where: { role: "EMPLOYEE" }
-            })
-
-            const user = users.find((u: any) => {
+            const user = allEmployees.find((u: any) => {
                 const dbName = u.name?.toLowerCase().replace(/[.,\s]/g, '') || ""
                 // Check if one contains the other or vice versa
                 return dbName.includes(searchName) || searchName.includes(dbName)
@@ -86,13 +92,22 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
             let date: Date
             const cleanDateStr = dateStr.trim()
             if (cleanDateStr.includes('.')) {
-                let [d, m, y] = cleanDateStr.split('.')
-                if (!y) {
-                    console.warn(`[SYNC DEBUG] Row ${rowNum}: Invalid date format "${dateStr}"`)
+                const parts = cleanDateStr.split('.')
+                if (parts.length !== 3) {
+                    console.warn(`[SYNC DEBUG] Row ${rowNum}: Invalid date format "${dateStr}" - expected DD.MM.YYYY`)
                     continue
                 }
+                let [d, m, y] = parts
+                if (!d || !m || !y) {
+                    console.warn(`[SYNC DEBUG] Row ${rowNum}: Invalid date components "${dateStr}"`)
+                    continue
+                }
+                // Trim all components before processing
+                d = d.trim()
+                m = m.trim()
+                y = y.trim()
                 if (y.length === 2) y = `20${y}`
-                date = new Date(`${y.trim()}-${m.trim()}-${d.trim()}`)
+                date = new Date(`${y}-${m}-${d}`)
             } else {
                 date = new Date(cleanDateStr)
             }

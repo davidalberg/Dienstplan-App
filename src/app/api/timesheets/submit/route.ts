@@ -3,16 +3,22 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 
 export async function POST(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    try {
+        const session = await auth()
+        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const body = await req.json()
-    const { month, year } = body
-    const user = session.user as any
+        const body = await req.json()
+        const { month, year } = body
+        const user = session.user as any
 
-    if (user.role !== "EMPLOYEE") {
-        return NextResponse.json({ error: "Only employees can submit their month" }, { status: 403 })
-    }
+        if (user.role !== "EMPLOYEE") {
+            return NextResponse.json({ error: "Only employees can submit their month" }, { status: 403 })
+        }
+
+        // Validate month/year
+        if (!month || !year || isNaN(month) || isNaN(year) || month < 1 || month > 12) {
+            return NextResponse.json({ error: "Invalid month or year" }, { status: 400 })
+        }
 
     // 1. Check if all planned days are processed (CONFIRMED or CHANGED)
     const unprocessed = await prisma.timesheet.findMany({
@@ -57,4 +63,11 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
+    } catch (error: any) {
+        console.error("[POST /api/timesheets/submit] Error:", error)
+        return NextResponse.json(
+            { error: "Internal server error", details: error.message },
+            { status: 500 }
+        )
+    }
 }
