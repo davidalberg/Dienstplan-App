@@ -112,10 +112,20 @@ export async function GET(req: NextRequest) {
                     plannedMinutes += diff
                 }
 
-                // Calculate actual hours
-                if (ts.actualStart && ts.actualEnd) {
+                // Calculate actual hours (exclude sick leave and vacation)
+                if (ts.actualStart && ts.actualEnd && !ts.absenceType) {
                     const [startH, startM] = ts.actualStart.split(":").map(Number)
                     const [endH, endM] = ts.actualEnd.split(":").map(Number)
+                    let diff = (endH * 60 + endM) - (startH * 60 + startM)
+                    if (diff < 0) diff += 24 * 60
+                    actualMinutes += diff
+                }
+                // Fallback to planned times for confirmed shifts without absences
+                else if (!ts.actualStart && !ts.actualEnd && !ts.absenceType &&
+                         ['CONFIRMED', 'CHANGED', 'SUBMITTED'].includes(ts.status) &&
+                         ts.plannedStart && ts.plannedEnd) {
+                    const [startH, startM] = ts.plannedStart.split(":").map(Number)
+                    const [endH, endM] = ts.plannedEnd.split(":").map(Number)
                     let diff = (endH * 60 + endM) - (startH * 60 + startM)
                     if (diff < 0) diff += 24 * 60
                     actualMinutes += diff
