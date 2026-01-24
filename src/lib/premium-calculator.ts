@@ -150,6 +150,79 @@ export function calculateNightHours(start: string, end: string, date: Date): num
 }
 
 /**
+ * Berechnet Backup-Statistiken für einen Mitarbeiter
+ *
+ * LOGIK:
+ * - Zählt alle Schichten, bei denen der Mitarbeiter als Backup eingetragen ist
+ * - Berechnet Arbeitsstunden NUR wenn Haupt-Person abwesend ist (SICK/VACATION)
+ * - Berechnet auch Zuschläge (Nacht/Sonntag/Feiertag) für eingesprungene Schichten
+ */
+export function calculateBackupStats(
+    allTimesheets: any[],
+    userId: string,
+    employee: {
+        nightPremiumEnabled: boolean
+        sundayPremiumEnabled: boolean
+        holidayPremiumEnabled: boolean
+    }
+): {
+    backupDays: number
+    backupHours: number
+    backupNightHours: number
+    backupSundayHours: number
+    backupHolidayHours: number
+} {
+    let backupDays = 0
+    let backupHours = 0
+    let backupNightHours = 0
+    let backupSundayHours = 0
+    let backupHolidayHours = 0
+
+    const backupDates = new Set<string>()
+
+    allTimesheets.forEach(ts => {
+        // Prüfen ob dieser User als Backup eingetragen ist
+        if (ts.backupEmployeeId === userId) {
+            const dateStr = new Date(ts.date).toISOString().split('T')[0]
+            backupDates.add(dateStr)
+
+            // Stunden NUR zählen wenn Haupt-Person abwesend ist
+            if (ts.absenceType === "SICK" || ts.absenceType === "VACATION") {
+                const start = ts.actualStart || ts.plannedStart
+                const end = ts.actualEnd || ts.plannedEnd
+
+                if (start && end) {
+                    const date = new Date(ts.date)
+                    const hours = calculateTotalHours(start, end)
+                    backupHours += hours
+
+                    // Zuschläge berechnen
+                    if (employee.nightPremiumEnabled) {
+                        backupNightHours += calculateNightHours(start, end, date)
+                    }
+
+                    if (employee.sundayPremiumEnabled && isSundayDate(date)) {
+                        backupSundayHours += hours
+                    }
+
+                    if (employee.holidayPremiumEnabled && isNRWHoliday(date)) {
+                        backupHolidayHours += hours
+                    }
+                }
+            }
+        }
+    })
+
+    return {
+        backupDays: backupDates.size,
+        backupHours: Math.round(backupHours * 100) / 100,
+        backupNightHours: Math.round(backupNightHours * 100) / 100,
+        backupSundayHours: Math.round(backupSundayHours * 100) / 100,
+        backupHolidayHours: Math.round(backupHolidayHours * 100) / 100
+    }
+}
+
+/**
  * Aggregiert monatliche Daten für einen Mitarbeiter
  */
 export function aggregateMonthlyData(
@@ -175,6 +248,7 @@ export function aggregateMonthlyData(
     vacationDays: number
     vacationHours: number
     backupDays: number
+    backupHours: number
 } {
     let totalHours = 0
     let nightHours = 0
@@ -184,53 +258,65 @@ export function aggregateMonthlyData(
     let sickHours = 0
     let vacationDays = 0
     let vacationHours = 0
-    let backupDays = 0
-
     const sickDates = new Set<string>()
     const vacationDates = new Set<string>()
-    const backupDates = new Set<string>()
 
     timesheets.forEach(ts => {
         const date = new Date(ts.date)
 
-        // Abwesenheiten
+        // Abwesenheiten (mit Fallback auf planned times)
         if (ts.absenceType === "SICK") {
             const dateStr = date.toISOString().split('T')[0]
             sickDates.add(dateStr)
 
-            if (ts.actualStart && ts.actualEnd) {
-                const hours = calculateTotalHours(ts.actualStart, ts.actualEnd)
+            const startTime = ts.actualStart || ts.plannedStart
+            const endTime = ts.actualEnd || ts.plannedEnd
+
+            if (startTime && endTime) {
+                const hours = calculateTotalHours(startTime, endTime)
                 sickHours += hours
             }
         } else if (ts.absenceType === "VACATION") {
             const dateStr = date.toISOString().split('T')[0]
             vacationDates.add(dateStr)
 
-            if (ts.actualStart && ts.actualEnd) {
-                const hours = calculateTotalHours(ts.actualStart, ts.actualEnd)
+            const startTime = ts.actualStart || ts.plannedStart
+            const endTime = ts.actualEnd || ts.plannedEnd
+
+            if (startTime && endTime) {
+                const hours = calculateTotalHours(startTime, endTime)
                 vacationHours += hours
             }
         }
 
         // Nur tatsächlich gearbeitete Stunden zählen (nicht Abwesenheiten)
-        if (ts.actualStart && ts.actualEnd && !ts.absenceType) {
-            const hours = calculateTotalHours(ts.actualStart, ts.actualEnd)
-            totalHours += hours
+        // FIX: Fallback auf planned times für bestätigte Dienste
+        const isConfirmed = ['CONFIRMED', 'CHANGED', 'SUBMITTED'].includes(ts.status)
 
-            // Nachtstunden
-            if (employee.nightPremiumEnabled) {
-                const nightHrs = calculateNightHours(ts.actualStart, ts.actualEnd, date)
-                nightHours += nightHrs
-            }
+        if (isConfirmed && !ts.absenceType) {
+            // Verwende actual wenn vorhanden, sonst planned
+            const startTime = ts.actualStart || ts.plannedStart
+            const endTime = ts.actualEnd || ts.plannedEnd
 
-            // Sonntagsstunden
-            if (employee.sundayPremiumEnabled && isSundayDate(date)) {
-                sundayHours += hours
-            }
+            if (startTime && endTime) {
+                const hours = calculateTotalHours(startTime, endTime)
+                totalHours += hours
 
-            // Feiertagsstunden
-            if (employee.holidayPremiumEnabled && isNRWHoliday(date)) {
-                holidayHours += hours
+                // Nachtstunden (23:00-06:00)
+                if (employee.nightPremiumEnabled) {
+                    const nightHrs = calculateNightHours(startTime, endTime, date)
+                    nightHours += nightHrs
+                }
+
+                // Sonntagsstunden
+                if (employee.sundayPremiumEnabled && isSundayDate(date)) {
+                    sundayHours += hours
+                }
+
+                // Feiertagsstunden
+                if (employee.holidayPremiumEnabled && isNRWHoliday(date)) {
+                    holidayHours += hours
+                }
             }
         }
     })
@@ -238,16 +324,28 @@ export function aggregateMonthlyData(
     sickDays = sickDates.size
     vacationDays = vacationDates.size
 
-    // Backup-Tage zählen: Wie oft ist dieser Mitarbeiter als Backup eingetragen?
-    if (employee.id && allTimesheetsForBackup) {
-        allTimesheetsForBackup.forEach(ts => {
-            if (ts.backupEmployeeId === employee.id) {
-                const dateStr = new Date(ts.date).toISOString().split('T')[0]
-                backupDates.add(dateStr)
-            }
-        })
-        backupDays = backupDates.size
+    // Backup-Statistiken berechnen (inklusive Stunden-Gutschrift bei Abwesenheit)
+    let backupStats = {
+        backupDays: 0,
+        backupHours: 0,
+        backupNightHours: 0,
+        backupSundayHours: 0,
+        backupHolidayHours: 0
     }
+
+    if (employee.id && allTimesheetsForBackup) {
+        backupStats = calculateBackupStats(allTimesheetsForBackup, employee.id, {
+            nightPremiumEnabled: employee.nightPremiumEnabled,
+            sundayPremiumEnabled: employee.sundayPremiumEnabled,
+            holidayPremiumEnabled: employee.holidayPremiumEnabled
+        })
+    }
+
+    // WICHTIG: Backup-Stunden zu Gesamt-Stunden addieren (wenn eingesprungen)
+    totalHours += backupStats.backupHours
+    nightHours += backupStats.backupNightHours
+    sundayHours += backupStats.backupSundayHours
+    holidayHours += backupStats.backupHolidayHours
 
     return {
         totalHours: Math.round(totalHours * 100) / 100,
@@ -258,6 +356,7 @@ export function aggregateMonthlyData(
         sickHours: Math.round(sickHours * 100) / 100,
         vacationDays,
         vacationHours: Math.round(vacationHours * 100) / 100,
-        backupDays
+        backupDays: backupStats.backupDays,
+        backupHours: backupStats.backupHours
     }
 }

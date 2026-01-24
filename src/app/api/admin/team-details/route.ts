@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
+import { aggregateMonthlyData } from "@/lib/premium-calculator"
 
 export async function GET(req: NextRequest) {
     const session = await auth()
@@ -34,10 +35,35 @@ export async function GET(req: NextRequest) {
             },
             include: {
                 employee: {
-                    select: { id: true, name: true, email: true }
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        hourlyWage: true,
+                        nightPremiumEnabled: true,
+                        nightPremiumPercent: true,
+                        sundayPremiumEnabled: true,
+                        sundayPremiumPercent: true,
+                        holidayPremiumEnabled: true,
+                        holidayPremiumPercent: true
+                    }
                 }
             },
             orderBy: { date: "asc" }
+        })
+
+        // Alle Timesheets für Backup-Berechnung laden
+        const allMonthTimesheets = await prisma.timesheet.findMany({
+            where: { month, year },
+            select: {
+                backupEmployeeId: true,
+                absenceType: true,
+                actualStart: true,
+                actualEnd: true,
+                plannedStart: true,
+                plannedEnd: true,
+                date: true
+            }
         })
 
         // Group by employee
@@ -50,6 +76,13 @@ export async function GET(req: NextRequest) {
                     id: empId,
                     name: ts.employee.name,
                     email: ts.employee.email,
+                    hourlyWage: ts.employee.hourlyWage,
+                    nightPremiumEnabled: ts.employee.nightPremiumEnabled,
+                    nightPremiumPercent: ts.employee.nightPremiumPercent,
+                    sundayPremiumEnabled: ts.employee.sundayPremiumEnabled,
+                    sundayPremiumPercent: ts.employee.sundayPremiumPercent,
+                    holidayPremiumEnabled: ts.employee.holidayPremiumEnabled,
+                    holidayPremiumPercent: ts.employee.holidayPremiumPercent,
                     timesheets: [],
                     hasSubmitted: false
                 })
@@ -118,11 +151,38 @@ export async function GET(req: NextRequest) {
             }
 
             emp.hasSubmitted = allSubmitted && emp.timesheets.length > 0
+
+            // Aggregierte Statistiken berechnen
+            const aggregated = aggregateMonthlyData(
+                emp.timesheets,
+                {
+                    id: emp.id,
+                    hourlyWage: emp.hourlyWage || 0,
+                    nightPremiumEnabled: emp.nightPremiumEnabled ?? true,
+                    nightPremiumPercent: emp.nightPremiumPercent || 25,
+                    sundayPremiumEnabled: emp.sundayPremiumEnabled ?? true,
+                    sundayPremiumPercent: emp.sundayPremiumPercent || 30,
+                    holidayPremiumEnabled: emp.holidayPremiumEnabled ?? true,
+                    holidayPremiumPercent: emp.holidayPremiumPercent || 125
+                },
+                allMonthTimesheets
+            )
+
             emp.stats = {
                 plannedHours: plannedMinutes / 60,
                 actualHours: actualMinutes / 60,
                 difference: (actualMinutes - plannedMinutes) / 60,
-                discrepancies
+                discrepancies,
+                // Erweiterte Statistiken
+                totalHours: aggregated.totalHours,
+                nightHours: aggregated.nightHours,
+                sundayHours: aggregated.sundayHours,
+                holidayHours: aggregated.holidayHours,
+                backupDays: aggregated.backupDays,
+                sickDays: aggregated.sickDays,
+                sickHours: aggregated.sickHours,
+                vacationDays: aggregated.vacationDays,
+                vacationHours: aggregated.vacationHours
             }
 
             return emp

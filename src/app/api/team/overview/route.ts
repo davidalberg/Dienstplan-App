@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { aggregateMonthlyData } from "@/lib/premium-calculator"
 
 export async function GET(req: NextRequest) {
     try {
@@ -42,18 +43,58 @@ export async function GET(req: NextRequest) {
             teamId: teamIdFilter,
             role: "EMPLOYEE"
         },
-        include: {
+        select: {
+            id: true,
+            name: true,
+            employeeId: true,
+            hourlyWage: true,
+            nightPremiumEnabled: true,
+            nightPremiumPercent: true,
+            sundayPremiumEnabled: true,
+            sundayPremiumPercent: true,
+            holidayPremiumEnabled: true,
+            holidayPremiumPercent: true,
             timesheets: {
                 where: { month, year },
             }
         }
     })
 
-    // Format response
+    // Alle Timesheets für Backup-Berechnung laden
+    const allMonthTimesheets = await prisma.timesheet.findMany({
+        where: { month, year },
+        select: {
+            backupEmployeeId: true,
+            absenceType: true,
+            actualStart: true,
+            actualEnd: true,
+            plannedStart: true,
+            plannedEnd: true,
+            date: true
+        }
+    })
+
+    // Format response with statistics
     const report = members.map(m => {
         const totalShifts = m.timesheets.length
         const submitted = m.timesheets.every(ts => ts.status === "SUBMITTED") && totalShifts > 0
         const pending = m.timesheets.some(ts => ts.status === "PLANNED")
+
+        // Aggregierte Statistiken berechnen
+        const aggregated = aggregateMonthlyData(
+            m.timesheets,
+            {
+                id: m.id,
+                hourlyWage: m.hourlyWage || 0,
+                nightPremiumEnabled: m.nightPremiumEnabled ?? true,
+                nightPremiumPercent: m.nightPremiumPercent || 25,
+                sundayPremiumEnabled: m.sundayPremiumEnabled ?? true,
+                sundayPremiumPercent: m.sundayPremiumPercent || 30,
+                holidayPremiumEnabled: m.holidayPremiumEnabled ?? true,
+                holidayPremiumPercent: m.holidayPremiumPercent || 125
+            },
+            allMonthTimesheets
+        )
 
         return {
             id: m.id,
@@ -61,7 +102,18 @@ export async function GET(req: NextRequest) {
             employeeId: m.employeeId,
             status: submitted ? "SUBMITTED" : (pending ? "DRAFT" : "READY"),
             shiftCount: totalShifts,
-            lastUpdate: m.timesheets.length > 0 ? m.timesheets[0].lastUpdatedAt : null
+            lastUpdate: m.timesheets.length > 0 ? m.timesheets[0].lastUpdatedAt : null,
+            stats: {
+                totalHours: aggregated.totalHours,
+                nightHours: aggregated.nightHours,
+                sundayHours: aggregated.sundayHours,
+                holidayHours: aggregated.holidayHours,
+                backupDays: aggregated.backupDays,
+                sickDays: aggregated.sickDays,
+                sickHours: aggregated.sickHours,
+                vacationDays: aggregated.vacationDays,
+                vacationHours: aggregated.vacationHours
+            }
         }
     })
 

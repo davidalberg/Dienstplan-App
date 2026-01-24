@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Download, CheckCircle, AlertCircle, Clock } from "lucide-react"
+import StatisticsDetails from "@/components/StatisticsDetails"
 
 export default function TeamDetailPage() {
     const params = useParams()
@@ -150,6 +151,14 @@ export default function TeamDetailPage() {
                                     </p>
                                 </div>
                             </div>
+
+                            {/* Detaillierte Statistiken */}
+                            {emp.stats.nightHours !== undefined && (
+                                <div className="mt-6">
+                                    <p className="text-xs font-black uppercase text-gray-600 mb-4">Detaillierte Statistiken</p>
+                                    <StatisticsDetails stats={emp.stats} variant="detailed" />
+                                </div>
+                            )}
 
                             {emp.stats.discrepancies.length > 0 && (
                                 <div className="mt-6 rounded-xl bg-red-50 p-4 ring-1 ring-red-200">

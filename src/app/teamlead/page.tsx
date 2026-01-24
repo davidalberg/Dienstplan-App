@@ -5,13 +5,15 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
-import { Users, CheckCircle, Clock, AlertCircle } from "lucide-react"
+import { Users, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
+import StatisticsDetails from "@/components/StatisticsDetails"
 
 export default function TeamleadPage() {
     const { data: session } = useSession()
     const [report, setReport] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [currentDate, setCurrentDate] = useState(new Date())
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
     const fetchReport = async () => {
         setLoading(true)
@@ -86,33 +88,67 @@ export default function TeamleadPage() {
                                 <th className="px-6 py-4 text-xs font-bold text-black uppercase tracking-wider">Mitarbeiter</th>
                                 <th className="px-6 py-4 text-xs font-bold text-black uppercase tracking-wider">Status</th>
                                 <th className="px-6 py-4 text-xs font-bold text-black uppercase tracking-wider">Dienste</th>
+                                <th className="px-6 py-4 text-xs font-bold text-black uppercase tracking-wider">Gesamt-Std</th>
                                 <th className="px-6 py-4 text-xs font-bold text-black uppercase tracking-wider">Letzte Änderung</th>
+                                <th className="px-6 py-4 text-xs font-bold text-black uppercase tracking-wider text-right">Details</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {loading ? (
-                                <tr><td colSpan={4} className="p-10 text-center text-black font-medium">Lade Daten...</td></tr>
+                                <tr><td colSpan={6} className="p-10 text-center text-black font-medium">Lade Daten...</td></tr>
                             ) : report.map(row => (
-                                <tr key={row.id}>
-                                    <td className="px-6 py-4">
-                                        <p className="font-bold text-black">{row.name}</p>
-                                        <p className="text-xs text-gray-700 font-bold">{row.employeeId}</p>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${row.status === "SUBMITTED" ? "bg-green-100 text-green-700" :
-                                            row.status === "READY" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-black"
-                                            }`}>
-                                            {row.status === "SUBMITTED" && <CheckCircle size={12} />}
-                                            {row.status === "SUBMITTED" ? "Abgeschlossen" : (row.status === "READY" ? "Bereit zum Senden" : "In Bearbeitung")}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm font-medium text-gray-700">
-                                        {row.shiftCount}
-                                    </td>
-                                    <td className="px-6 py-4 text-xs text-black font-medium">
-                                        {row.lastUpdate ? format(new Date(row.lastUpdate), "dd.MM. HH:mm") : "-"}
-                                    </td>
-                                </tr>
+                                <>
+                                    <tr key={row.id} className={expandedRows.has(row.id) ? "bg-gray-50" : ""}>
+                                        <td className="px-6 py-4">
+                                            <p className="font-bold text-black">{row.name}</p>
+                                            <p className="text-xs text-gray-700 font-bold">{row.employeeId}</p>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${row.status === "SUBMITTED" ? "bg-green-100 text-green-700" :
+                                                row.status === "READY" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-black"
+                                                }`}>
+                                                {row.status === "SUBMITTED" && <CheckCircle size={12} />}
+                                                {row.status === "SUBMITTED" ? "Abgeschlossen" : (row.status === "READY" ? "Bereit zum Senden" : "In Bearbeitung")}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm font-medium text-gray-700">
+                                            {row.shiftCount}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm font-bold text-gray-900">
+                                            {row.stats?.totalHours?.toFixed(1) || "0"} Std
+                                        </td>
+                                        <td className="px-6 py-4 text-xs text-black font-medium">
+                                            {row.lastUpdate ? format(new Date(row.lastUpdate), "dd.MM. HH:mm") : "-"}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button
+                                                onClick={() => {
+                                                    const newExpanded = new Set(expandedRows)
+                                                    if (newExpanded.has(row.id)) {
+                                                        newExpanded.delete(row.id)
+                                                    } else {
+                                                        newExpanded.add(row.id)
+                                                    }
+                                                    setExpandedRows(newExpanded)
+                                                }}
+                                                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-bold"
+                                            >
+                                                {expandedRows.has(row.id) ? (
+                                                    <>Weniger <ChevronUp size={16} /></>
+                                                ) : (
+                                                    <>Mehr <ChevronDown size={16} /></>
+                                                )}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {expandedRows.has(row.id) && row.stats && (
+                                        <tr key={`${row.id}-details`}>
+                                            <td colSpan={6} className="px-6 py-4 bg-gray-50 border-t border-gray-100">
+                                                <StatisticsDetails stats={row.stats} variant="compact" />
+                                            </td>
+                                        </tr>
+                                    )}
+                                </>
                             ))}
                         </tbody>
                     </table>
