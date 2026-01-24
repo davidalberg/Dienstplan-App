@@ -33,11 +33,19 @@ export async function POST(req: NextRequest) {
                 })
 
                 const sheetFileName = spreadsheet.data.properties?.title || "Unbekannt"
+
+                // Debug: Log all sheets with their properties
+                console.log(`[SYNC DEBUG] Raw sheets data:`, JSON.stringify(spreadsheet.data.sheets?.map((s: any) => ({
+                    title: s.properties?.title,
+                    index: s.properties?.index,
+                    hidden: s.properties?.hidden
+                }))))
+
                 const sheetTitles = (spreadsheet.data.sheets || [])
                     .map((s: any) => s.properties?.title)
                     .filter(Boolean) as string[]
 
-                console.log(`[SYNC DEBUG] Discovered tabs in "${sheetFileName}" (${specificSheetId}): ${JSON.stringify(sheetTitles)}`)
+                console.log(`[SYNC DEBUG] Discovered ${sheetTitles.length} tabs in "${sheetFileName}" (${specificSheetId}): ${JSON.stringify(sheetTitles)}`)
                 totalTabs += sheetTitles.length
 
                 for (const title of sheetTitles) {
@@ -49,6 +57,7 @@ export async function POST(req: NextRequest) {
                         console.log(`[SYNC DEBUG] Finished tab: "${title}". Imported ${result.imported}, Deleted ${result.deleted}.`)
                     } catch (e: any) {
                         console.error(`[SYNC DEBUG] Failed to import from ${specificSheetId} / ${title}: ${e.message}`)
+                        console.error(`[SYNC DEBUG] Full error:`, e)
                     }
                 }
             }

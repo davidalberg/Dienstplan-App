@@ -47,8 +47,9 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
         })
 
         const rows = response.data.values || []
-        console.log(`[SYNC DEBUG] Tab "${tabName}" returned ${rows.length} rows.`)
+        console.log(`[SYNC DEBUG] Tab "${tabName}" returned ${rows.length} rows from range "${range}"`)
         let processed = 0
+        let skipped = 0
 
         // Fetch all employees once to avoid N+1 query problem
         const allEmployees = await prisma.user.findMany({
@@ -101,6 +102,7 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
                 if (name || dateStr) {
                     console.log(`[SYNC DEBUG] Skipping row ${rowNum}: Name="${name}", Date="${dateStr}" (Required both)`)
                 }
+                skipped++
                 continue
             }
 
@@ -252,6 +254,7 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
             })
         }
 
+        console.log(`[SYNC DEBUG] Tab "${tabName}" complete: ${processed} processed, ${skipped} skipped, ${deletedShifts.length} deleted`)
         return { imported: processed, deleted: deletedShifts.length }
     } catch (error: any) {
         console.error(`[SYNC DEBUG] Error in importPlannedShifts for ${tabName}:`, error.message)
