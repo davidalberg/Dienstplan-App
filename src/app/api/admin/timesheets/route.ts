@@ -165,6 +165,7 @@ export async function PUT(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
     try {
+        // 1. Update in DB mit employee relation für Response
         const updated = await prisma.timesheet.update({
             where: { id },
             data: {
@@ -175,51 +176,62 @@ export async function PUT(req: NextRequest) {
                 note: data.note,
                 status: data.status,
                 lastUpdatedBy: session.user.email
+            },
+            include: {
+                employee: { select: { name: true, email: true } },
+                team: { select: { name: true } }
             }
         })
 
-        // Response vorbereiten
-        const response = NextResponse.json(updated)
+        // 2. Google Sheets Sync SYNCHRON (mit await!) - für Daten-Konsistenz
+        let sheetSyncError: string | null = null
 
-        // Google Sheets Sync async (nicht blockierend)
         if (updated.source) {
-            ;(async () => {
-                try {
-                    const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "")
-                        .split(",").map(s => s.trim()).filter(Boolean)
-                    const gsClient = await getGoogleSheetsClient()
+            try {
+                const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "")
+                    .split(",").map(s => s.trim()).filter(Boolean)
+                const gsClient = await getGoogleSheetsClient()
+                let syncedSuccessfully = false
 
-                    for (const sid of sheetIds) {
-                        try {
-                            const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
-                            const tabs = res.data.sheets?.map(s => s.properties?.title)
+                for (const sid of sheetIds) {
+                    try {
+                        const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
+                        const tabs = res.data.sheets?.map(s => s.properties?.title)
 
-                            if (tabs?.includes(updated.source)) {
-                                const employee = await prisma.user.findUnique({
-                                    where: { id: updated.employeeId },
-                                    select: { name: true }
-                                })
-
-                                await appendShiftToSheet(sid, updated.source as string, {
-                                    date: updated.date,
-                                    name: employee?.name || "Unknown",
-                                    start: updated.actualStart || updated.plannedStart || "",
-                                    end: updated.actualEnd || updated.plannedEnd || "",
-                                    note: updated.note || ""
-                                }, 'partial')
-                                break
-                            }
-                        } catch (error) {
-                            console.error(`Error syncing to sheet ${sid}:`, error)
+                        if (tabs?.includes(updated.source)) {
+                            await appendShiftToSheet(sid, updated.source as string, {
+                                date: updated.date,
+                                name: updated.employee?.name || "Unknown",
+                                start: updated.actualStart || updated.plannedStart || "",
+                                end: updated.actualEnd || updated.plannedEnd || "",
+                                note: updated.note || ""
+                            }, 'partial')
+                            syncedSuccessfully = true
+                            break
                         }
+                    } catch (error) {
+                        console.error(`Error syncing to sheet ${sid}:`, error)
                     }
-                } catch (error) {
-                    console.error("Google Sheets sync failed (non-critical):", error)
                 }
-            })()
+
+                if (!syncedSuccessfully && sheetIds.length > 0) {
+                    console.warn(`[SYNC WARNING] Tab "${updated.source}" not found in any sheet.`)
+                }
+            } catch (error: any) {
+                console.error("Google Sheets sync failed:", error)
+                sheetSyncError = error.message || "Google Sheets Synchronisation fehlgeschlagen"
+            }
         }
 
-        return response
+        // 3. Bei Sync-Fehler: Warnung zurückgeben aber DB-Update ist OK
+        if (sheetSyncError) {
+            return NextResponse.json({
+                ...updated,
+                _syncWarning: "Änderung gespeichert, aber Google Sheets Sync fehlgeschlagen."
+            })
+        }
+
+        return NextResponse.json(updated)
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }

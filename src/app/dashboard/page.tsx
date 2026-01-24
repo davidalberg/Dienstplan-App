@@ -175,7 +175,12 @@ export default function DashboardPage() {
                 ) : (
                     <>
                         {/* Statistics Card */}
-                        <MonthlySummary timesheets={timesheets} onRefresh={fetchTimesheets} />
+                        <MonthlySummary
+                            timesheets={timesheets}
+                            onRefresh={fetchTimesheets}
+                            month={currentDate.getMonth() + 1}
+                            year={currentDate.getFullYear()}
+                        />
 
                         {/* Days List */}
                         <div className="mt-6 space-y-4">
