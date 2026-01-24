@@ -143,16 +143,33 @@ export default function AdminPage() {
 
         setLoading(true)
         try {
-            // Delete in parallel (batches for safety)
-            const deletePromises = Array.from(selectedShifts).map(id =>
-                fetch(`/api/admin/timesheets?id=${id}`, { method: "DELETE" })
-            )
+            // Delete sequentially to avoid connection pool exhaustion
+            const ids = Array.from(selectedShifts)
+            let successCount = 0
+            let errorCount = 0
 
-            await Promise.all(deletePromises)
+            for (const id of ids) {
+                try {
+                    const res = await fetch(`/api/admin/timesheets?id=${id}`, { method: "DELETE" })
+                    if (res.ok) {
+                        successCount++
+                        // Update UI progressively
+                        setTimesheets(prev => prev.filter(ts => ts.id !== id))
+                    } else {
+                        errorCount++
+                    }
+                } catch {
+                    errorCount++
+                }
+            }
 
-            // Clear selection and refresh
+            // Clear selection and show result
             clearSelection()
-            fetchAdminData()
+            if (errorCount > 0) {
+                showToast("error", `${successCount} gelöscht, ${errorCount} Fehler`)
+            } else {
+                showToast("success", `${successCount} Schichten erfolgreich gelöscht`)
+            }
         } catch (err) {
             console.error(err)
             alert("Fehler beim Löschen der Schichten")
@@ -426,7 +443,7 @@ export default function AdminPage() {
                     <div className="space-y-6">
                         {Object.keys(groupedTimesheets).length === 0 ? (
                             <div className="py-12 text-center text-black font-medium font-medium">Keine Schichten gefunden.</div>
-                        ) : Object.keys(groupedTimesheets).map(planName => {
+                        ) : Object.keys(groupedTimesheets).sort((a, b) => a.localeCompare(b, 'de')).map(planName => {
                             // Find the sheetId for this file name - use the first timesheet's sheetId
                             const firstTimesheet = groupedTimesheets[planName][0]
                             const sheetUrl = firstTimesheet?.sheetId ? `https://docs.google.com/spreadsheets/d/${firstTimesheet.sheetId}/edit` : null

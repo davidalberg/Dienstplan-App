@@ -1,7 +1,16 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
-    return new PrismaClient()
+    return new PrismaClient({
+        // Connection pool settings for Supabase
+        datasources: {
+            db: {
+                url: process.env.DATABASE_URL
+            }
+        },
+        // Log slow queries in development
+        log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error']
+    })
 }
 
 declare global {
