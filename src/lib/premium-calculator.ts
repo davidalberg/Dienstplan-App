@@ -109,7 +109,15 @@ export function calculateTotalHours(start: string, end: string): number {
 
 /**
  * Berechnet Nachtstunden (23:00-06:00) für einen Dienst
- * Unterstützt Übernacht-Dienste
+ * Unterstützt Übernacht-Dienste und 24-Stunden-Schichten
+ *
+ * WICHTIG: Nachtstunden bestehen aus ZWEI Fenstern:
+ * - Fenster 1: 0:00-6:00 (früher Morgen)
+ * - Fenster 2: 23:00-24:00 (und darüber hinaus bis 6:00 am nächsten Tag)
+ *
+ * Bei einer 24-Stunden-Schicht (0:00-0:00) sind das 7 Stunden:
+ * - 0:00-6:00 = 6 Stunden
+ * - 23:00-24:00 = 1 Stunde
  */
 export function calculateNightHours(start: string, end: string, date: Date): number {
     const [startH, startM] = start.split(":").map(Number)
@@ -118,35 +126,36 @@ export function calculateNightHours(start: string, end: string, date: Date): num
     const startMinutes = startH * 60 + startM
     let endMinutes = endH * 60 + endM
 
-    // Übernacht-Dienst: Ende am nächsten Tag
+    // Übernacht-Dienst: Ende am nächsten Tag (z.B. 18:00-6:00 oder 0:00-0:00)
     if (endMinutes <= startMinutes) {
-        endMinutes += 24 * 60
+        endMinutes += 24 * 60 // 1440
     }
 
-    // Nachtfenster: 23:00 (1380 min) bis 06:00 (360 min am nächsten Tag = 1800 min)
-    const nightStart = 23 * 60 // 1380
-    const nightEnd = 30 * 60   // 1800 (entspricht 06:00 am nächsten Tag)
+    // Zwei Nachtfenster definieren:
+    // Fenster 1: 0:00-6:00 (0-360 Minuten)
+    // Fenster 2: 23:00-30:00 (1380-1800 Minuten, wobei 30:00 = 6:00 nächster Tag)
+    const nightWindow1Start = 0
+    const nightWindow1End = 6 * 60 // 360
+    const nightWindow2Start = 23 * 60 // 1380
+    const nightWindow2End = 30 * 60 // 1800
 
     let nightMinutes = 0
 
-    // Fall 1: Dienst komplett innerhalb der Nacht (23:00-06:00)
-    if (startMinutes >= nightStart && endMinutes <= nightEnd) {
-        nightMinutes = endMinutes - startMinutes
-    }
-    // Fall 2: Dienst startet vor Nacht, endet in der Nacht
-    else if (startMinutes < nightStart && endMinutes > nightStart && endMinutes <= nightEnd) {
-        nightMinutes = endMinutes - nightStart
-    }
-    // Fall 3: Dienst startet in der Nacht, endet nach der Nacht
-    else if (startMinutes >= nightStart && startMinutes < nightEnd && endMinutes > nightEnd) {
-        nightMinutes = nightEnd - startMinutes
-    }
-    // Fall 4: Dienst umspannt die gesamte Nacht
-    else if (startMinutes < nightStart && endMinutes > nightEnd) {
-        nightMinutes = nightEnd - nightStart // 7 Stunden
+    // Überschneidung mit Fenster 1 (0:00-6:00)
+    if (startMinutes < nightWindow1End && endMinutes > nightWindow1Start) {
+        const overlapStart = Math.max(startMinutes, nightWindow1Start)
+        const overlapEnd = Math.min(endMinutes, nightWindow1End)
+        nightMinutes += Math.max(0, overlapEnd - overlapStart)
     }
 
-    return Math.max(0, nightMinutes / 60)
+    // Überschneidung mit Fenster 2 (23:00-30:00)
+    if (startMinutes < nightWindow2End && endMinutes > nightWindow2Start) {
+        const overlapStart = Math.max(startMinutes, nightWindow2Start)
+        const overlapEnd = Math.min(endMinutes, nightWindow2End)
+        nightMinutes += Math.max(0, overlapEnd - overlapStart)
+    }
+
+    return nightMinutes / 60
 }
 
 /**
@@ -172,7 +181,6 @@ export function calculateBackupStats(
     backupSundayHours: number
     backupHolidayHours: number
 } {
-    let backupDays = 0
     let backupHours = 0
     let backupNightHours = 0
     let backupSundayHours = 0
@@ -180,11 +188,16 @@ export function calculateBackupStats(
 
     const backupDates = new Set<string>()
 
+    // Debug: Zähle wie viele Timesheets überhaupt backupEmployeeId haben
+    const sheetsWithBackup = allTimesheets.filter(ts => ts.backupEmployeeId)
+    console.log(`[BACKUP DEBUG] userId: ${userId}, totalSheets: ${allTimesheets.length}, sheetsWithBackupId: ${sheetsWithBackup.length}`)
+
     allTimesheets.forEach(ts => {
         // Prüfen ob dieser User als Backup eingetragen ist
         if (ts.backupEmployeeId === userId) {
             const dateStr = new Date(ts.date).toISOString().split('T')[0]
             backupDates.add(dateStr)
+            console.log(`[BACKUP DEBUG] Found backup match for userId ${userId} on ${dateStr}`)
 
             // Stunden NUR zählen wenn Haupt-Person abwesend ist
             if (ts.absenceType === "SICK" || ts.absenceType === "VACATION") {
@@ -195,6 +208,7 @@ export function calculateBackupStats(
                     const date = new Date(ts.date)
                     const hours = calculateTotalHours(start, end)
                     backupHours += hours
+                    console.log(`[BACKUP DEBUG] Main person absent (${ts.absenceType}), crediting ${hours}h to backup`)
 
                     // Zuschläge berechnen
                     if (employee.nightPremiumEnabled) {
@@ -212,6 +226,8 @@ export function calculateBackupStats(
             }
         }
     })
+
+    console.log(`[BACKUP DEBUG] Result for userId ${userId}: backupDays=${backupDates.size}, backupHours=${backupHours}`)
 
     return {
         backupDays: backupDates.size,

@@ -128,7 +128,9 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
                     return dbName.includes(searchBackupName) || searchBackupName.includes(dbName)
                 })
 
-                if (!backupUser) {
+                if (backupUser) {
+                    console.log(`[SYNC DEBUG] Row ${rowNum}: Backup user FOUND: "${backupName}" -> ${backupUser.name} (ID: ${backupUser.id})`)
+                } else {
                     console.warn(`[SYNC DEBUG] Row ${rowNum}: Backup user NOT FOUND in database for name "${backupName}" (Clean: "${searchBackupName}")`)
                 }
             }
