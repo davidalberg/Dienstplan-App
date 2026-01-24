@@ -67,7 +67,8 @@ export async function GET(req: NextRequest) {
             employees
         })
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("[GET /api/admin/timesheets] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -141,8 +142,8 @@ export async function DELETE(req: NextRequest) {
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
-        console.error("Error in delete:", error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("[DELETE /api/admin/timesheets] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -221,7 +222,8 @@ export async function PUT(req: NextRequest) {
 
         return NextResponse.json(updated)
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("[PUT /api/admin/timesheets] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -278,7 +280,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json(shift)
     } catch (error: any) {
-        console.error("Error creating manual shift:", error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("[POST /api/admin/timesheets] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

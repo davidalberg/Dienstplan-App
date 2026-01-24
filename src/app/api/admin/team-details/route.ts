@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({ employees })
     } catch (error: any) {
-        console.error("Team details error:", error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("[GET /api/admin/team-details] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

@@ -67,11 +67,12 @@ export async function POST(req: NextRequest) {
                 message: `Imported ${totalImported} shifts, deleted ${totalDeleted} shifts`
             })
         } catch (error: any) {
+            console.error("[POST /api/admin/sync IMPORT] Error:", error)
             await prisma.syncLog.update({
                 where: { id: syncLog.id },
-                data: { status: "ERROR", message: error.message, endedAt: new Date() }
+                data: { status: "ERROR", message: "Import fehlgeschlagen", endedAt: new Date() }
             })
-            return NextResponse.json({ error: error.message }, { status: 500 })
+            return NextResponse.json({ error: "Import fehlgeschlagen" }, { status: 500 })
         }
     }
 
@@ -100,15 +101,16 @@ export async function POST(req: NextRequest) {
             })
             return NextResponse.json({ success: true, message: `Exported ${count} shifts` })
         } catch (error: any) {
+            console.error("[POST /api/admin/sync EXPORT] Error:", error)
             await prisma.syncLog.update({
                 where: { id: syncLog.id },
                 data: {
                     status: "ERROR",
-                    message: error.message || "Export failed",
+                    message: "Export fehlgeschlagen",
                     endedAt: new Date()
                 }
             })
-            return NextResponse.json({ error: error.message }, { status: 500 })
+            return NextResponse.json({ error: "Export fehlgeschlagen" }, { status: 500 })
         }
     }
 

@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
             message: `${updatedShifts.length} Schichten wurden zurückgesetzt`
         })
     } catch (error: any) {
-        console.error("Error canceling submission:", error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("[POST /api/timesheets/cancel-submit] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

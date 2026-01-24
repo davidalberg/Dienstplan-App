@@ -55,7 +55,8 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({ employees })
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("[GET /api/admin/employees] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -151,7 +152,8 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ employee })
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("[POST /api/admin/employees] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -262,7 +264,8 @@ export async function PUT(req: NextRequest) {
 
         return NextResponse.json({ employee })
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("[PUT /api/admin/employees] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -336,10 +339,11 @@ export async function DELETE(req: NextRequest) {
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
-        // Spezifische Fehlermeldung für Race Condition
-        if (error.message.includes("Race Condition")) {
-            return NextResponse.json({ error: error.message }, { status: 409 })
+        console.error("[DELETE /api/admin/employees] Error:", error)
+        // Spezifische Fehlermeldung für Race Condition (interner Fehler, ok zu zeigen)
+        if (error.message?.includes("Race Condition")) {
+            return NextResponse.json({ error: "Konflikt: Daten wurden zwischenzeitlich geändert" }, { status: 409 })
         }
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

@@ -82,12 +82,13 @@ export function isValidTimeFormat(timeStr: string | null | undefined): boolean {
 
 /**
  * Calculate total hours from a list of timesheets with actual times
- * @param timesheets Array of timesheet objects with actualStart and actualEnd
+ * @param timesheets Array of timesheet objects with actualStart, actualEnd, and breakMinutes
  * @returns Total hours as decimal string
  */
 export function calculateTotalHoursFromTimesheets(timesheets: Array<{
     actualStart?: string | null
     actualEnd?: string | null
+    breakMinutes?: number | null
 }>): string {
     let totalMinutes = 0
 
@@ -95,7 +96,9 @@ export function calculateTotalHoursFromTimesheets(timesheets: Array<{
         if (ts.actualStart && ts.actualEnd) {
             const minutes = calculateMinutesBetween(ts.actualStart, ts.actualEnd)
             if (minutes !== null) {
-                totalMinutes += minutes
+                // Subtract break minutes from total
+                const breakMins = ts.breakMinutes || 0
+                totalMinutes += Math.max(0, minutes - breakMins)
             }
         }
     }
