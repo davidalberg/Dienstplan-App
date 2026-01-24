@@ -40,25 +40,24 @@ export async function GET(req: NextRequest) {
         })
 
         // Fetch unique sources, sheet file names, teams, and employees for the filter menu
-        const [sourcesData, sheetFileNamesData, teams, employees] = await Promise.all([
-            prisma.timesheet.findMany({
-                select: { source: true },
-                distinct: ["source"],
-                where: { source: { not: null } }
-            }),
-            prisma.timesheet.findMany({
-                select: { sheetFileName: true },
-                distinct: ["sheetFileName"],
-                where: { sheetFileName: { not: null } }
-            }),
-            prisma.team.findMany({
-                select: { id: true, name: true }
-            }),
-            prisma.user.findMany({
-                where: { role: "EMPLOYEE" },
-                select: { id: true, name: true }
-            })
-        ])
+        // SEQUENTIELL statt Promise.all um Connection Pool nicht zu erschöpfen
+        const sourcesData = await prisma.timesheet.findMany({
+            select: { source: true },
+            distinct: ["source"],
+            where: { source: { not: null } }
+        })
+        const sheetFileNamesData = await prisma.timesheet.findMany({
+            select: { sheetFileName: true },
+            distinct: ["sheetFileName"],
+            where: { sheetFileName: { not: null } }
+        })
+        const teams = await prisma.team.findMany({
+            select: { id: true, name: true }
+        })
+        const employees = await prisma.user.findMany({
+            where: { role: "EMPLOYEE" },
+            select: { id: true, name: true }
+        })
 
         return NextResponse.json({
             timesheets,
