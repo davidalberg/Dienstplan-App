@@ -19,6 +19,11 @@ export function parseTimeToMinutes(timeStr: string | null | undefined): number |
     const minutes = parseInt(parts[1], 10)
 
     if (isNaN(hours) || isNaN(minutes)) return null
+
+    // Allow 24:00 as a special case (midnight at end of day)
+    if (hours === 24 && minutes === 0) return 24 * 60
+
+    // Standard validation: hours 0-23, minutes 0-59
     if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
 
     return hours * 60 + minutes
@@ -75,6 +80,9 @@ export function formatMinutesAsTime(minutes: number): string {
  */
 export function isValidTimeFormat(timeStr: string | null | undefined): boolean {
     if (!timeStr) return false
+
+    // Allow 24:00 as a special case (midnight at end of day)
+    if (timeStr === '24:00') return true
 
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
     return timeRegex.test(timeStr)

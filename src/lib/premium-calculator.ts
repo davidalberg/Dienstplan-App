@@ -155,6 +155,7 @@ export function calculateNightHours(start: string, end: string, date: Date): num
 export function aggregateMonthlyData(
     timesheets: any[],
     employee: {
+        id?: string
         hourlyWage: number
         nightPremiumEnabled: boolean
         nightPremiumPercent: number
@@ -162,7 +163,8 @@ export function aggregateMonthlyData(
         sundayPremiumPercent: number
         holidayPremiumEnabled: boolean
         holidayPremiumPercent: number
-    }
+    },
+    allTimesheetsForBackup?: any[]
 ): {
     totalHours: number
     nightHours: number
@@ -172,6 +174,7 @@ export function aggregateMonthlyData(
     sickHours: number
     vacationDays: number
     vacationHours: number
+    backupDays: number
 } {
     let totalHours = 0
     let nightHours = 0
@@ -181,9 +184,11 @@ export function aggregateMonthlyData(
     let sickHours = 0
     let vacationDays = 0
     let vacationHours = 0
+    let backupDays = 0
 
     const sickDates = new Set<string>()
     const vacationDates = new Set<string>()
+    const backupDates = new Set<string>()
 
     timesheets.forEach(ts => {
         const date = new Date(ts.date)
@@ -233,6 +238,17 @@ export function aggregateMonthlyData(
     sickDays = sickDates.size
     vacationDays = vacationDates.size
 
+    // Backup-Tage zählen: Wie oft ist dieser Mitarbeiter als Backup eingetragen?
+    if (employee.id && allTimesheetsForBackup) {
+        allTimesheetsForBackup.forEach(ts => {
+            if (ts.backupEmployeeId === employee.id) {
+                const dateStr = new Date(ts.date).toISOString().split('T')[0]
+                backupDates.add(dateStr)
+            }
+        })
+        backupDays = backupDates.size
+    }
+
     return {
         totalHours: Math.round(totalHours * 100) / 100,
         nightHours: Math.round(nightHours * 100) / 100,
@@ -241,6 +257,7 @@ export function aggregateMonthlyData(
         sickDays,
         sickHours: Math.round(sickHours * 100) / 100,
         vacationDays,
-        vacationHours: Math.round(vacationHours * 100) / 100
+        vacationHours: Math.round(vacationHours * 100) / 100,
+        backupDays
     }
 }

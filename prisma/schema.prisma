@@ -46,33 +46,35 @@ model Team {
 }
 
 model Timesheet {
-  id            String   @id @default(cuid())
-  date          DateTime
-  plannedStart  String?
-  plannedEnd    String?
-  actualStart   String?
-  actualEnd     String?
-  breakMinutes  Int      @default(0)
-  note          String?
-  absenceType   String?
-  status        String   @default("PLANNED")
-  employeeId    String
-  teamId        String?
-  month         Int
-  year          Int
-  lastUpdatedAt DateTime @updatedAt
-  lastUpdatedBy String?
-  source        String?
-  sheetFileName String?
-  sheetId       String?
-  syncVerified  Boolean  @default(false)
-  team          Team?    @relation(fields: [teamId], references: [id])
-  employee      User     @relation(fields: [employeeId], references: [id])
+  id               String   @id @default(cuid())
+  date             DateTime
+  plannedStart     String?
+  plannedEnd       String?
+  actualStart      String?
+  actualEnd        String?
+  breakMinutes     Int      @default(0)
+  note             String?
+  absenceType      String?
+  status           String   @default("PLANNED")
+  employeeId       String
+  teamId           String?
+  month            Int
+  year             Int
+  lastUpdatedAt    DateTime @updatedAt
+  lastUpdatedBy    String?
+  source           String?
+  sheetFileName    String?
+  sheetId          String?
+  syncVerified     Boolean  @default(false)
+  backupEmployeeId String?
+  team             Team?    @relation(fields: [teamId], references: [id])
+  employee         User     @relation(fields: [employeeId], references: [id])
 
   @@unique([employeeId, date])
   @@index([source, syncVerified])
   @@index([month, year, employeeId])
   @@index([date, status])
+  @@index([backupEmployeeId, month, year])
 }
 
 model AuditLog {

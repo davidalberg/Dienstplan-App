@@ -170,6 +170,89 @@ export async function POST(req: NextRequest) {
         data: updateData,
     })
 
+    // Automatische Backup-Einspringfunktion
+    // Wenn jemand krank/Urlaub ist und es gibt einen Backup, springt dieser automatisch ein
+    if ((absenceType === "SICK" || absenceType === "VACATION") && existing.backupEmployeeId) {
+        try {
+            console.log(`[BACKUP SUBSTITUTION] Employee ${existing.employeeId} is ${absenceType}, activating backup ${existing.backupEmployeeId}`)
+
+            // Prüfe ob Backup-Person bereits einen Eintrag für diesen Tag hat
+            const backupExisting = await prisma.timesheet.findUnique({
+                where: {
+                    employeeId_date: {
+                        employeeId: existing.backupEmployeeId,
+                        date: existing.date
+                    }
+                }
+            })
+
+            // Hole Team-Info des Backup-Mitarbeiters
+            const backupEmployee = await prisma.user.findUnique({
+                where: { id: existing.backupEmployeeId },
+                select: { teamId: true, name: true }
+            })
+
+            if (backupEmployee) {
+                // Erstelle oder aktualisiere Timesheet für Backup-Person
+                const backupData = {
+                    actualStart: existing.plannedStart,
+                    actualEnd: existing.plannedEnd,
+                    breakMinutes: existing.breakMinutes || 0,
+                    status: "CHANGED", // Marked as changed since they're filling in
+                    absenceType: null, // They're working, not absent
+                    note: `Eingesprungen für ${absenceType === "SICK" ? "Krankheit" : "Urlaub"}`,
+                    lastUpdatedBy: "SYSTEM_BACKUP_ACTIVATION",
+                    teamId: backupEmployee.teamId,
+                    source: existing.source,
+                    sheetFileName: existing.sheetFileName,
+                    sheetId: existing.sheetId,
+                    syncVerified: true
+                }
+
+                if (backupExisting) {
+                    // Update existing backup timesheet
+                    await prisma.timesheet.update({
+                        where: { id: backupExisting.id },
+                        data: backupData
+                    })
+                    console.log(`[BACKUP SUBSTITUTION] Updated existing timesheet for backup employee`)
+                } else {
+                    // Create new backup timesheet
+                    await prisma.timesheet.create({
+                        data: {
+                            ...backupData,
+                            employeeId: existing.backupEmployeeId,
+                            date: existing.date,
+                            plannedStart: existing.plannedStart,
+                            plannedEnd: existing.plannedEnd,
+                            month: existing.month,
+                            year: existing.year,
+                        }
+                    })
+                    console.log(`[BACKUP SUBSTITUTION] Created new timesheet for backup employee`)
+                }
+
+                // Sync backup timesheet to Google Sheets (wenn vorhanden)
+                if (existing.source && existing.sheetId) {
+                    try {
+                        const { appendShiftToSheet } = await import("@/lib/google-sheets")
+                        await appendShiftToSheet(existing.sheetId, existing.source, {
+                            date: existing.date,
+                            name: backupEmployee.name || "Unknown",
+                            start: existing.plannedStart || "",
+                            end: existing.plannedEnd || "",
+                            note: `Eingesprungen für ${absenceType === "SICK" ? "Krankheit" : "Urlaub"}`
+                        })
+                    } catch (error) {
+                        console.error("[BACKUP SUBSTITUTION] Google Sheets sync failed (non-critical):", error)
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("[BACKUP SUBSTITUTION] Failed to activate backup (non-critical):", error)
+        }
+    }
+
     // Audit Log Entry - immer synchron um Connection Pool nicht zu erschöpfen
     try {
         await prisma.auditLog.create({

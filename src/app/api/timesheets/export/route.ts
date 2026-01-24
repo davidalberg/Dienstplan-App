@@ -108,7 +108,9 @@ export async function GET(req: NextRequest) {
             const primarySource = source || empTimesheets[0].sheetFileName || empTimesheets[0].source || "-"
 
             // Aggregate monthly data using premium calculator
+            // Pass all timesheets to count backup days
             const aggregated = aggregateMonthlyData(empTimesheets, {
+                id: empId,
                 hourlyWage: employee.hourlyWage || 0,
                 nightPremiumEnabled: employee.nightPremiumEnabled,
                 nightPremiumPercent: employee.nightPremiumPercent || 25,
@@ -116,7 +118,7 @@ export async function GET(req: NextRequest) {
                 sundayPremiumPercent: employee.sundayPremiumPercent || 30,
                 holidayPremiumEnabled: employee.holidayPremiumEnabled,
                 holidayPremiumPercent: employee.holidayPremiumPercent || 125
-            })
+            }, timesheets)
 
             // Build row with columns A-Q
             const row: any = {}
@@ -155,8 +157,8 @@ export async function GET(req: NextRequest) {
             // J: NRW Feiertagsstunden
             row["J_Feiertagsstunden"] = aggregated.holidayHours
 
-            // K: Bereitschaftstage (LEER - vorerst übersprungen)
-            row["K_Bereitschaftstage"] = ""
+            // K: Bereitschaftstage (Backup-Tage)
+            row["K_Bereitschaftstage"] = aggregated.backupDays
 
             // L: Krankheitstage
             row["L_Krankheitstage"] = aggregated.sickDays

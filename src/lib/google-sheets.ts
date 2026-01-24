@@ -93,8 +93,9 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
             }
 
             // Mapping: A:Day, B:Date, C:Name, D:Start, E:End, F:Total, G:Backup, H:Status, I:Notes
-            const [day, dateStr, nameRaw, start, end, total, backup, status, notes] = row
+            const [day, dateStr, nameRaw, start, end, total, backupRaw, status, notes] = row
             const name = nameRaw?.trim()
+            const backupName = backupRaw?.trim()
 
             if (!name || !dateStr) {
                 if (name || dateStr) {
@@ -103,7 +104,7 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
                 continue
             }
 
-            // Fuzzy Name Matching
+            // Fuzzy Name Matching for main employee
             // We'll try exact match first, then parts
             const searchName = name.toLowerCase().replace(/[.,\s]/g, '')
 
@@ -116,6 +117,20 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
             if (!user) {
                 console.warn(`[SYNC DEBUG] Row ${rowNum}: User NOT FOUND in database for name "${name}" (Clean: "${searchName}")`)
                 continue
+            }
+
+            // Fuzzy Name Matching for backup employee (optional)
+            let backupUser = null
+            if (backupName) {
+                const searchBackupName = backupName.toLowerCase().replace(/[.,\s]/g, '')
+                backupUser = allEmployees.find((u: any) => {
+                    const dbName = u.name?.toLowerCase().replace(/[.,\s]/g, '') || ""
+                    return dbName.includes(searchBackupName) || searchBackupName.includes(dbName)
+                })
+
+                if (!backupUser) {
+                    console.warn(`[SYNC DEBUG] Row ${rowNum}: Backup user NOT FOUND in database for name "${backupName}" (Clean: "${searchBackupName}")`)
+                }
             }
 
             // Parse date (B)
@@ -171,6 +186,7 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
                 sheetFileName: sheetFileName,
                 sheetId: sheetId,
                 syncVerified: true, // SCHRITT 2: Markiere als verifiziert
+                backupEmployeeId: backupUser ? backupUser.id : null,
             }
 
             // Sammle Upsert-Operation für spätere Batch-Ausführung
@@ -339,29 +355,52 @@ export async function appendShiftToSheet(sheetId: string, tabName: string, shift
                 requestBody: { values }
             })
         } else {
-            // Update all columns A-I
-            console.log(`[SYNC DEBUG] Updating all columns (A-I) in row ${rowIndex} in "${tabName}"`)
-            const updateRange = `'${tabName}'!A${rowIndex}:I${rowIndex}`
-            const values = [[day, dateFormatted, name, start, end, "", "", "", note]]
+            // Update columns A-E and I, but SKIP F (Total - auto-calculated) and G (Backup - managed separately)
+            console.log(`[SYNC DEBUG] Updating columns A-E and I in row ${rowIndex} in "${tabName}", skipping F and G`)
 
+            // Update A-E (Day, Date, Name, Start, End)
             await sheets.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: updateRange,
+                range: `'${tabName}'!A${rowIndex}:E${rowIndex}`,
                 valueInputOption: "USER_ENTERED",
-                requestBody: { values }
+                requestBody: { values: [[day, dateFormatted, name, start, end]] }
             })
+
+            // Update I (Notes) separately if there's a note
+            if (note) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId: sheetId,
+                    range: `'${tabName}'!I${rowIndex}`,
+                    valueInputOption: "USER_ENTERED",
+                    requestBody: { values: [[note]] }
+                })
+            }
         }
     } else {
-        // Append as new row - always write all columns
+        // Append as new row - only write columns A-E and I, leave F and G empty for auto-calculation/manual entry
         console.log(`[SYNC DEBUG] Appending new row to "${tabName}"`)
-        const values = [[day, dateFormatted, name, start, end, "", "", "", note]]
+        const values = [[day, dateFormatted, name, start, end]]
 
         await sheets.spreadsheets.values.append({
             spreadsheetId: sheetId,
-            range: `'${tabName}'!A3`,
+            range: `'${tabName}'!A3:E`,
             valueInputOption: "USER_ENTERED",
             requestBody: { values }
         })
+
+        // Add note to column I if present
+        if (note) {
+            // Find the newly added row and update column I
+            const newRowIndex = await findRowIndex(sheets, sheetId, tabName, date, name)
+            if (newRowIndex !== -1) {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId: sheetId,
+                    range: `'${tabName}'!I${newRowIndex}`,
+                    valueInputOption: "USER_ENTERED",
+                    requestBody: { values: [[note]] }
+                })
+            }
+        }
     }
 }
 
