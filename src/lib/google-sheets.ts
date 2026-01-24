@@ -85,6 +85,7 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
             create: any;
         }> = []
         const updateVerifiedIds: string[] = []
+        const backupUpdateOperations: Array<{ id: string; backupEmployeeId: string | null }> = []
 
         for (const [index, row] of rows.entries()) {
             const rowNum = index + 3
@@ -173,10 +174,17 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
             const lookupKey = `${user.id}-${date.toISOString().split('T')[0]}`
             const existing = existingMap.get(lookupKey)
 
-            // Wenn DB-Version neuer als Import-Start, nicht überschreiben
+            // Wenn DB-Version neuer als Import-Start, nicht überschreiben ABER backupEmployeeId aktualisieren
             if (existing && existing.lastUpdatedAt > importStartTime) {
-                console.log(`[SYNC DEBUG] Row ${rowNum}: DB-Version ist neuer als Import-Start, überspringe Import aber markiere als verifiziert`)
+                console.log(`[SYNC DEBUG] Row ${rowNum}: DB-Version ist neuer als Import-Start, überspringe Import aber markiere als verifiziert und aktualisiere backupEmployeeId`)
                 updateVerifiedIds.push(existing.id)
+
+                // WICHTIG: backupEmployeeId trotzdem aktualisieren, da diese Info aus Google Sheets kommt
+                backupUpdateOperations.push({
+                    id: existing.id,
+                    backupEmployeeId: backupUser ? backupUser.id : null
+                })
+
                 processed++
                 continue
             }
@@ -215,13 +223,27 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
             processed++
         }
 
-        // BATCH: Markiere übersprungene Einträge als verifiziert
+        // BATCH: Markiere übersprungene Einträge als verifiziert UND aktualisiere backupEmployeeId
         if (updateVerifiedIds.length > 0) {
             await prisma.timesheet.updateMany({
                 where: { id: { in: updateVerifiedIds } },
                 data: { syncVerified: true }
             })
             console.log(`[SYNC DEBUG] Marked ${updateVerifiedIds.length} newer entries as verified`)
+        }
+
+        // BATCH: Aktualisiere backupEmployeeId für neuere Einträge
+        if (backupUpdateOperations.length > 0) {
+            console.log(`[SYNC DEBUG] Updating backupEmployeeId for ${backupUpdateOperations.length} newer entries...`)
+            await prisma.$transaction(
+                backupUpdateOperations.map(op =>
+                    prisma.timesheet.update({
+                        where: { id: op.id },
+                        data: { backupEmployeeId: op.backupEmployeeId }
+                    })
+                )
+            )
+            console.log(`[SYNC DEBUG] backupEmployeeId updates completed`)
         }
 
         // BATCH: Führe alle Upserts in einer Transaction aus
