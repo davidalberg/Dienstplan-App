@@ -55,6 +55,36 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
             where: { role: "EMPLOYEE" }
         })
 
+        // BATCH OPTIMIZATION: Lade alle existierenden Timesheets für diesen Tab vorab
+        // Reduziert DB-Abfragen von O(n) auf O(1) pro Zeile
+        const existingTimesheets = await prisma.timesheet.findMany({
+            where: { source: tabName, sheetId: sheetId },
+            select: {
+                id: true,
+                employeeId: true,
+                date: true,
+                lastUpdatedAt: true,
+                syncVerified: true
+            }
+        })
+
+        // Map für O(1) Lookup: "employeeId-YYYY-MM-DD" -> existing timesheet
+        const existingMap = new Map(
+            existingTimesheets.map(t => [
+                `${t.employeeId}-${t.date.toISOString().split('T')[0]}`,
+                t
+            ])
+        )
+        console.log(`[SYNC DEBUG] Loaded ${existingTimesheets.length} existing timesheets into memory map`)
+
+        // Sammle alle Upsert-Operationen für Batch-Verarbeitung
+        const upsertOperations: Array<{
+            where: { employeeId_date: { employeeId: string; date: Date } };
+            update: any;
+            create: any;
+        }> = []
+        const updateVerifiedIds: string[] = []
+
         for (const [index, row] of rows.entries()) {
             const rowNum = index + 3
             if (row.length < 2) {
@@ -120,25 +150,14 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
             const formatTime = (t: string) => (t && t.includes(':')) ? t.trim() : null
             const finalNote = status ? `[Status: ${status}] ${notes || ""}` : (notes || "")
 
-            console.log(`[SYNC DEBUG] Row ${rowNum} OK: ${user.name} on ${dateStr} (${tabName})`)
-
-            // Konflikt-Prävention: Prüfe ob DB-Version neuer als Import-Start
-            const existing = await prisma.timesheet.findUnique({
-                where: {
-                    employeeId_date: {
-                        employeeId: user.id,
-                        date: date,
-                    }
-                }
-            })
+            // BATCH OPTIMIZATION: Lookup aus Memory-Map statt DB-Query
+            const lookupKey = `${user.id}-${date.toISOString().split('T')[0]}`
+            const existing = existingMap.get(lookupKey)
 
             // Wenn DB-Version neuer als Import-Start, nicht überschreiben
             if (existing && existing.lastUpdatedAt > importStartTime) {
                 console.log(`[SYNC DEBUG] Row ${rowNum}: DB-Version ist neuer als Import-Start, überspringe Import aber markiere als verifiziert`)
-                await prisma.timesheet.update({
-                    where: { id: existing.id },
-                    data: { syncVerified: true }
-                })
+                updateVerifiedIds.push(existing.id)
                 processed++
                 continue
             }
@@ -154,7 +173,8 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
                 syncVerified: true, // SCHRITT 2: Markiere als verifiziert
             }
 
-            await prisma.timesheet.upsert({
+            // Sammle Upsert-Operation für spätere Batch-Ausführung
+            upsertOperations.push({
                 where: {
                     employeeId_date: {
                         employeeId: user.id,
@@ -173,6 +193,27 @@ export async function importPlannedShifts(sheetId: string, tabName: string = "Im
                 }
             })
             processed++
+        }
+
+        // BATCH: Markiere übersprungene Einträge als verifiziert
+        if (updateVerifiedIds.length > 0) {
+            await prisma.timesheet.updateMany({
+                where: { id: { in: updateVerifiedIds } },
+                data: { syncVerified: true }
+            })
+            console.log(`[SYNC DEBUG] Marked ${updateVerifiedIds.length} newer entries as verified`)
+        }
+
+        // BATCH: Führe alle Upserts in einer Transaction aus
+        // Das reduziert DB-Roundtrips und hält Connections kürzer offen
+        if (upsertOperations.length > 0) {
+            console.log(`[SYNC DEBUG] Executing ${upsertOperations.length} upsert operations in transaction...`)
+
+            // Batch-Transaction für alle Upserts (schneller als einzelne Queries)
+            await prisma.$transaction(
+                upsertOperations.map(op => prisma.timesheet.upsert(op))
+            )
+            console.log(`[SYNC DEBUG] Transaction completed successfully`)
         }
 
         // SCHRITT 3: Lösche alle nicht verifizierten Dienste (wurden aus Sheets entfernt)

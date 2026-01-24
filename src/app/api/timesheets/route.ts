@@ -170,35 +170,8 @@ export async function POST(req: NextRequest) {
         data: updateData,
     })
 
-    // Audit Log Entry - für CONFIRM asynchron (fire-and-forget), für UPDATE/UNCONFIRM synchron
-    if (action === "CONFIRM") {
-        // Fire-and-forget Audit Log für CONFIRM (nicht blockierend)
-        ;(async () => {
-            try {
-                await prisma.auditLog.create({
-                    data: {
-                        employeeId: existing.employeeId,
-                        date: existing.date,
-                        changedBy: user.email,
-                        field: "TIMESHEET_UPDATE",
-                        oldValue: JSON.stringify({
-                            actualStart: existing.actualStart,
-                            actualEnd: existing.actualEnd,
-                            status: existing.status
-                        }),
-                        newValue: JSON.stringify({
-                            actualStart: updated.actualStart,
-                            actualEnd: updated.actualEnd,
-                            status: updated.status
-                        }),
-                    }
-                })
-            } catch (error) {
-                console.error("Audit log failed (non-critical):", error)
-            }
-        })()
-    } else {
-        // Für UPDATE/UNCONFIRM: Synchroner Audit Log (wie bisher)
+    // Audit Log Entry - immer synchron um Connection Pool nicht zu erschöpfen
+    try {
         await prisma.auditLog.create({
             data: {
                 employeeId: existing.employeeId,
@@ -217,45 +190,33 @@ export async function POST(req: NextRequest) {
                 }),
             }
         })
+    } catch (error) {
+        // Audit Log Fehler sollten die Hauptoperation nicht blockieren
+        console.error("Audit log failed (non-critical):", error)
     }
 
     // Sync zu Google Sheets - nur bei wichtigen Änderungen (nicht bei CONFIRM)
-    // Dies verhindert langsame Responses auf Mobilgeräten
+    // Synchron ausführen um Connection Pool nicht zu erschöpfen
     if (updated.source && updated.sheetId && action !== "CONFIRM") {
-        // Type-safe context object for async IIFE to avoid type narrowing issues
-        const syncContext = {
-            sheetId: updated.sheetId as string,
-            source: updated.source as string,
-            employeeId: updated.employeeId,
-            date: updated.date,
-            actualStart: updated.actualStart,
-            actualEnd: updated.actualEnd,
-            plannedStart: updated.plannedStart,
-            plannedEnd: updated.plannedEnd,
-            note: updated.note
-        };
+        try {
+            const { appendShiftToSheet } = await import("@/lib/google-sheets")
 
-        // Fire-and-forget: Nicht auf Sync warten, um Response schnell zurückzusenden
-        ;(async () => {
-            try {
-                const { appendShiftToSheet } = await import("@/lib/google-sheets")
+            const employee = await prisma.user.findUnique({
+                where: { id: updated.employeeId },
+                select: { name: true }
+            })
 
-                const employee = await prisma.user.findUnique({
-                    where: { id: syncContext.employeeId },
-                    select: { name: true }
-                })
-
-                await appendShiftToSheet(syncContext.sheetId, syncContext.source, {
-                    date: syncContext.date,
-                    name: employee?.name || "Unknown",
-                    start: syncContext.actualStart || syncContext.plannedStart || "",
-                    end: syncContext.actualEnd || syncContext.plannedEnd || "",
-                    note: syncContext.note || ""
-                })
-            } catch (error) {
-                console.error("Fehler beim Sync zu Google Sheets:", error)
-            }
-        })()
+            await appendShiftToSheet(updated.sheetId, updated.source, {
+                date: updated.date,
+                name: employee?.name || "Unknown",
+                start: updated.actualStart || updated.plannedStart || "",
+                end: updated.actualEnd || updated.plannedEnd || "",
+                note: updated.note || ""
+            })
+        } catch (error) {
+            // Google Sheets Sync Fehler loggen aber Response nicht blockieren
+            console.error("Fehler beim Sync zu Google Sheets:", error)
+        }
     }
 
     return NextResponse.json(updated)
