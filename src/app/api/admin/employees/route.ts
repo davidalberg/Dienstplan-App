@@ -266,7 +266,7 @@ export async function PUT(req: NextRequest) {
     }
 }
 
-// DELETE - Mitarbeiter löschen
+// DELETE - Mitarbeiter löschen (mit Transaction gegen Race Conditions)
 export async function DELETE(req: NextRequest) {
     const session = await auth()
     if (!session?.user || (session.user as any).role !== "ADMIN") {
@@ -282,17 +282,11 @@ export async function DELETE(req: NextRequest) {
     }
 
     try {
-        // Prüfen ob Mitarbeiter Timesheets hat
+        // Erste Prüfung außerhalb der Transaction (für User-Feedback)
         const timesheetCount = await prisma.timesheet.count({
             where: { employeeId: id }
         })
 
-        // Prüfen ob Mitarbeiter AuditLogs hat
-        const auditLogCount = await prisma.auditLog.count({
-            where: { employeeId: id }
-        })
-
-        // Timesheets können nicht gelöscht werden
         if (timesheetCount > 0) {
             return NextResponse.json(
                 { error: `Mitarbeiter kann nicht gelöscht werden. Es existieren noch ${timesheetCount} Stundeneinträge.` },
@@ -300,7 +294,10 @@ export async function DELETE(req: NextRequest) {
             )
         }
 
-        // AuditLogs können mit force gelöscht werden
+        const auditLogCount = await prisma.auditLog.count({
+            where: { employeeId: id }
+        })
+
         if (auditLogCount > 0 && !force) {
             return NextResponse.json(
                 {
@@ -312,20 +309,37 @@ export async function DELETE(req: NextRequest) {
             )
         }
 
-        // Wenn force=true, AuditLogs zuerst löschen
-        if (auditLogCount > 0 && force) {
-            await prisma.auditLog.deleteMany({
+        // Atomare Transaction: Prüfung + Löschung in einer Operation
+        // Verhindert Race Condition zwischen Check und Delete
+        await prisma.$transaction(async (tx) => {
+            // Erneute Prüfung innerhalb der Transaction (atomar)
+            const currentTimesheetCount = await tx.timesheet.count({
                 where: { employeeId: id }
             })
-        }
 
-        // Mitarbeiter löschen
-        await prisma.user.delete({
-            where: { id }
+            if (currentTimesheetCount > 0) {
+                throw new Error(`Race Condition: Inzwischen wurden ${currentTimesheetCount} Stundeneinträge erstellt.`)
+            }
+
+            // AuditLogs löschen wenn force=true
+            if (force) {
+                await tx.auditLog.deleteMany({
+                    where: { employeeId: id }
+                })
+            }
+
+            // Mitarbeiter löschen
+            await tx.user.delete({
+                where: { id }
+            })
         })
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
+        // Spezifische Fehlermeldung für Race Condition
+        if (error.message.includes("Race Condition")) {
+            return NextResponse.json({ error: error.message }, { status: 409 })
+        }
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }

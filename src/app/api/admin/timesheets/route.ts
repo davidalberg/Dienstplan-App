@@ -84,7 +84,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
     try {
-        // 1. Fetch shift details
+        // 1. Fetch shift details BEFORE delete
         const shift = await prisma.timesheet.findUnique({
             where: { id },
             include: { employee: true }
@@ -94,40 +94,61 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: "Not found" }, { status: 404 })
         }
 
-        // 2. Delete from database FIRST (fast)
-        await prisma.timesheet.delete({ where: { id } })
+        // 2. Google Sheets Sync ZUERST (mit await!) - KRITISCH für Daten-Konsistenz
+        let sheetSyncError: string | null = null
 
-        // 3. Response sofort zurücksenden
-        const response = NextResponse.json({ success: true })
-
-        // 4. Google Sheets Sync async (nicht blockierend)
         if (shift.source) {
-            ;(async () => {
-                try {
-                    const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "").split(",").map(s => s.trim()).filter(Boolean)
-                    const gsClient = await getGoogleSheetsClient()
+            try {
+                const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "")
+                    .split(",").map(s => s.trim()).filter(Boolean)
+                const gsClient = await getGoogleSheetsClient()
+                let syncedSuccessfully = false
 
-                    for (const sid of sheetIds) {
-                        try {
-                            const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
-                            const tabs = res.data.sheets?.map(s => s.properties?.title)
-                            if (tabs?.includes(shift.source)) {
-                                await clearShiftInSheet(sid, shift.source as string, shift.date, (shift.employee?.name || "Unknown") as string)
-                                break
-                            }
-                        } catch (e) {
-                            console.error(`Error searching tab ${shift.source} in sheet ${sid}:`, e)
+                for (const sid of sheetIds) {
+                    try {
+                        const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
+                        const tabs = res.data.sheets?.map(s => s.properties?.title)
+
+                        if (tabs?.includes(shift.source)) {
+                            await clearShiftInSheet(
+                                sid,
+                                shift.source as string,
+                                shift.date,
+                                (shift.employee?.name || "Unknown") as string
+                            )
+                            syncedSuccessfully = true
+                            break
                         }
+                    } catch (e) {
+                        console.error(`Error searching tab ${shift.source} in sheet ${sid}:`, e)
                     }
-                } catch (error) {
-                    console.error("Google Sheets sync failed (non-critical):", error)
                 }
-            })()
+
+                // Warnung wenn Tab nicht gefunden wurde (Sheet bleibt inkonsistent)
+                if (!syncedSuccessfully && sheetIds.length > 0) {
+                    console.warn(`[SYNC WARNING] Tab "${shift.source}" not found in any sheet. Sheet may be inconsistent.`)
+                }
+            } catch (error: any) {
+                console.error("Google Sheets sync failed:", error)
+                sheetSyncError = error.message || "Google Sheets Synchronisation fehlgeschlagen"
+            }
         }
 
-        return response
+        // 3. Wenn Google Sync fehlgeschlagen ist: NICHT aus DB löschen!
+        if (sheetSyncError) {
+            return NextResponse.json({
+                error: "Konnte nicht mit Google Sheets synchronisieren. Bitte erneut versuchen.",
+                details: sheetSyncError,
+                syncFailed: true
+            }, { status: 503 })
+        }
+
+        // 4. Erst JETZT aus Datenbank löschen (nach erfolgreichem Sheet-Sync)
+        await prisma.timesheet.delete({ where: { id } })
+
+        return NextResponse.json({ success: true })
     } catch (error: any) {
-        console.error("Error in refined delete:", error)
+        console.error("Error in delete:", error)
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }

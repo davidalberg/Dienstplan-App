@@ -1,13 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import { Send, Clock, CheckCircle, X } from "lucide-react"
+import { Send, Clock, CheckCircle, X, AlertCircle } from "lucide-react"
 import { calculateTotalHoursFromTimesheets } from "@/lib/time-utils"
 
-export default function MonthlySummary({ timesheets, onRefresh }: { timesheets: any[], onRefresh: () => void }) {
+interface MonthlySummaryProps {
+    timesheets: any[]
+    onRefresh: () => void
+    month?: number
+    year?: number
+}
+
+export default function MonthlySummary({ timesheets, onRefresh, month, year }: MonthlySummaryProps) {
     const [loading, setLoading] = useState(false)
     const [cancelling, setCancelling] = useState(false)
     const [error, setError] = useState("")
+
+    // Sichere Extraktion von month/year mit Fallback auf Props
+    const currentMonth = timesheets.length > 0 ? timesheets[0].month : month
+    const currentYear = timesheets.length > 0 ? timesheets[0].year : year
 
     const calculateTotalHours = () => {
         return calculateTotalHoursFromTimesheets(timesheets)
@@ -24,7 +35,8 @@ export default function MonthlySummary({ timesheets, onRefresh }: { timesheets: 
     }
 
     const handleSubmit = async () => {
-        if (timesheets.length === 0) {
+        // Doppelte Sicherheitsprüfung
+        if (!currentMonth || !currentYear) {
             setError("Keine Zeiterfassungen vorhanden")
             return
         }
@@ -39,8 +51,8 @@ export default function MonthlySummary({ timesheets, onRefresh }: { timesheets: 
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    month: timesheets[0].month,
-                    year: timesheets[0].year,
+                    month: currentMonth,
+                    year: currentYear,
                 })
             })
 
@@ -58,7 +70,8 @@ export default function MonthlySummary({ timesheets, onRefresh }: { timesheets: 
     }
 
     const handleCancelSubmit = async () => {
-        if (timesheets.length === 0) {
+        // Doppelte Sicherheitsprüfung
+        if (!currentMonth || !currentYear) {
             setError("Keine Zeiterfassungen vorhanden")
             return
         }
@@ -73,8 +86,8 @@ export default function MonthlySummary({ timesheets, onRefresh }: { timesheets: 
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    month: timesheets[0].month,
-                    year: timesheets[0].year,
+                    month: currentMonth,
+                    year: currentYear,
                 })
             })
 
@@ -89,6 +102,21 @@ export default function MonthlySummary({ timesheets, onRefresh }: { timesheets: 
         } finally {
             setCancelling(false)
         }
+    }
+
+    // Leerzustand: Keine Daten vorhanden
+    if (timesheets.length === 0 && !month && !year) {
+        return (
+            <div className="rounded-3xl bg-gray-100 p-6 text-gray-500 shadow-xl">
+                <div className="flex items-center justify-center gap-3">
+                    <AlertCircle size={24} />
+                    <span className="font-medium">Keine Daten vorhanden</span>
+                </div>
+                <p className="mt-2 text-center text-sm">
+                    Für diesen Monat wurden noch keine Dienste importiert.
+                </p>
+            </div>
+        )
     }
 
     const total = calculateTotalHours()
