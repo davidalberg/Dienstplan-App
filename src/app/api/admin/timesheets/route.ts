@@ -97,48 +97,35 @@ export async function DELETE(req: NextRequest) {
         // 2. Google Sheets Sync ZUERST (mit await!) - KRITISCH für Daten-Konsistenz
         let sheetSyncError: string | null = null
 
-        if (shift.source) {
+        // FIX: Direkt das gespeicherte sheetId verwenden statt alle Sheets zu durchsuchen
+        if (shift.source && shift.sheetId) {
             try {
-                const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "")
-                    .split(",").map(s => s.trim()).filter(Boolean)
-                console.log(`[DELETE SYNC] Searching for tab "${shift.source}" in ${sheetIds.length} sheet(s)`)
+                console.log(`[DELETE SYNC] Using stored sheetId: ${shift.sheetId.slice(0,8)}... for tab "${shift.source}"`)
 
                 const gsClient = await getGoogleSheetsClient()
-                let syncedSuccessfully = false
 
-                for (const sid of sheetIds) {
-                    try {
-                        const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
-                        const tabs = res.data.sheets?.map(s => s.properties?.title) || []
-                        console.log(`[DELETE SYNC] Sheet ${sid.slice(0,8)}... has tabs: ${tabs.join(", ")}`)
+                // Verifiziere dass der Tab im richtigen Sheet existiert
+                const res = await gsClient.spreadsheets.get({ spreadsheetId: shift.sheetId })
+                const tabs = res.data.sheets?.map(s => s.properties?.title) || []
 
-                        if (tabs.includes(shift.source)) {
-                            console.log(`[DELETE SYNC] Found matching tab "${shift.source}", clearing...`)
-                            await clearShiftInSheet(
-                                sid,
-                                shift.source as string,
-                                shift.date,
-                                (shift.employee?.name || "Unknown") as string
-                            )
-                            syncedSuccessfully = true
-                            console.log(`[DELETE SYNC] Clear completed successfully!`)
-                            break
-                        }
-                    } catch (e: any) {
-                        console.error(`[DELETE SYNC] Error searching tab ${shift.source} in sheet ${sid}:`, e.message)
-                    }
-                }
-
-                // Warnung wenn Tab nicht gefunden wurde (Sheet bleibt inkonsistent)
-                if (!syncedSuccessfully && sheetIds.length > 0) {
-                    console.warn(`[DELETE SYNC WARNING] Tab "${shift.source}" NOT FOUND in any sheet. Sheet may be inconsistent.`)
+                if (tabs.includes(shift.source)) {
+                    console.log(`[DELETE SYNC] Tab "${shift.source}" found, clearing...`)
+                    await clearShiftInSheet(
+                        shift.sheetId,
+                        shift.source as string,
+                        shift.date,
+                        (shift.employee?.name || "Unknown") as string
+                    )
+                    console.log(`[DELETE SYNC] Clear completed successfully!`)
+                } else {
+                    console.warn(`[DELETE SYNC WARNING] Tab "${shift.source}" NOT FOUND in sheet ${shift.sheetId.slice(0,8)}...`)
                 }
             } catch (error: any) {
                 console.error("[DELETE SYNC] Google Sheets sync failed:", error)
                 sheetSyncError = error.message || "Google Sheets Synchronisation fehlgeschlagen"
             }
         } else {
-            console.log(`[DELETE SYNC] No source field - skipping Google Sheets sync`)
+            console.log(`[DELETE SYNC] No source/sheetId - skipping Google Sheets sync`)
         }
 
         // 3. Wenn Google Sync fehlgeschlagen ist: NICHT aus DB löschen!
@@ -193,48 +180,36 @@ export async function PUT(req: NextRequest) {
         // 2. Google Sheets Sync SYNCHRON (mit await!) - für Daten-Konsistenz
         let sheetSyncError: string | null = null
 
-        if (updated.source) {
+        // FIX: Direkt das gespeicherte sheetId verwenden statt alle Sheets zu durchsuchen
+        if (updated.source && updated.sheetId) {
             try {
-                const sheetIds = (process.env.GOOGLE_SHEET_IDS || process.env.GOOGLE_SHEET_ID || "")
-                    .split(",").map(s => s.trim()).filter(Boolean)
-                console.log(`[PUT SYNC] Searching for tab "${updated.source}" in ${sheetIds.length} sheet(s)`)
+                console.log(`[PUT SYNC] Using stored sheetId: ${updated.sheetId.slice(0,8)}... for tab "${updated.source}"`)
 
                 const gsClient = await getGoogleSheetsClient()
-                let syncedSuccessfully = false
 
-                for (const sid of sheetIds) {
-                    try {
-                        const res = await gsClient.spreadsheets.get({ spreadsheetId: sid })
-                        const tabs = res.data.sheets?.map(s => s.properties?.title) || []
-                        console.log(`[PUT SYNC] Sheet ${sid.slice(0,8)}... has tabs: ${tabs.join(", ")}`)
+                // Verifiziere dass der Tab im richtigen Sheet existiert
+                const res = await gsClient.spreadsheets.get({ spreadsheetId: updated.sheetId })
+                const tabs = res.data.sheets?.map(s => s.properties?.title) || []
 
-                        if (tabs.includes(updated.source)) {
-                            console.log(`[PUT SYNC] Found matching tab "${updated.source}", syncing...`)
-                            await appendShiftToSheet(sid, updated.source as string, {
-                                date: updated.date,
-                                name: updated.employee?.name || "Unknown",
-                                start: updated.actualStart || updated.plannedStart || "",
-                                end: updated.actualEnd || updated.plannedEnd || "",
-                                note: updated.note || ""
-                            }, 'partial')
-                            syncedSuccessfully = true
-                            console.log(`[PUT SYNC] Sync completed successfully!`)
-                            break
-                        }
-                    } catch (error: any) {
-                        console.error(`[PUT SYNC] Error syncing to sheet ${sid}:`, error.message)
-                    }
-                }
-
-                if (!syncedSuccessfully && sheetIds.length > 0) {
-                    console.warn(`[PUT SYNC WARNING] Tab "${updated.source}" NOT FOUND in any sheet. Available tabs logged above.`)
+                if (tabs.includes(updated.source)) {
+                    console.log(`[PUT SYNC] Tab "${updated.source}" found, syncing...`)
+                    await appendShiftToSheet(updated.sheetId, updated.source as string, {
+                        date: updated.date,
+                        name: updated.employee?.name || "Unknown",
+                        start: updated.actualStart || updated.plannedStart || "",
+                        end: updated.actualEnd || updated.plannedEnd || "",
+                        note: updated.note || ""
+                    }, 'partial')
+                    console.log(`[PUT SYNC] Sync completed successfully!`)
+                } else {
+                    console.warn(`[PUT SYNC WARNING] Tab "${updated.source}" NOT FOUND in sheet ${updated.sheetId.slice(0,8)}...`)
                 }
             } catch (error: any) {
                 console.error("[PUT SYNC] Google Sheets sync failed:", error)
                 sheetSyncError = error.message || "Google Sheets Synchronisation fehlgeschlagen"
             }
         } else {
-            console.log(`[PUT SYNC] No source field - skipping Google Sheets sync`)
+            console.log(`[PUT SYNC] No source/sheetId - skipping Google Sheets sync`)
         }
 
         // 3. Bei Sync-Fehler: Warnung zurückgeben aber DB-Update ist OK
