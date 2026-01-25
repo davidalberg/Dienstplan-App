@@ -43,6 +43,7 @@ export default function AdminPage() {
     const [exportYear, setExportYear] = useState(new Date().getFullYear())
 
     const fetchAdminData = async () => {
+        setLoading(true)
         try {
             const [logsRes, tsRes] = await Promise.all([
                 fetch("/api/admin/sync"),
@@ -70,6 +71,8 @@ export default function AdminPage() {
             }
         } catch (err) {
             console.error(err)
+        } finally {
+            setLoading(false)
         }
     }
 
