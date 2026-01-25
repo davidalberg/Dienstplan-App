@@ -10,7 +10,7 @@ import { showToast } from '@/lib/toast-utils'
 export default function AdminPage() {
     const { data: session } = useSession()
     const [logs, setLogs] = useState<any[]>([])
-    const [loading, setLoading] = useState(false)
+    const [loading, setLoading] = useState(true)
     const [timesheets, setTimesheets] = useState<any[]>([])
     const [sources, setSources] = useState<string[]>([])
     const [sheetFileNames, setSheetFileNames] = useState<string[]>([])
@@ -443,8 +443,13 @@ export default function AdminPage() {
                     )}
 
                     <div className="space-y-6">
-                        {Object.keys(groupedTimesheets).length === 0 ? (
-                            <div className="py-12 text-center text-black font-medium font-medium">Keine Schichten gefunden.</div>
+                        {loading ? (
+                            <div className="py-12 text-center text-gray-500">
+                                <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
+                                Lade Schichten...
+                            </div>
+                        ) : Object.keys(groupedTimesheets).length === 0 ? (
+                            <div className="py-12 text-center text-black font-medium">Keine Schichten gefunden.</div>
                         ) : Object.keys(groupedTimesheets).sort((a, b) => a.localeCompare(b, 'de')).map(planName => {
                             // Find the sheetId for this file name - use the first timesheet's sheetId
                             const firstTimesheet = groupedTimesheets[planName][0]
