@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Send, Clock, CheckCircle, X, AlertCircle } from "lucide-react"
+import { Send, Clock, CheckCircle, X, AlertCircle, FileSignature } from "lucide-react"
 import { calculateTotalHoursFromTimesheets } from "@/lib/time-utils"
+import SubmitModal from "./SubmitModal"
 
 interface MonthlySummaryProps {
     timesheets: any[]
@@ -15,6 +16,7 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
     const [loading, setLoading] = useState(false)
     const [cancelling, setCancelling] = useState(false)
     const [error, setError] = useState("")
+    const [showSubmitModal, setShowSubmitModal] = useState(false)
 
     // Sichere Extraktion von month/year mit Fallback auf Props
     const currentMonth = timesheets.length > 0 ? timesheets[0].month : month
@@ -34,39 +36,17 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
         return timesheets.length > 0 && timesheets.every(ts => ts.status === "SUBMITTED")
     }
 
-    const handleSubmit = async () => {
+    const handleOpenSubmitModal = () => {
         // Doppelte Sicherheitsprüfung
         if (!currentMonth || !currentYear) {
             setError("Keine Zeiterfassungen vorhanden")
             return
         }
+        setShowSubmitModal(true)
+    }
 
-        if (!confirm("Möchten Sie den aktuellen Monat wirklich abschließen? Eine Änderung ist danach nur noch über den Admin möglich.")) return
-
-        setLoading(true)
-        setError("")
-
-        try {
-            const res = await fetch("/api/timesheets/submit", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    month: currentMonth,
-                    year: currentYear,
-                })
-            })
-
-            if (!res.ok) {
-                const data = await res.json()
-                setError(data.error || "Einreichung fehlgeschlagen")
-            } else {
-                onRefresh()
-            }
-        } catch (err) {
-            setError("Ein unerwarteter Fehler ist aufgetreten")
-        } finally {
-            setLoading(false)
-        }
+    const handleSubmitSuccess = () => {
+        onRefresh()
     }
 
     const handleCancelSubmit = async () => {
@@ -164,15 +144,15 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
                 ) : (
                     <button
                         type="button"
-                        onClick={handleSubmit}
+                        onClick={handleOpenSubmitModal}
                         disabled={!ready || loading}
                         className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 font-bold transition-all shadow-lg ${ready
                             ? "bg-white text-blue-600 shadow-blue-800/20 hover:scale-[1.02]"
                             : "bg-blue-400/50 text-blue-200 cursor-not-allowed"
                             }`}
                     >
-                        <Send size={18} />
-                        {loading ? "Wird eingereicht..." : "Monat Final Einreichen"}
+                        <FileSignature size={18} />
+                        {loading ? "Wird eingereicht..." : "Mit Unterschrift einreichen"}
                     </button>
                 )}
 
@@ -182,6 +162,17 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
                     </p>
                 )}
             </div>
+
+            {/* Submit Modal mit Unterschrift */}
+            {currentMonth && currentYear && (
+                <SubmitModal
+                    isOpen={showSubmitModal}
+                    onClose={() => setShowSubmitModal(false)}
+                    month={currentMonth}
+                    year={currentYear}
+                    onSuccess={handleSubmitSuccess}
+                />
+            )}
         </div>
     )
 }

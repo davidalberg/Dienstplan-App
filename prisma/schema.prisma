@@ -17,9 +17,10 @@ model User {
   teamId     String?
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
-  auditLogs  AuditLog[]
-  timesheets Timesheet[]
-  team       Team?       @relation(fields: [teamId], references: [id])
+  auditLogs   AuditLog[]
+  timesheets  Timesheet[]
+  submissions MonthlySubmission[]
+  team        Team?       @relation(fields: [teamId], references: [id])
 
   // Neue Felder für Mitarbeiter-Verwaltung
   entryDate                DateTime?
@@ -39,10 +40,13 @@ model User {
 }
 
 model Team {
-  id         String      @id @default(cuid())
-  name       String      @unique
-  timesheets Timesheet[]
-  members    User[]
+  id                      String              @id @default(cuid())
+  name                    String              @unique
+  assistantRecipientEmail String?             // E-Mail des Assistenznehmers für Signatur
+  assistantRecipientName  String?             // Name des Assistenznehmers für PDF
+  timesheets              Timesheet[]
+  members                 User[]
+  submissions             MonthlySubmission[]
 }
 
 model Timesheet {
@@ -96,4 +100,39 @@ model SyncLog {
   status        String
   message       String?
   rowsProcessed Int       @default(0)
+}
+
+model MonthlySubmission {
+  id                 String    @id @default(cuid())
+  month              Int
+  year               Int
+  employeeId         String
+  teamId             String
+
+  // Mitarbeiter-Signatur
+  employeeSignature  String?   @db.Text // Base64 PNG
+  employeeSignedAt   DateTime?
+  employeeIp         String?
+
+  // Assistenznehmer-Signatur
+  recipientSignature String?   @db.Text // Base64 PNG
+  recipientSignedAt  DateTime?
+  recipientIp        String?
+  signatureToken     String    @unique // Einmaliger Link-Token
+  tokenExpiresAt     DateTime
+
+  // PDF & Status
+  pdfUrl             String?   // Google Drive URL
+  status             String    @default("PENDING_EMPLOYEE")
+  // Status: PENDING_EMPLOYEE → PENDING_RECIPIENT → COMPLETED
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  employee           User      @relation(fields: [employeeId], references: [id])
+  team               Team      @relation(fields: [teamId], references: [id])
+
+  @@unique([employeeId, month, year])
+  @@index([signatureToken])
+  @@index([status])
 }

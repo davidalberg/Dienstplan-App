@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 
 export const showToast = (
-    type: 'success' | 'error' | 'info',
+    type: 'success' | 'error' | 'info' | 'warning',
     message: string
 ) => {
     switch (type) {
@@ -13,6 +13,9 @@ export const showToast = (
             break
         case 'info':
             toast.info(message, { duration: 3000 })
+            break
+        case 'warning':
+            toast.warning(message, { duration: 4000, icon: '⚠' })
             break
     }
 }
