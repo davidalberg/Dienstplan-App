@@ -110,15 +110,14 @@ export default function DashboardPage() {
                                         const [year, month] = e.target.value.split('-').map(Number)
                                         setCurrentDate(new Date(year, month - 1, 1))
                                     }}
-                                    className="appearance-none bg-transparent text-sm text-black font-bold pr-6 cursor-pointer focus:outline-none"
+                                    className="appearance-none bg-transparent text-sm font-bold pr-6 cursor-pointer focus:outline-none"
                                     style={{ color: '#000000' }}
                                 >
                                     {availableMonths.map((m) => (
                                         <option
                                             key={`${m.year}-${m.month}`}
                                             value={`${m.year}-${m.month}`}
-                                            style={{ color: '#000000' }}
-                                            className="text-black font-bold"
+                                            style={{ color: '#000000', fontWeight: 'bold' }}
                                         >
                                             {format(new Date(m.year, m.month - 1, 1), "MMMM yyyy", { locale: de })}
                                         </option>

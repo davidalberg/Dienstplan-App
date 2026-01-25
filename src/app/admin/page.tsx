@@ -373,12 +373,12 @@ export default function AdminPage() {
                             <select
                                 value={filters.sheetFileName}
                                 onChange={e => setFilters({ ...filters, sheetFileName: e.target.value })}
-                                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 style={{ color: '#000000' }}
                             >
-                                <option value="" style={{ color: '#000000' }} className="text-black">Alle Dienstpläne</option>
+                                <option value="" style={{ color: '#000000', fontWeight: 600 }}>Alle Dienstpläne</option>
                                 {sheetFileNames.map(s => (
-                                    <option key={s} value={s} style={{ color: '#000000' }} className="text-black">
+                                    <option key={s} value={s} style={{ color: '#000000', fontWeight: 600 }}>
                                         {s}
                                     </option>
                                 ))}
@@ -386,12 +386,12 @@ export default function AdminPage() {
                             <select
                                 value={filters.employeeId}
                                 onChange={e => setFilters({ ...filters, employeeId: e.target.value })}
-                                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 style={{ color: '#000000' }}
                             >
-                                <option value="" style={{ color: '#000000' }} className="text-black">Alle Mitarbeiter</option>
+                                <option value="" style={{ color: '#000000', fontWeight: 600 }}>Alle Mitarbeiter</option>
                                 {employees.map(e => (
-                                    <option key={e.id} value={e.id} style={{ color: '#000000' }} className="text-black">
+                                    <option key={e.id} value={e.id} style={{ color: '#000000', fontWeight: 600 }}>
                                         {e.name}
                                     </option>
                                 ))}
