@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
                     select: { name: true }
                 }
             },
-            orderBy: [{ date: "asc" }, { employee: { name: "asc" } }]
+            orderBy: [{ date: "asc" }, { plannedStart: "asc" }]
         })
 
         // Fetch unique sources, sheet file names, teams, and employees for the filter menu
