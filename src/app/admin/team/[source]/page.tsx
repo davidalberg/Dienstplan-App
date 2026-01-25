@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Download, CheckCircle, AlertCircle, Clock } from "lucide-react"
+import { ArrowLeft, Download, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp } from "lucide-react"
 import StatisticsDetails from "@/components/StatisticsDetails"
 
 export default function TeamDetailPage() {
@@ -17,6 +17,29 @@ export default function TeamDetailPage() {
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear()
     })
+    const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set())
+
+    const toggleEmployee = (employeeId: string) => {
+        setExpandedEmployees(prev => {
+            const newSet = new Set(prev)
+            if (newSet.has(employeeId)) {
+                newSet.delete(employeeId)
+            } else {
+                newSet.add(employeeId)
+            }
+            return newSet
+        })
+    }
+
+    const expandAll = () => {
+        if (data?.employees) {
+            setExpandedEmployees(new Set(data.employees.map((e: any) => e.id)))
+        }
+    }
+
+    const collapseAll = () => {
+        setExpandedEmployees(new Set())
+    }
 
     useEffect(() => {
         fetchTeamData()
@@ -88,9 +111,29 @@ export default function TeamDetailPage() {
                     </button>
                 </div>
 
-                <header className="mb-8">
-                    <h1 className="text-3xl font-black text-black">{source}</h1>
-                    <p className="text-gray-900 font-bold">Übersicht für {data.employees.length} Mitarbeiter</p>
+                <header className="mb-8 flex items-start justify-between">
+                    <div>
+                        <h1 className="text-3xl font-black text-black">{source}</h1>
+                        <p className="text-gray-900 font-bold">Übersicht für {data.employees.length} Mitarbeiter</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={expandAll}
+                            className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50"
+                        >
+                            <ChevronDown size={14} />
+                            Alle öffnen
+                        </button>
+                        <button
+                            type="button"
+                            onClick={collapseAll}
+                            className="flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50"
+                        >
+                            <ChevronUp size={14} />
+                            Alle schließen
+                        </button>
+                    </div>
                 </header>
 
                 <div className="mb-6 flex gap-2 items-center bg-white rounded-xl p-4 shadow-sm ring-1 ring-gray-200">
@@ -111,74 +154,106 @@ export default function TeamDetailPage() {
                 </div>
 
                 <div className="space-y-4">
-                    {data.employees.map((emp: any) => (
-                        <div key={emp.id} className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-                            <div className="flex items-start justify-between mb-4">
-                                <div>
-                                    <h3 className="text-xl font-black text-black">{emp.name}</h3>
-                                    <p className="text-sm text-black">{emp.email}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {emp.hasSubmitted ? (
-                                        <div className="flex items-center gap-2 rounded-full bg-green-100 px-4 py-2 text-sm font-bold text-green-700">
-                                            <CheckCircle size={16} />
-                                            Eingereicht
+                    {data.employees.map((emp: any) => {
+                        const isExpanded = expandedEmployees.has(emp.id)
+                        return (
+                            <div key={emp.id} className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 overflow-hidden">
+                                {/* Klickbarer Header */}
+                                <button
+                                    type="button"
+                                    onClick={() => toggleEmployee(emp.id)}
+                                    className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 font-black text-lg">
+                                            {emp.name?.charAt(0) || "?"}
                                         </div>
-                                    ) : (
-                                        <div className="flex items-center gap-2 rounded-full bg-gray-100 px-4 py-2 text-sm font-bold text-gray-600">
-                                            <Clock size={16} />
-                                            Ausstehend
+                                        <div>
+                                            <h3 className="text-xl font-black text-black">{emp.name}</h3>
+                                            <p className="text-sm text-black">{emp.email}</p>
                                         </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-6 mt-6">
-                                <div className="rounded-xl bg-blue-50 p-4">
-                                    <p className="text-xs font-black uppercase text-blue-600 mb-2">Geplante Stunden</p>
-                                    <p className="text-2xl font-black text-blue-900">{emp.stats.plannedHours.toFixed(2)} Std.</p>
-                                </div>
-                                <div className="rounded-xl bg-green-50 p-4">
-                                    <p className="text-xs font-black uppercase text-green-600 mb-2">Tatsächliche Stunden</p>
-                                    <p className="text-2xl font-black text-green-900">{emp.stats.actualHours.toFixed(2)} Std.</p>
-                                </div>
-                                <div className={`rounded-xl p-4 ${emp.stats.difference >= 0 ? 'bg-amber-50' : 'bg-red-50'}`}>
-                                    <p className={`text-xs font-black uppercase mb-2 ${emp.stats.difference >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
-                                        Differenz
-                                    </p>
-                                    <p className={`text-2xl font-black ${emp.stats.difference >= 0 ? 'text-amber-900' : 'text-red-900'}`}>
-                                        {emp.stats.difference >= 0 ? '+' : ''}{emp.stats.difference.toFixed(2)} Std.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Detaillierte Statistiken */}
-                            {emp.stats.nightHours !== undefined && (
-                                <div className="mt-6">
-                                    <p className="text-xs font-black uppercase text-gray-600 mb-4">Detaillierte Statistiken</p>
-                                    <StatisticsDetails stats={emp.stats} variant="detailed" />
-                                </div>
-                            )}
-
-                            {emp.stats.discrepancies.length > 0 && (
-                                <div className="mt-6 rounded-xl bg-red-50 p-4 ring-1 ring-red-200">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <AlertCircle size={16} className="text-red-600" />
-                                        <p className="text-sm font-black uppercase text-red-600">
-                                            {emp.stats.discrepancies.length} Zeitliche Abweichung(en)
-                                        </p>
                                     </div>
-                                    <div className="space-y-2">
-                                        {emp.stats.discrepancies.map((disc: any, idx: number) => (
-                                            <div key={idx} className="text-sm text-red-900">
-                                                <span className="font-bold">{disc.date}:</span> Geplant {disc.planned}, Tatsächlich {disc.actual} ({disc.diffText})
+                                    <div className="flex items-center gap-3">
+                                        {/* Kompakte Statistik-Vorschau */}
+                                        <div className="hidden sm:flex items-center gap-3 mr-4">
+                                            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                                {emp.stats.plannedHours.toFixed(1)}h Plan
+                                            </span>
+                                            <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded">
+                                                {emp.stats.actualHours.toFixed(1)}h Ist
+                                            </span>
+                                        </div>
+                                        {emp.hasSubmitted ? (
+                                            <div className="flex items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-xs font-bold text-green-700">
+                                                <CheckCircle size={14} />
+                                                Eingereicht
                                             </div>
-                                        ))}
+                                        ) : (
+                                            <div className="flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-600">
+                                                <Clock size={14} />
+                                                Ausstehend
+                                            </div>
+                                        )}
+                                        {isExpanded ? (
+                                            <ChevronUp size={20} className="text-gray-400" />
+                                        ) : (
+                                            <ChevronDown size={20} className="text-gray-400" />
+                                        )}
                                     </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                                </button>
+
+                                {/* Aufklappbarer Inhalt */}
+                                {isExpanded && (
+                                    <div className="px-6 pb-6 border-t border-gray-100">
+                                        <div className="grid grid-cols-3 gap-6 mt-6">
+                                            <div className="rounded-xl bg-blue-50 p-4">
+                                                <p className="text-xs font-black uppercase text-blue-600 mb-2">Geplante Stunden</p>
+                                                <p className="text-2xl font-black text-blue-900">{emp.stats.plannedHours.toFixed(2)} Std.</p>
+                                            </div>
+                                            <div className="rounded-xl bg-green-50 p-4">
+                                                <p className="text-xs font-black uppercase text-green-600 mb-2">Tatsächliche Stunden</p>
+                                                <p className="text-2xl font-black text-green-900">{emp.stats.actualHours.toFixed(2)} Std.</p>
+                                            </div>
+                                            <div className={`rounded-xl p-4 ${emp.stats.difference >= 0 ? 'bg-amber-50' : 'bg-red-50'}`}>
+                                                <p className={`text-xs font-black uppercase mb-2 ${emp.stats.difference >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                                                    Differenz
+                                                </p>
+                                                <p className={`text-2xl font-black ${emp.stats.difference >= 0 ? 'text-amber-900' : 'text-red-900'}`}>
+                                                    {emp.stats.difference >= 0 ? '+' : ''}{emp.stats.difference.toFixed(2)} Std.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Detaillierte Statistiken */}
+                                        {emp.stats.nightHours !== undefined && (
+                                            <div className="mt-6">
+                                                <p className="text-xs font-black uppercase text-gray-600 mb-4">Detaillierte Statistiken</p>
+                                                <StatisticsDetails stats={emp.stats} variant="detailed" />
+                                            </div>
+                                        )}
+
+                                        {emp.stats.discrepancies.length > 0 && (
+                                            <div className="mt-6 rounded-xl bg-red-50 p-4 ring-1 ring-red-200">
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <AlertCircle size={16} className="text-red-600" />
+                                                    <p className="text-sm font-black uppercase text-red-600">
+                                                        {emp.stats.discrepancies.length} Zeitliche Abweichung(en)
+                                                    </p>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {emp.stats.discrepancies.map((disc: any, idx: number) => (
+                                                        <div key={idx} className="text-sm text-red-900">
+                                                            <span className="font-bold">{disc.date}:</span> Geplant {disc.planned}, Tatsächlich {disc.actual} ({disc.diffText})
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    })}
                 </div>
             </div>
         </div>

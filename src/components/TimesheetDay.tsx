@@ -57,6 +57,8 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
                     showToast("success", "Dienst erfolgreich bestätigt")
                 } else if (action === "UPDATE") {
                     showToast("success", "Änderungen gespeichert")
+                } else if (action === "UNCONFIRM") {
+                    showToast("success", "Dienst zurückgesetzt")
                 }
             } else {
                 // Rollback bei Fehler
@@ -104,7 +106,7 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
             case "SUBMITTED": return "Eingereicht"
             case "CONFIRMED": return isOptimistic ? "Wird bestätigt..." : "Bestätigt"
             case "CHANGED": return "Geändert"
-            default: return "Geplant"
+            default: return isOptimistic ? "Wird zurückgesetzt..." : "Geplant"
         }
     }
 
@@ -160,10 +162,20 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
                                 <button
                                     type="button"
                                     onClick={() => handleAction("UNCONFIRM")}
-                                    disabled={loading}
-                                    className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-700"
+                                    disabled={loading || isOptimistic}
+                                    className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:bg-amber-400 transition-colors"
                                 >
-                                    <RotateCcw size={16} /> Zurücksetzen
+                                    {loading && optimisticStatus === "PLANNED" ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin" />
+                                            Zurücksetzen...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <RotateCcw size={16} />
+                                            Zurücksetzen
+                                        </>
+                                    )}
                                 </button>
                             )}
                             {timesheet.status !== "SUBMITTED" && (
