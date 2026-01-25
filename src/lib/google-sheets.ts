@@ -437,7 +437,7 @@ export async function clearShiftInSheet(sheetId: string, tabName: string, date: 
 
     if (rowIndex !== -1) {
         console.log(`[SYNC DEBUG] Clearing columns C,D,E in row ${rowIndex} (tab: "${tabName}")`)
-        // Columns C, D, E are indices 2, 3, 4. 
+        // Columns C, D, E are indices 2, 3, 4.
         // We write empty strings to these cells.
         const clearRange = `'${tabName}'!C${rowIndex}:E${rowIndex}`
         await sheets.spreadsheets.values.update({
@@ -450,5 +450,52 @@ export async function clearShiftInSheet(sheetId: string, tabName: string, date: 
         })
     } else {
         console.warn(`[SYNC DEBUG] Could not find row to clear for ${name} on ${date.toDateString()} in "${tabName}"`)
+    }
+}
+
+/**
+ * Schreibt den Backup-Mitarbeiter in Spalte I (Sonstiges) der bestehenden Zeile
+ * des kranken/abwesenden Mitarbeiters - KEINE neue Zeile!
+ */
+export async function updateBackupInSameRow(
+    sheetId: string,
+    tabName: string,
+    date: Date,
+    absentEmployeeName: string,
+    backupEmployeeName: string,
+    absenceType: "SICK" | "VACATION"
+) {
+    const sheets = await getGoogleSheetsClient()
+
+    // Finde die Zeile des kranken/abwesenden Mitarbeiters
+    const rowIndex = await findRowIndex(sheets, sheetId, tabName, date, absentEmployeeName)
+
+    if (rowIndex !== -1) {
+        // Schreibe in Spalte I (Sonstiges) den Backup-Namen
+        const absenceText = absenceType === "SICK" ? "Krank" : "Urlaub"
+        const backupNote = `Vertretung: ${backupEmployeeName}`
+
+        console.log(`[BACKUP SYNC] Writing "${backupNote}" to column I, row ${rowIndex} in "${tabName}"`)
+
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: `'${tabName}'!I${rowIndex}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[backupNote]] }
+        })
+
+        // Optional: Schreibe auch in Spalte H (Urlaub/Krank) den Status
+        console.log(`[BACKUP SYNC] Writing "${absenceText}" to column H, row ${rowIndex} in "${tabName}"`)
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: `'${tabName}'!H${rowIndex}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[absenceText]] }
+        })
+
+        return true
+    } else {
+        console.warn(`[BACKUP SYNC] Could not find row for ${absentEmployeeName} on ${date.toDateString()} in "${tabName}"`)
+        return false
     }
 }

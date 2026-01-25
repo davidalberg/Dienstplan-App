@@ -233,17 +233,26 @@ export async function POST(req: NextRequest) {
                     console.log(`[BACKUP SUBSTITUTION] Created new timesheet for backup employee`)
                 }
 
-                // Sync backup timesheet to Google Sheets (wenn vorhanden)
+                // Sync zu Google Sheets: Schreibe Backup-Name in Spalte I der GLEICHEN Zeile
+                // (NICHT als neue Zeile anhängen!)
                 if (existing.source && existing.sheetId) {
                     try {
-                        const { appendShiftToSheet } = await import("@/lib/google-sheets")
-                        await appendShiftToSheet(existing.sheetId, existing.source, {
-                            date: existing.date,
-                            name: backupEmployee.name || "Unknown",
-                            start: existing.plannedStart || "",
-                            end: existing.plannedEnd || "",
-                            note: `Eingesprungen für ${absenceType === "SICK" ? "Krankheit" : "Urlaub"}`
+                        const { updateBackupInSameRow } = await import("@/lib/google-sheets")
+
+                        // Hole den Namen des abwesenden Mitarbeiters
+                        const absentEmployee = await prisma.user.findUnique({
+                            where: { id: existing.employeeId },
+                            select: { name: true }
                         })
+
+                        await updateBackupInSameRow(
+                            existing.sheetId,
+                            existing.source,
+                            existing.date,
+                            absentEmployee?.name || "Unknown",
+                            backupEmployee.name || "Unknown",
+                            absenceType as "SICK" | "VACATION"
+                        )
                     } catch (error) {
                         console.error("[BACKUP SUBSTITUTION] Google Sheets sync failed (non-critical):", error)
                     }
