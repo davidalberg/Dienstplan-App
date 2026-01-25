@@ -79,6 +79,11 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
     const getCurrentStatus = () => optimisticStatus || timesheet.status
 
     const getStatusColor = () => {
+        // Krank/Urlaub/Eingesprungen haben Priorität über technischen Status
+        if (timesheet.absenceType === "SICK") return "bg-red-100 text-red-700"
+        if (timesheet.absenceType === "VACATION") return "bg-cyan-100 text-cyan-700"
+        if (timesheet.note && timesheet.note.includes("Eingesprungen")) return "bg-purple-100 text-purple-700"
+
         const status = getCurrentStatus()
         switch (status) {
             case "SUBMITTED": return "bg-blue-100 text-blue-700"
@@ -89,6 +94,11 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
     }
 
     const getStatusLabel = () => {
+        // Krank/Urlaub/Eingesprungen haben Priorität über technischen Status
+        if (timesheet.absenceType === "SICK") return "Krank"
+        if (timesheet.absenceType === "VACATION") return "Urlaub"
+        if (timesheet.note && timesheet.note.includes("Eingesprungen")) return "Eingesprungen"
+
         const status = getCurrentStatus()
         switch (status) {
             case "SUBMITTED": return "Eingereicht"

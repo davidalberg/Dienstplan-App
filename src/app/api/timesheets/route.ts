@@ -194,11 +194,12 @@ export async function POST(req: NextRequest) {
 
             if (backupEmployee) {
                 // Erstelle oder aktualisiere Timesheet für Backup-Person
+                // WICHTIG: Nicht automatisch bestätigen - Backup muss selbst bestätigen
                 const backupData = {
-                    actualStart: existing.plannedStart,
-                    actualEnd: existing.plannedEnd,
+                    actualStart: null, // Keine Ist-Zeiten - Mitarbeiter muss selbst bestätigen
+                    actualEnd: null,
                     breakMinutes: existing.breakMinutes || 0,
-                    status: "CHANGED", // Marked as changed since they're filling in
+                    status: "PLANNED", // PLANNED statt CHANGED - Backup muss selbst bestätigen
                     absenceType: null, // They're working, not absent
                     note: `Eingesprungen für ${absenceType === "SICK" ? "Krankheit" : "Urlaub"}`,
                     lastUpdatedBy: "SYSTEM_BACKUP_ACTIVATION",

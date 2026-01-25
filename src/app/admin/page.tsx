@@ -32,7 +32,8 @@ export default function AdminPage() {
         actualStart: "",
         actualEnd: "",
         note: "",
-        status: ""
+        status: "",
+        absenceType: ""
     })
     const [showLogs, setShowLogs] = useState(false)
     const [selectedShifts, setSelectedShifts] = useState<Set<string>>(new Set())
@@ -243,7 +244,8 @@ export default function AdminPage() {
             actualStart: shift.actualStart || "",
             actualEnd: shift.actualEnd || "",
             note: shift.note || "",
-            status: shift.status
+            status: shift.status,
+            absenceType: shift.absenceType || ""
         })
     }
 
@@ -541,14 +543,30 @@ export default function AdminPage() {
                                                             )}
                                                         </td>
                                                         <td className="py-4 px-4">
-                                                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${ts.status === "CONFIRMED" ? "bg-green-100 text-green-700" :
-                                                                ts.status === "CHANGED" ? "bg-amber-100 text-amber-700" :
+                                                            <div className="flex flex-col gap-1">
+                                                                {/* Hauptstatus - Krank/Urlaub/Eingesprungen haben Priorität */}
+                                                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                                                                    ts.absenceType === "SICK" ? "bg-red-100 text-red-700" :
+                                                                    ts.absenceType === "VACATION" ? "bg-cyan-100 text-cyan-700" :
+                                                                    (ts.note && ts.note.includes("Eingesprungen")) ? "bg-purple-100 text-purple-700" :
+                                                                    ts.status === "CONFIRMED" ? "bg-green-100 text-green-700" :
+                                                                    ts.status === "CHANGED" ? "bg-amber-100 text-amber-700" :
                                                                     ts.status === "SUBMITTED" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-black"
                                                                 }`}>
-                                                                {ts.status === "CONFIRMED" ? "Bestätigt" :
-                                                                    ts.status === "CHANGED" ? "Geändert" :
+                                                                    {ts.absenceType === "SICK" ? "Krank" :
+                                                                        ts.absenceType === "VACATION" ? "Urlaub" :
+                                                                        (ts.note && ts.note.includes("Eingesprungen")) ? "Eingesprungen" :
+                                                                        ts.status === "CONFIRMED" ? "Bestätigt" :
+                                                                        ts.status === "CHANGED" ? "Geändert" :
                                                                         ts.status === "SUBMITTED" ? "Eingereicht" : "Geplant"}
-                                                            </span>
+                                                                </span>
+                                                                {/* Backup-Markierung wenn backupEmployeeId vorhanden */}
+                                                                {ts.backupEmployeeId && !ts.note?.includes("Eingesprungen") && (
+                                                                    <span className="inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-orange-100 text-orange-600">
+                                                                        Backup verfügbar
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                         <td className="py-4 px-4">
                                                             <div className="flex gap-1">
@@ -672,19 +690,34 @@ export default function AdminPage() {
                                         />
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="text-[10px] font-black uppercase text-black">Status</label>
-                                    <select
-                                        value={editData.status}
-                                        onChange={e => setEditData({ ...editData, status: e.target.value })}
-                                        className="w-full rounded-lg border border-gray-200 p-2 text-sm font-bold text-black"
-                                        style={{ color: '#000000' }}
-                                    >
-                                        <option value="PLANNED" style={{ color: '#000000' }} className="text-black">GEPLANT</option>
-                                        <option value="CONFIRMED" style={{ color: '#000000' }} className="text-black">BESTÄTIGT</option>
-                                        <option value="CHANGED" style={{ color: '#000000' }} className="text-black">GEÄNDERT</option>
-                                        <option value="SUBMITTED" style={{ color: '#000000' }} className="text-black">EINGEREICHT</option>
-                                    </select>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-black">Status</label>
+                                        <select
+                                            value={editData.status}
+                                            onChange={e => setEditData({ ...editData, status: e.target.value })}
+                                            className="w-full rounded-lg border border-gray-200 p-2 text-sm font-bold text-black"
+                                            style={{ color: '#000000' }}
+                                        >
+                                            <option value="PLANNED" style={{ color: '#000000' }} className="text-black">GEPLANT</option>
+                                            <option value="CONFIRMED" style={{ color: '#000000' }} className="text-black">BESTÄTIGT</option>
+                                            <option value="CHANGED" style={{ color: '#000000' }} className="text-black">GEÄNDERT</option>
+                                            <option value="SUBMITTED" style={{ color: '#000000' }} className="text-black">EINGEREICHT</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-black">Abwesenheit</label>
+                                        <select
+                                            value={editData.absenceType}
+                                            onChange={e => setEditData({ ...editData, absenceType: e.target.value })}
+                                            className="w-full rounded-lg border border-gray-200 p-2 text-sm font-bold text-black"
+                                            style={{ color: '#000000' }}
+                                        >
+                                            <option value="" style={{ color: '#000000' }} className="text-black">Keine</option>
+                                            <option value="SICK" style={{ color: '#000000' }} className="text-black">Krank</option>
+                                            <option value="VACATION" style={{ color: '#000000' }} className="text-black">Urlaub</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-black">Notiz</label>

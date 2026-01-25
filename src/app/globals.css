@@ -49,15 +49,21 @@ textarea {
   color: #111827 !important;
 }
 
-/* Stelle sicher, dass Select-Dropdowns dunklen Text haben */
+/* Stelle sicher, dass Select-Dropdowns IMMER schwarzen Text haben (auch in Dark Mode) */
 select,
 select option {
-  color: #111827 !important;
+  color: #000000 !important;
+  background-color: #ffffff !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  select,
-  select option {
-    color: #ededed !important;
-  }
+/* Forciere schwarzen Text für alle Browser */
+select::-ms-value {
+  color: #000000 !important;
+}
+
+/* Firefox */
+select option:checked,
+select option:hover {
+  color: #000000 !important;
+  background-color: #f3f4f6 !important;
 }

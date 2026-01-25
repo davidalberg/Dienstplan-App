@@ -169,6 +169,7 @@ export async function PUT(req: NextRequest) {
                 actualEnd: data.actualEnd,
                 note: data.note,
                 status: data.status,
+                absenceType: data.absenceType === "" ? null : data.absenceType,
                 lastUpdatedBy: session.user.email
             },
             include: {
