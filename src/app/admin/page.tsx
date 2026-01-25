@@ -543,30 +543,24 @@ export default function AdminPage() {
                                                             )}
                                                         </td>
                                                         <td className="py-4 px-4">
-                                                            <div className="flex flex-col gap-1">
-                                                                {/* Hauptstatus - Krank/Urlaub/Eingesprungen haben Priorität */}
-                                                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-                                                                    ts.absenceType === "SICK" ? "bg-red-100 text-red-700" :
-                                                                    ts.absenceType === "VACATION" ? "bg-cyan-100 text-cyan-700" :
-                                                                    (ts.note && ts.note.includes("Eingesprungen")) ? "bg-purple-100 text-purple-700" :
-                                                                    ts.status === "CONFIRMED" ? "bg-green-100 text-green-700" :
-                                                                    ts.status === "CHANGED" ? "bg-amber-100 text-amber-700" :
-                                                                    ts.status === "SUBMITTED" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-black"
-                                                                }`}>
-                                                                    {ts.absenceType === "SICK" ? "Krank" :
-                                                                        ts.absenceType === "VACATION" ? "Urlaub" :
-                                                                        (ts.note && ts.note.includes("Eingesprungen")) ? "Eingesprungen" :
-                                                                        ts.status === "CONFIRMED" ? "Bestätigt" :
-                                                                        ts.status === "CHANGED" ? "Geändert" :
-                                                                        ts.status === "SUBMITTED" ? "Eingereicht" : "Geplant"}
-                                                                </span>
-                                                                {/* Backup-Markierung wenn backupEmployeeId vorhanden */}
-                                                                {ts.backupEmployeeId && !ts.note?.includes("Eingesprungen") && (
-                                                                    <span className="inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-orange-100 text-orange-600">
-                                                                        Backup verfügbar
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                            {/* Status-Anzeige mit Priorität: Krank > Urlaub > Eingesprungen/Backup-Schicht > Normal */}
+                                                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                                                                ts.absenceType === "SICK" ? "bg-red-100 text-red-700" :
+                                                                ts.absenceType === "VACATION" ? "bg-cyan-100 text-cyan-700" :
+                                                                (ts.note && ts.note.includes("Eingesprungen") && ts.status === "CONFIRMED") ? "bg-green-100 text-green-700" :
+                                                                (ts.note && ts.note.includes("Eingesprungen")) ? "bg-orange-100 text-orange-700" :
+                                                                ts.status === "CONFIRMED" ? "bg-green-100 text-green-700" :
+                                                                ts.status === "CHANGED" ? "bg-amber-100 text-amber-700" :
+                                                                ts.status === "SUBMITTED" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-black"
+                                                            }`}>
+                                                                {ts.absenceType === "SICK" ? "Krank" :
+                                                                    ts.absenceType === "VACATION" ? "Urlaub" :
+                                                                    (ts.note && ts.note.includes("Eingesprungen") && ts.status === "CONFIRMED") ? "Eingesprungen" :
+                                                                    (ts.note && ts.note.includes("Eingesprungen")) ? "Backup-Schicht" :
+                                                                    ts.status === "CONFIRMED" ? "Bestätigt" :
+                                                                    ts.status === "CHANGED" ? "Geändert" :
+                                                                    ts.status === "SUBMITTED" ? "Eingereicht" : "Geplant"}
+                                                            </span>
                                                         </td>
                                                         <td className="py-4 px-4">
                                                             <div className="flex gap-1">

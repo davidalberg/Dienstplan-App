@@ -81,10 +81,14 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
     const getCurrentStatus = () => optimisticStatus || timesheet.status
 
     const getStatusColor = () => {
-        // Krank/Urlaub/Eingesprungen haben Priorität über technischen Status
+        // Priorität: Krank > Urlaub > Eingesprungen (bestätigt) > Backup-Schicht (unbestätigt) > Normal
         if (timesheet.absenceType === "SICK") return "bg-red-100 text-red-700"
         if (timesheet.absenceType === "VACATION") return "bg-cyan-100 text-cyan-700"
-        if (timesheet.note && timesheet.note.includes("Eingesprungen")) return "bg-purple-100 text-purple-700"
+
+        // Backup-Schicht: Grün wenn bestätigt, Orange wenn noch offen
+        const isBackupShift = timesheet.note && timesheet.note.includes("Eingesprungen")
+        if (isBackupShift && getCurrentStatus() === "CONFIRMED") return "bg-green-100 text-green-700"
+        if (isBackupShift) return "bg-orange-100 text-orange-700"
 
         const status = getCurrentStatus()
         switch (status) {
@@ -96,10 +100,14 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
     }
 
     const getStatusLabel = () => {
-        // Krank/Urlaub/Eingesprungen haben Priorität über technischen Status
+        // Priorität: Krank > Urlaub > Eingesprungen (bestätigt) > Backup-Schicht (unbestätigt) > Normal
         if (timesheet.absenceType === "SICK") return "Krank"
         if (timesheet.absenceType === "VACATION") return "Urlaub"
-        if (timesheet.note && timesheet.note.includes("Eingesprungen")) return "Eingesprungen"
+
+        // Backup-Schicht: "Eingesprungen" wenn bestätigt, "Backup-Schicht" wenn noch offen
+        const isBackupShift = timesheet.note && timesheet.note.includes("Eingesprungen")
+        if (isBackupShift && getCurrentStatus() === "CONFIRMED") return "Eingesprungen"
+        if (isBackupShift) return "Backup-Schicht"
 
         const status = getCurrentStatus()
         switch (status) {
