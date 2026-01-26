@@ -28,6 +28,7 @@ interface Employee {
 export default function EmployeesPage() {
     const { data: session } = useSession()
     const [employees, setEmployees] = useState<Employee[]>([])
+    const [teams, setTeams] = useState<Array<{ sheetFileName: string; assistantRecipientName: string }>>([])
     const [loading, setLoading] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [isCreating, setIsCreating] = useState(false)
@@ -38,6 +39,7 @@ export default function EmployeesPage() {
         password: "",
         name: "",
         employeeId: "",
+        team: "",
         entryDate: "",
         exitDate: "",
         hourlyWage: 0,
@@ -52,6 +54,7 @@ export default function EmployeesPage() {
 
     useEffect(() => {
         fetchEmployees()
+        fetchTeams()
     }, [])
 
     const fetchEmployees = async () => {
@@ -69,6 +72,18 @@ export default function EmployeesPage() {
         }
     }
 
+    const fetchTeams = async () => {
+        try {
+            const res = await fetch("/api/admin/dienstplan-config")
+            if (res.ok) {
+                const data = await res.json()
+                setTeams(data.configs || [])
+            }
+        } catch (err) {
+            console.error(err)
+        }
+    }
+
     const handleEdit = (employee: Employee) => {
         setEditingEmployee(employee)
         setFormData({
@@ -77,6 +92,7 @@ export default function EmployeesPage() {
             password: "",
             name: employee.name || "",
             employeeId: employee.employeeId || "",
+            team: employee.team?.name || "",
             entryDate: employee.entryDate ? new Date(employee.entryDate).toISOString().split('T')[0] : "",
             exitDate: employee.exitDate ? new Date(employee.exitDate).toISOString().split('T')[0] : "",
             hourlyWage: employee.hourlyWage || 0,
@@ -98,6 +114,7 @@ export default function EmployeesPage() {
             password: "",
             name: "",
             employeeId: "",
+            team: "",
             entryDate: "",
             exitDate: "",
             hourlyWage: 0,
@@ -350,6 +367,27 @@ export default function EmployeesPage() {
                                         </div>
 
                                         <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Team (Dienstplan)
+                                            </label>
+                                            <select
+                                                value={formData.team}
+                                                onChange={(e) => setFormData({ ...formData, team: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            >
+                                                <option value="">Kein Team</option>
+                                                {teams.map((team) => (
+                                                    <option key={team.sheetFileName} value={team.sheetFileName}>
+                                                        {team.sheetFileName}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Teams werden im Dashboard angezeigt
+                                            </p>
+                                        </div>
+
+                                        <div className="col-span-2">
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                 {isCreating ? "Passwort *" : "Passwort (leer lassen für keine Änderung)"}
                                             </label>

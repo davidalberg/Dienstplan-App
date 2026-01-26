@@ -86,7 +86,8 @@ export async function POST(req: NextRequest) {
             holidayPremiumPercent,
             assignedSheetId,
             assignedPlanTab,
-            teamId
+            teamId,
+            team // NEW: sheetFileName string from frontend
         } = body
 
         // Validierung
@@ -123,6 +124,17 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        // Lookup teamId from team name (sheetFileName) if provided
+        let resolvedTeamId = teamId || null
+        if (team && !teamId) {
+            const foundTeam = await prisma.team.findFirst({
+                where: { name: team }
+            })
+            if (foundTeam) {
+                resolvedTeamId = foundTeam.id
+            }
+        }
+
         // Passwort hashen
         const hashedPassword = await bcrypt.hash(password, 10)
 
@@ -146,7 +158,7 @@ export async function POST(req: NextRequest) {
                 holidayPremiumPercent: safeParseFloat(holidayPremiumPercent, 125, "holidayPremiumPercent"),
                 assignedSheetId: assignedSheetId || null,
                 assignedPlanTab: assignedPlanTab || null,
-                teamId: teamId || null
+                teamId: resolvedTeamId
             }
         })
 
@@ -184,7 +196,8 @@ export async function PUT(req: NextRequest) {
             holidayPremiumPercent,
             assignedSheetId,
             assignedPlanTab,
-            teamId
+            teamId,
+            team // NEW: sheetFileName string from frontend
         } = body
 
         if (!id) {
@@ -225,6 +238,23 @@ export async function PUT(req: NextRequest) {
             }
         }
 
+        // Lookup teamId from team name (sheetFileName) if provided
+        let resolvedTeamId = teamId
+        if (team !== undefined && !teamId) {
+            if (team === "") {
+                resolvedTeamId = null
+            } else {
+                const foundTeam = await prisma.team.findFirst({
+                    where: { name: team }
+                })
+                if (foundTeam) {
+                    resolvedTeamId = foundTeam.id
+                } else {
+                    resolvedTeamId = null
+                }
+            }
+        }
+
         // Daten vorbereiten
         const updateData: any = {}
         if (email !== undefined) updateData.email = email
@@ -250,7 +280,7 @@ export async function PUT(req: NextRequest) {
         }
         if (assignedSheetId !== undefined) updateData.assignedSheetId = assignedSheetId || null
         if (assignedPlanTab !== undefined) updateData.assignedPlanTab = assignedPlanTab || null
-        if (teamId !== undefined) updateData.teamId = teamId || null
+        if (teamId !== undefined || team !== undefined) updateData.teamId = resolvedTeamId
 
         // Passwort nur aktualisieren wenn angegeben
         if (password) {
