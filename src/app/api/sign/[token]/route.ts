@@ -362,9 +362,12 @@ export async function POST(
             console.error("[RECIPIENT SIGN] Google Drive upload failed:", driveError)
         }
 
-        // Update TeamSubmission to COMPLETED
-        await prisma.teamSubmission.update({
-            where: { id: teamSubmission.id },
+        // Update TeamSubmission to COMPLETED (atomically with status check to prevent re-signing)
+        const updateResult = await prisma.teamSubmission.updateMany({
+            where: {
+                id: teamSubmission.id,
+                status: "PENDING_RECIPIENT" // CRITICAL: Only update if status is PENDING_RECIPIENT
+            },
             data: {
                 recipientSignature: signature,
                 recipientSignedAt,
@@ -373,6 +376,14 @@ export async function POST(
                 pdfUrl
             }
         })
+
+        // If update failed, someone already signed (race condition or token reuse)
+        if (updateResult.count === 0) {
+            return NextResponse.json({
+                error: "Dieser Stundennachweis wurde bereits unterschrieben oder ist nicht mehr im korrekten Status.",
+                pdfUrl: teamSubmission.pdfUrl
+            }, { status: 409 })
+        }
 
         // Update all timesheets to COMPLETED status
         await prisma.timesheet.updateMany({
@@ -387,6 +398,9 @@ export async function POST(
         })
 
         // Send completion emails to ALL employees + recipient + employer
+        let emailSuccess = true
+        let emailErrorMessage = ""
+
         try {
             const employeeEmails = teamSubmission.employeeSignatures.map(sig => ({
                 email: sig.employee.email,
@@ -413,14 +427,26 @@ export async function POST(
                 recipientSignedAt
             })
         } catch (emailError: any) {
+            emailSuccess = false
+            emailErrorMessage = emailError.message || "Unbekannter Fehler"
             console.error("[RECIPIENT SIGN] Completion emails failed:", emailError)
         }
 
-        return NextResponse.json({
-            success: true,
-            message: "Stundennachweis erfolgreich unterschrieben und abgeschlossen.",
-            pdfUrl
-        })
+        if (emailSuccess) {
+            return NextResponse.json({
+                success: true,
+                message: "Stundennachweis erfolgreich unterschrieben und abgeschlossen. Alle Beteiligten wurden per E-Mail benachrichtigt.",
+                pdfUrl
+            })
+        } else {
+            return NextResponse.json({
+                success: true,
+                message: "Stundennachweis erfolgreich unterschrieben und abgeschlossen.",
+                warning: "Die Benachrichtigungs-E-Mails konnten nicht versendet werden. Bitte informieren Sie die Mitarbeiter und den Arbeitgeber manuell.",
+                pdfUrl,
+                emailError: emailErrorMessage
+            }, { status: 207 }) // 207 Multi-Status: Partial success
+        }
     } catch (error: any) {
         console.error("[POST /api/sign/[token]] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
