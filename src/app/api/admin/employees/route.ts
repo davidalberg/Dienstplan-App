@@ -48,12 +48,32 @@ export async function GET(req: NextRequest) {
                 },
                 _count: {
                     select: { timesheets: true }
+                },
+                timesheets: {
+                    select: {
+                        absenceType: true
+                    }
                 }
             },
             orderBy: { name: "asc" }
         })
 
-        return NextResponse.json({ employees })
+        // Calculate vacation and sick days for each employee
+        const employeesWithAbsenceCounts = employees.map(emp => {
+            const vacationDays = emp.timesheets.filter(ts => ts.absenceType === "VACATION").length
+            const sickDays = emp.timesheets.filter(ts => ts.absenceType === "SICK").length
+
+            // Remove timesheets from response (we only needed them for counting)
+            const { timesheets, ...employeeData } = emp
+
+            return {
+                ...employeeData,
+                vacationDays,
+                sickDays
+            }
+        })
+
+        return NextResponse.json({ employees: employeesWithAbsenceCounts })
     } catch (error: any) {
         console.error("[GET /api/admin/employees] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -24,6 +24,8 @@ interface Employee {
     teamId: string | null
     team: { name: string } | null
     _count: { timesheets: number }
+    vacationDays: number
+    sickDays: number
 }
 
 export default function EmployeesPage() {
@@ -289,8 +291,8 @@ export default function EmployeesPage() {
                                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
                                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Mitarbeiter-ID</th>
                                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Stundenlohn</th>
-                                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Fahrtkosten</th>
-                                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Einträge</th>
+                                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Urlaubstage</th>
+                                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Krankheitstage</th>
                                 <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Aktionen</th>
                             </tr>
                         </thead>
@@ -330,12 +332,8 @@ export default function EmployeesPage() {
                                                 <td className="px-4 py-3 text-sm text-gray-600">{emp.email}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-600">{emp.employeeId || "-"}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-800">{emp.hourlyWage.toFixed(2)} €</td>
-                                                <td className="px-4 py-3 text-sm text-gray-600">
-                                                    {emp.travelCostType === "NONE" && "-"}
-                                                    {emp.travelCostType === "DEUTSCHLANDTICKET" && "Deutschlandticket"}
-                                                    {emp.travelCostType === "AUTO" && "Auto"}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm text-gray-600">{emp._count.timesheets}</td>
+                                                <td className="px-4 py-3 text-sm text-cyan-600 font-medium">{emp.vacationDays || 0}</td>
+                                                <td className="px-4 py-3 text-sm text-red-600 font-medium">{emp.sickDays || 0}</td>
                                                 <td className="px-4 py-3 text-right">
                                                     <div className="flex gap-2 justify-end">
                                                         <button
