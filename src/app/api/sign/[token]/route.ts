@@ -294,6 +294,10 @@ export async function POST(
                     const [endH, endM] = ts.plannedEnd.split(":").map(Number)
                     let diff = (endH * 60 + endM) - (startH * 60 + startM)
                     if (diff < 0) diff += 24 * 60
+                    // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+                    if (diff === 0 && startH === 0 && startM === 0 && endH === 0 && endM === 0) {
+                        diff = 24 * 60
+                    }
                     totalPlannedHours += diff / 60
                 }
             }

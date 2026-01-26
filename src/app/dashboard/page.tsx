@@ -8,6 +8,7 @@ import { de } from "date-fns/locale"
 import TimesheetDay from "@/components/TimesheetDay"
 import MonthlySummary from "@/components/MonthlySummary"
 import { ChevronDown, ChevronRight, Shield } from "lucide-react"
+import { formatTimeRange } from "@/lib/time-utils"
 
 export default function DashboardPage() {
     const { data: session, status } = useSession()
@@ -216,7 +217,7 @@ export default function DashboardPage() {
                                                     Backup für <span className="font-medium text-gray-800">{shift.employeeName}</span>
                                                 </span>
                                                 <span className="font-medium text-gray-800">
-                                                    {format(new Date(shift.date), "EE dd.MM.", { locale: de })} {shift.plannedStart} - {shift.plannedEnd}
+                                                    {format(new Date(shift.date), "EE dd.MM.", { locale: de })} {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
                                                 </span>
                                             </div>
                                         ))}

@@ -5,6 +5,7 @@ import { format } from "date-fns"
 import { de } from "date-fns/locale"
 import { CheckCircle2, AlertCircle, Clock, Edit3, RotateCcw, Loader2 } from "lucide-react"
 import { showToast } from '@/lib/toast-utils'
+import { formatTimeRange } from '@/lib/time-utils'
 
 export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, onUpdate: (updatedTimesheet: any) => void }) {
     const [isEditing, setIsEditing] = useState(false)
@@ -131,7 +132,7 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
                 </div>
                 <div className="text-right text-sm">
                     <p className="text-gray-900 font-bold">Plan</p>
-                    <p className="font-black text-black">{timesheet.plannedStart} - {timesheet.plannedEnd}</p>
+                    <p className="font-black text-black">{formatTimeRange(timesheet.plannedStart, timesheet.plannedEnd)}</p>
                 </div>
             </div>
 
@@ -141,7 +142,7 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
                         <div className="space-y-1">
                             <p className="text-xs text-gray-900 uppercase tracking-tight font-black">Tatsächlich</p>
                             <p className="text-lg font-black text-black">
-                                {timesheet.actualStart ? `${timesheet.actualStart} - ${timesheet.actualEnd}` : "-- : --"}
+                                {timesheet.actualStart ? formatTimeRange(timesheet.actualStart, timesheet.actualEnd) : "-- : --"}
                             </p>
                         </div>
 

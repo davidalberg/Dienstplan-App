@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Calendar, Users, CheckCircle, Clock, AlertCircle, Download, Trash2, RotateCcw, XCircle, Eye, FileText, ChevronDown, ChevronRight } from "lucide-react"
+import { formatTimeRange } from "@/lib/time-utils"
 
 interface EmployeeSignature {
     employeeId: string
@@ -740,14 +741,14 @@ export default function AdminSubmissionsPage() {
                                                                         {emp.timesheets.map((ts, idx) => (
                                                                             <tr key={idx} className="border-t border-gray-100">
                                                                                 <td className="py-2">{new Date(ts.date).toLocaleDateString("de-DE", { weekday: 'short', day: '2-digit', month: '2-digit' })}</td>
-                                                                                <td className="py-2">{ts.plannedStart} - {ts.plannedEnd}</td>
+                                                                                <td className="py-2">{formatTimeRange(ts.plannedStart, ts.plannedEnd)}</td>
                                                                                 <td className="py-2">
                                                                                     {ts.absenceType === "SICK" ? (
                                                                                         <span className="text-red-600">Krank</span>
                                                                                     ) : ts.absenceType === "VACATION" ? (
                                                                                         <span className="text-cyan-600">Urlaub</span>
                                                                                     ) : ts.actualStart ? (
-                                                                                        `${ts.actualStart} - ${ts.actualEnd}`
+                                                                                        formatTimeRange(ts.actualStart, ts.actualEnd)
                                                                                     ) : (
                                                                                         <span className="text-gray-400">-</span>
                                                                                     )}

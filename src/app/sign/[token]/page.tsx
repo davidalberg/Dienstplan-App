@@ -51,7 +51,12 @@ function formatDate(dateStr: string): string {
 
 function formatTime(start: string | null, end: string | null): string {
     if (!start || !end) return "-"
-    return `${start} - ${end}`
+    // Normalize end time: 0:00 → 24:00 for display
+    let displayEnd = end
+    if (end === "0:00" || end === "00:00") {
+        displayEnd = "24:00"
+    }
+    return `${start} - ${displayEnd}`
 }
 
 function calculateHours(start: string | null, end: string | null): number {
@@ -60,6 +65,10 @@ function calculateHours(start: string | null, end: string | null): number {
     const [endH, endM] = end.split(":").map(Number)
     let diff = (endH * 60 + endM) - (startH * 60 + startM)
     if (diff < 0) diff += 24 * 60
+    // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+    if (diff === 0 && startH === 0 && startM === 0 && endH === 0 && endM === 0) {
+        diff = 24 * 60
+    }
     return diff / 60
 }
 

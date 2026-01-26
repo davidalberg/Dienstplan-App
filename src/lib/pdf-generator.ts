@@ -74,7 +74,23 @@ function calculateHoursFromTimes(start: string | null, end: string | null): numb
     const [endH, endM] = end.split(":").map(Number)
     let diff = (endH * 60 + endM) - (startH * 60 + startM)
     if (diff < 0) diff += 24 * 60
+    // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+    if (diff === 0 && startH === 0 && startM === 0 && endH === 0 && endM === 0) {
+        diff = 24 * 60
+    }
     return diff / 60
+}
+
+/**
+ * Format a time range for display (ensures 0:00 end is shown as 24:00)
+ */
+function formatTimeRangeForPdf(start: string | null, end: string | null): string {
+    if (!start || !end) return "-"
+    let displayEnd = end
+    if (end === "0:00" || end === "00:00") {
+        displayEnd = "24:00"
+    }
+    return `${start}-${displayEnd}`
 }
 
 function formatDiff(planned: number, actual: number): string {
@@ -164,10 +180,10 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
             diffStr = "-"
         } else {
             if (ts.plannedStart && ts.plannedEnd) {
-                plannedStr = `${ts.plannedStart}-${ts.plannedEnd}`
+                plannedStr = formatTimeRangeForPdf(ts.plannedStart, ts.plannedEnd)
             }
             if (ts.actualStart && ts.actualEnd) {
-                actualStr = `${ts.actualStart}-${ts.actualEnd}`
+                actualStr = formatTimeRangeForPdf(ts.actualStart, ts.actualEnd)
             } else if (["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status)) {
                 actualStr = plannedStr // Use planned if confirmed but no actual times
             }

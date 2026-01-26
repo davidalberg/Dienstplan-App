@@ -95,6 +95,30 @@ export function isValidTimeFormat(timeStr: string | null | undefined): boolean {
 }
 
 /**
+ * Format a time range for display
+ * Ensures 24:00 is displayed correctly (not as 0:00)
+ * Examples:
+ *   - "0:00" to "0:00" → "0:00 - 24:00" (24-hour shift)
+ *   - "18:00" to "0:00" → "18:00 - 24:00" (evening to midnight)
+ *   - "8:00" to "16:00" → "8:00 - 16:00" (normal shift)
+ * @param start Start time (HH:MM)
+ * @param end End time (HH:MM)
+ * @returns Formatted time range string
+ */
+export function formatTimeRange(start: string | null | undefined, end: string | null | undefined): string {
+    if (!start || !end) return "-"
+
+    // Normalize end time: 0:00 → 24:00 when it represents midnight end of day
+    let displayEnd = end
+    if (end === "0:00" || end === "00:00") {
+        // If end is 0:00/00:00, it means midnight = end of day = 24:00
+        displayEnd = "24:00"
+    }
+
+    return `${start} - ${displayEnd}`
+}
+
+/**
  * Calculate total hours from a list of timesheets with actual times
  * @param timesheets Array of timesheet objects with actualStart, actualEnd, and breakMinutes
  * @returns Total hours as decimal string
