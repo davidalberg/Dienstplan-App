@@ -337,7 +337,21 @@ export default function AdminPage() {
                         <h1 className="text-3xl font-black text-black">Admin Panel</h1>
                         <p className="text-gray-900 font-bold">Google Sheets Synchronisierung & Logs</p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 flex-wrap">
+                        <Link
+                            href="/admin/dienstplan-config"
+                            className="flex items-center gap-2 rounded-xl border-2 border-green-600 px-6 py-3 font-bold text-green-600 transition-all hover:bg-green-50"
+                        >
+                            <Database size={20} />
+                            Dienstplan-Konfig
+                        </Link>
+                        <Link
+                            href="/admin/submissions"
+                            className="flex items-center gap-2 rounded-xl border-2 border-orange-600 px-6 py-3 font-bold text-orange-600 transition-all hover:bg-orange-50"
+                        >
+                            <FileText size={20} />
+                            Einreichungen
+                        </Link>
                         <Link
                             href="/admin/employees"
                             className="flex items-center gap-2 rounded-xl border-2 border-purple-600 px-6 py-3 font-bold text-purple-600 transition-all hover:bg-purple-50"
