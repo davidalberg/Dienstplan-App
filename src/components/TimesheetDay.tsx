@@ -245,14 +245,22 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
                                 type="button"
                                 onClick={() => handleAction("UPDATE")}
                                 disabled={loading}
-                                className="flex-1 rounded-xl bg-blue-600 py-2.5 font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:bg-blue-300"
+                                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
                             >
-                                Speichern
+                                {loading ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        Speichern...
+                                    </>
+                                ) : (
+                                    "Speichern"
+                                )}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setIsEditing(false)}
-                                className="rounded-xl border border-gray-200 px-6 py-2.5 font-semibold text-gray-600 hover:bg-gray-50"
+                                disabled={loading}
+                                className="rounded-xl border border-gray-200 px-6 py-2.5 font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Abbruch
                             </button>

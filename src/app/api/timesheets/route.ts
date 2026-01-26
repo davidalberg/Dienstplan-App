@@ -29,10 +29,14 @@ export async function GET(req: NextRequest) {
         // If requesting available months, return distinct month/year combinations
         if (getAvailableMonths) {
         const user = session.user as any
-        const where: any = {}
+        let where: any = {}
 
         if (user.role === "EMPLOYEE" || user.role === "ADMIN") {
-            where.employeeId = user.id
+            // Include months where user has own shifts OR backup shifts
+            where.OR = [
+                { employeeId: user.id },
+                { backupEmployeeId: user.id }
+            ]
         } else if (user.role === "TEAMLEAD") {
             // Validate teamId from database to prevent token manipulation
             const dbUser = await prisma.user.findUnique({
@@ -65,11 +69,19 @@ export async function GET(req: NextRequest) {
     }
 
     // Role based filtering
-    const where: any = { month, year }
     const user = session.user as any
+    let where: any = {}
 
     if (user.role === "EMPLOYEE" || user.role === "ADMIN") {
-        where.employeeId = user.id
+        // Load both own shifts AND backup shifts for this employee
+        where = {
+            month,
+            year,
+            OR: [
+                { employeeId: user.id },           // Normal own shifts
+                { backupEmployeeId: user.id }      // Backup shifts where this employee is the backup
+            ]
+        }
     } else if (user.role === "TEAMLEAD") {
         // Validate teamId from database to prevent token manipulation
         const dbUser = await prisma.user.findUnique({
@@ -81,7 +93,11 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
-        where.teamId = dbUser.teamId
+        where = {
+            month,
+            year,
+            teamId: dbUser.teamId
+        }
     }
 
     const timesheets = await prisma.timesheet.findMany({
@@ -232,31 +248,6 @@ export async function POST(req: NextRequest) {
                     })
                     console.log(`[BACKUP SUBSTITUTION] Created new timesheet for backup employee`)
                 }
-
-                // Sync zu Google Sheets: Schreibe Backup-Name in Spalte I der GLEICHEN Zeile
-                // (NICHT als neue Zeile anhängen!)
-                if (existing.source && existing.sheetId) {
-                    try {
-                        const { updateBackupInSameRow } = await import("@/lib/google-sheets")
-
-                        // Hole den Namen des abwesenden Mitarbeiters
-                        const absentEmployee = await prisma.user.findUnique({
-                            where: { id: existing.employeeId },
-                            select: { name: true }
-                        })
-
-                        await updateBackupInSameRow(
-                            existing.sheetId,
-                            existing.source,
-                            existing.date,
-                            absentEmployee?.name || "Unknown",
-                            backupEmployee.name || "Unknown",
-                            absenceType as "SICK" | "VACATION"
-                        )
-                    } catch (error) {
-                        console.error("[BACKUP SUBSTITUTION] Google Sheets sync failed (non-critical):", error)
-                    }
-                }
             }
         } catch (error) {
             console.error("[BACKUP SUBSTITUTION] Failed to activate backup (non-critical):", error)
@@ -264,28 +255,30 @@ export async function POST(req: NextRequest) {
     }
 
     // Wenn absenceType auf null gesetzt wird (Mitarbeiter ist wieder gesund),
-    // lösche Backup/Krank-Status in Google Sheets (Spalten H und I)
-    if (!absenceType && (existing.absenceType === "SICK" || existing.absenceType === "VACATION")) {
+    // lösche Backup-Schicht aus der Datenbank
+    if (!absenceType && (existing.absenceType === "SICK" || existing.absenceType === "VACATION") && existing.backupEmployeeId) {
         try {
-            console.log(`[BACKUP CLEAR] Employee ${existing.employeeId} is no longer ${existing.absenceType}, clearing backup status`)
+            console.log(`[BACKUP CLEAR] Employee ${existing.employeeId} is no longer ${existing.absenceType}, removing backup shift`)
 
-            if (existing.source && existing.sheetId) {
-                const { clearBackupAndSickStatus } = await import("@/lib/google-sheets")
+            // Lösche die Backup-Schicht in der Datenbank
+            const backupShift = await prisma.timesheet.findUnique({
+                where: {
+                    employeeId_date: {
+                        employeeId: existing.backupEmployeeId,
+                        date: existing.date
+                    }
+                }
+            })
 
-                const employee = await prisma.user.findUnique({
-                    where: { id: existing.employeeId },
-                    select: { name: true }
+            if (backupShift && backupShift.note?.includes("Eingesprungen")) {
+                // Lösche die Backup-Schicht komplett
+                await prisma.timesheet.delete({
+                    where: { id: backupShift.id }
                 })
-
-                await clearBackupAndSickStatus(
-                    existing.sheetId,
-                    existing.source,
-                    existing.date,
-                    employee?.name || "Unknown"
-                )
+                console.log(`[BACKUP CLEAR] Deleted backup shift for employee ${existing.backupEmployeeId}`)
             }
         } catch (error) {
-            console.error("[BACKUP CLEAR] Failed to clear backup status in Google Sheets (non-critical):", error)
+            console.error("[BACKUP CLEAR] Failed to clear backup shift (non-critical):", error)
         }
     }
 

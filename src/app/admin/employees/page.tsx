@@ -1,8 +1,9 @@
 "use client"
 
+import React from "react"
 import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Edit2, Trash2, Plus, X, Save } from "lucide-react"
+import { Users, Edit2, Trash2, Plus, X, Save, ChevronDown, ChevronRight } from "lucide-react"
 import Link from "next/link"
 
 interface Employee {
@@ -33,6 +34,7 @@ export default function EmployeesPage() {
     const [isEditing, setIsEditing] = useState(false)
     const [isCreating, setIsCreating] = useState(false)
     const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
+    const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set())
     const [formData, setFormData] = useState({
         id: "",
         email: "",
@@ -216,6 +218,33 @@ export default function EmployeesPage() {
         setEditingEmployee(null)
     }
 
+    const toggleTeam = (teamName: string) => {
+        const newCollapsed = new Set(collapsedTeams)
+        if (newCollapsed.has(teamName)) {
+            newCollapsed.delete(teamName)
+        } else {
+            newCollapsed.add(teamName)
+        }
+        setCollapsedTeams(newCollapsed)
+    }
+
+    // Gruppiere Mitarbeiter nach Teams
+    const groupedEmployees = employees.reduce((acc, emp) => {
+        const teamName = emp.team?.name || "Kein Team"
+        if (!acc[teamName]) {
+            acc[teamName] = []
+        }
+        acc[teamName].push(emp)
+        return acc
+    }, {} as Record<string, Employee[]>)
+
+    // Sortiere Teams alphabetisch, "Kein Team" am Ende
+    const sortedTeamNames = Object.keys(groupedEmployees).sort((a, b) => {
+        if (a === "Kein Team") return 1
+        if (b === "Kein Team") return -1
+        return a.localeCompare(b)
+    })
+
     if (loading && employees.length === 0) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -251,7 +280,7 @@ export default function EmployeesPage() {
                     </button>
                 </div>
 
-                {/* Mitarbeiter-Liste */}
+                {/* Mitarbeiter-Liste gruppiert nach Teams */}
                 <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                     <table className="w-full">
                         <thead className="bg-gray-100">
@@ -266,38 +295,70 @@ export default function EmployeesPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {employees.map((emp) => (
-                                <tr key={emp.id} className="border-t hover:bg-gray-50">
-                                    <td className="px-4 py-3 text-sm text-gray-800">{emp.name}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">{emp.email}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">{emp.employeeId || "-"}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-800">{emp.hourlyWage.toFixed(2)} €</td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">
-                                        {emp.travelCostType === "NONE" && "-"}
-                                        {emp.travelCostType === "DEUTSCHLANDTICKET" && "Deutschlandticket"}
-                                        {emp.travelCostType === "AUTO" && "Auto"}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">{emp._count.timesheets}</td>
-                                    <td className="px-4 py-3 text-right">
-                                        <div className="flex gap-2 justify-end">
-                                            <button
-                                                onClick={() => handleEdit(emp)}
-                                                className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 transition"
-                                                disabled={loading}
-                                            >
-                                                <Edit2 size={18} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(emp.id, emp.name, emp._count.timesheets)}
-                                                className="text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50 transition"
-                                                disabled={loading}
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                            {sortedTeamNames.map((teamName) => {
+                                const teamEmployees = groupedEmployees[teamName]
+                                const isCollapsed = collapsedTeams.has(teamName)
+
+                                return (
+                                    <React.Fragment key={teamName}>
+                                        {/* Team Header */}
+                                        <tr className="bg-blue-50 border-t-2 border-blue-200">
+                                            <td colSpan={7} className="px-4 py-3">
+                                                <button
+                                                    onClick={() => toggleTeam(teamName)}
+                                                    className="flex items-center gap-2 w-full text-left hover:bg-blue-100 rounded transition -mx-2 px-2 py-1"
+                                                >
+                                                    {isCollapsed ? (
+                                                        <ChevronRight size={20} className="text-blue-600" />
+                                                    ) : (
+                                                        <ChevronDown size={20} className="text-blue-600" />
+                                                    )}
+                                                    <span className="font-bold text-gray-800 text-base">
+                                                        {teamName}
+                                                    </span>
+                                                    <span className="text-sm text-gray-600 font-normal">
+                                                        ({teamEmployees.length} Mitarbeiter)
+                                                    </span>
+                                                </button>
+                                            </td>
+                                        </tr>
+
+                                        {/* Team Mitarbeiter */}
+                                        {!isCollapsed && teamEmployees.map((emp) => (
+                                            <tr key={emp.id} className="border-t hover:bg-gray-50">
+                                                <td className="px-4 py-3 text-sm text-gray-800">{emp.name}</td>
+                                                <td className="px-4 py-3 text-sm text-gray-600">{emp.email}</td>
+                                                <td className="px-4 py-3 text-sm text-gray-600">{emp.employeeId || "-"}</td>
+                                                <td className="px-4 py-3 text-sm text-gray-800">{emp.hourlyWage.toFixed(2)} €</td>
+                                                <td className="px-4 py-3 text-sm text-gray-600">
+                                                    {emp.travelCostType === "NONE" && "-"}
+                                                    {emp.travelCostType === "DEUTSCHLANDTICKET" && "Deutschlandticket"}
+                                                    {emp.travelCostType === "AUTO" && "Auto"}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-gray-600">{emp._count.timesheets}</td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <div className="flex gap-2 justify-end">
+                                                        <button
+                                                            onClick={() => handleEdit(emp)}
+                                                            className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 transition"
+                                                            disabled={loading}
+                                                        >
+                                                            <Edit2 size={18} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(emp.id, emp.name, emp._count.timesheets)}
+                                                            className="text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50 transition"
+                                                            disabled={loading}
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </React.Fragment>
+                                )
+                            })}
                         </tbody>
                     </table>
 
