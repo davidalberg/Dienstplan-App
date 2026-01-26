@@ -10,11 +10,17 @@ interface SubmissionData {
     month: number
     year: number
     status: string
-    employeeName: string
-    teamName: string
+    sheetFileName: string
     recipientName: string
-    employeeSignedAt: string
     pdfUrl?: string
+}
+
+interface EmployeeSignature {
+    employeeId: string
+    employeeName: string
+    employeeEmail: string
+    signature: string
+    signedAt: string
 }
 
 interface TimesheetEntry {
@@ -26,6 +32,11 @@ interface TimesheetEntry {
     absenceType: string | null
     note: string | null
     status: string
+    employeeId: string
+    employee: {
+        name: string
+        email: string
+    }
 }
 
 const MONTH_NAMES = [
@@ -59,6 +70,7 @@ export default function SignPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [submission, setSubmission] = useState<SubmissionData | null>(null)
+    const [employeeSignatures, setEmployeeSignatures] = useState<EmployeeSignature[]>([])
     const [timesheets, setTimesheets] = useState<TimesheetEntry[]>([])
     const [signature, setSignature] = useState<string | null>(null)
     const [signing, setSigning] = useState(false)
@@ -83,6 +95,7 @@ export default function SignPage() {
                 }
 
                 setSubmission(data.submission)
+                setEmployeeSignatures(data.employeeSignatures || [])
                 setTimesheets(data.timesheets || [])
                 setLoading(false)
             } catch (err) {
@@ -127,6 +140,46 @@ export default function SignPage() {
             setSigning(false)
         }
     }
+
+    // Group timesheets by employee
+    const employeeStats = new Map<string, {
+        name: string
+        workDays: number
+        totalHours: number
+        sickDays: number
+        vacationDays: number
+        hasSigned: boolean
+    }>()
+
+    for (const ts of timesheets) {
+        if (!employeeStats.has(ts.employeeId)) {
+            const hasSigned = employeeSignatures.some(sig => sig.employeeId === ts.employeeId)
+            employeeStats.set(ts.employeeId, {
+                name: ts.employee.name,
+                workDays: 0,
+                totalHours: 0,
+                sickDays: 0,
+                vacationDays: 0,
+                hasSigned
+            })
+        }
+
+        const emp = employeeStats.get(ts.employeeId)!
+
+        if (ts.absenceType === "SICK") {
+            emp.sickDays++
+        } else if (ts.absenceType === "VACATION") {
+            emp.vacationDays++
+        } else if (ts.actualStart && ts.actualEnd) {
+            emp.workDays++
+            emp.totalHours += calculateHours(ts.actualStart, ts.actualEnd)
+        } else if (ts.plannedStart && ts.plannedEnd && ["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status)) {
+            emp.workDays++
+            emp.totalHours += calculateHours(ts.plannedStart, ts.plannedEnd)
+        }
+    }
+
+    const employeeArray = Array.from(employeeStats.values())
 
     // Calculate stats from timesheets
     const stats = {
@@ -234,28 +287,77 @@ export default function SignPage() {
                     </div>
 
                     {submission && (
-                        <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/20">
+                        <div className="mt-4 pt-4 border-t border-white/20">
                             <div className="flex items-center gap-2">
                                 <User size={16} className="text-blue-200" />
                                 <div>
-                                    <p className="text-xs text-blue-200">Mitarbeiter</p>
-                                    <p className="font-medium">{submission.employeeName}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Calendar size={16} className="text-blue-200" />
-                                <div>
-                                    <p className="text-xs text-blue-200">Unterschrieben am</p>
-                                    <p className="font-medium">
-                                        {submission.employeeSignedAt
-                                            ? new Date(submission.employeeSignedAt).toLocaleDateString("de-DE")
-                                            : "-"
-                                        }
-                                    </p>
+                                    <p className="text-xs text-blue-200">Team</p>
+                                    <p className="font-medium">{submission.sheetFileName}</p>
                                 </div>
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* Employee Overview - NEW */}
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                    <div className="p-4 border-b border-gray-100">
+                        <h2 className="font-bold text-gray-900">Mitarbeiter-Übersicht</h2>
+                        <p className="text-sm text-gray-600">
+                            {employeeArray.length} Mitarbeiter im Team
+                        </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="text-left px-4 py-3 font-semibold text-gray-600">Mitarbeiter</th>
+                                    <th className="text-center px-4 py-3 font-semibold text-gray-600">Arbeitstage</th>
+                                    <th className="text-center px-4 py-3 font-semibold text-gray-600">Stunden</th>
+                                    <th className="text-center px-4 py-3 font-semibold text-gray-600">Krank</th>
+                                    <th className="text-center px-4 py-3 font-semibold text-gray-600">Urlaub</th>
+                                    <th className="text-center px-4 py-3 font-semibold text-gray-600">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {employeeArray.map((emp, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50">
+                                        <td className="px-4 py-3 font-medium text-gray-900">{emp.name}</td>
+                                        <td className="px-4 py-3 text-center text-gray-600">{emp.workDays}</td>
+                                        <td className="px-4 py-3 text-center text-gray-900 font-semibold">
+                                            {emp.totalHours.toFixed(1)}
+                                        </td>
+                                        <td className="px-4 py-3 text-center text-gray-600">{emp.sickDays}</td>
+                                        <td className="px-4 py-3 text-center text-gray-600">{emp.vacationDays}</td>
+                                        <td className="px-4 py-3 text-center">
+                                            {emp.hasSigned ? (
+                                                <span className="text-green-600 font-semibold">✓</span>
+                                            ) : (
+                                                <span className="text-gray-400">○</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {/* Total row */}
+                                <tr className="bg-blue-50 font-bold">
+                                    <td className="px-4 py-3 text-gray-900">GESAMT</td>
+                                    <td className="px-4 py-3 text-center text-gray-900">
+                                        {employeeArray.reduce((sum, e) => sum + e.workDays, 0)}
+                                    </td>
+                                    <td className="px-4 py-3 text-center text-gray-900">
+                                        {employeeArray.reduce((sum, e) => sum + e.totalHours, 0).toFixed(1)}
+                                    </td>
+                                    <td className="px-4 py-3 text-center text-gray-900">
+                                        {employeeArray.reduce((sum, e) => sum + e.sickDays, 0)}
+                                    </td>
+                                    <td className="px-4 py-3 text-center text-gray-900">
+                                        {employeeArray.reduce((sum, e) => sum + e.vacationDays, 0)}
+                                    </td>
+                                    <td className="px-4 py-3"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 {/* Summary Stats */}
@@ -290,6 +392,7 @@ export default function SignPage() {
                         <table className="w-full text-sm">
                             <thead className="bg-gray-50">
                                 <tr>
+                                    <th className="text-left px-4 py-3 font-semibold text-gray-600">Mitarbeiter</th>
                                     <th className="text-left px-4 py-3 font-semibold text-gray-600">Datum</th>
                                     <th className="text-left px-4 py-3 font-semibold text-gray-600">Soll</th>
                                     <th className="text-left px-4 py-3 font-semibold text-gray-600">Ist</th>
@@ -299,6 +402,7 @@ export default function SignPage() {
                             <tbody className="divide-y divide-gray-100">
                                 {timesheets.map((ts, idx) => (
                                     <tr key={idx} className="hover:bg-gray-50">
+                                        <td className="px-4 py-2 text-gray-600 text-xs">{ts.employee.name}</td>
                                         <td className="px-4 py-2 font-medium text-gray-900">
                                             {formatDate(ts.date)}
                                         </td>
