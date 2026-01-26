@@ -263,6 +263,32 @@ export async function POST(req: NextRequest) {
         }
     }
 
+    // Wenn absenceType auf null gesetzt wird (Mitarbeiter ist wieder gesund),
+    // lösche Backup/Krank-Status in Google Sheets (Spalten H und I)
+    if (!absenceType && (existing.absenceType === "SICK" || existing.absenceType === "VACATION")) {
+        try {
+            console.log(`[BACKUP CLEAR] Employee ${existing.employeeId} is no longer ${existing.absenceType}, clearing backup status`)
+
+            if (existing.source && existing.sheetId) {
+                const { clearBackupAndSickStatus } = await import("@/lib/google-sheets")
+
+                const employee = await prisma.user.findUnique({
+                    where: { id: existing.employeeId },
+                    select: { name: true }
+                })
+
+                await clearBackupAndSickStatus(
+                    existing.sheetId,
+                    existing.source,
+                    existing.date,
+                    employee?.name || "Unknown"
+                )
+            }
+        } catch (error) {
+            console.error("[BACKUP CLEAR] Failed to clear backup status in Google Sheets (non-critical):", error)
+        }
+    }
+
     // Audit Log Entry - immer synchron um Connection Pool nicht zu erschöpfen
     try {
         await prisma.auditLog.create({

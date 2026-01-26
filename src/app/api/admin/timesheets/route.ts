@@ -159,6 +159,12 @@ export async function PUT(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
     try {
+        // 0. Hole alte Werte für Vergleich (für Backup-Status-Löschung)
+        const existing = await prisma.timesheet.findUnique({
+            where: { id },
+            select: { absenceType: true, source: true, sheetId: true, date: true, employeeId: true }
+        })
+
         // 1. Update in DB mit employee relation für Response
         const updated = await prisma.timesheet.update({
             where: { id },
@@ -211,6 +217,28 @@ export async function PUT(req: NextRequest) {
             }
         } else {
             console.log(`[PUT SYNC] No source/sheetId - skipping Google Sheets sync`)
+        }
+
+        // 2.5. Wenn absenceType von SICK/VACATION auf null geändert wurde,
+        // lösche Backup/Krank-Status in Google Sheets (Spalten H und I)
+        if (existing && !updated.absenceType &&
+            (existing.absenceType === "SICK" || existing.absenceType === "VACATION")) {
+            try {
+                console.log(`[ADMIN BACKUP CLEAR] AbsenceType changed from ${existing.absenceType} to null, clearing backup status`)
+
+                if (existing.source && existing.sheetId) {
+                    const { clearBackupAndSickStatus } = await import("@/lib/google-sheets")
+
+                    await clearBackupAndSickStatus(
+                        existing.sheetId,
+                        existing.source,
+                        existing.date,
+                        updated.employee?.name || "Unknown"
+                    )
+                }
+            } catch (error: any) {
+                console.error("[ADMIN BACKUP CLEAR] Failed to clear backup status (non-critical):", error)
+            }
         }
 
         // 3. Bei Sync-Fehler: Warnung zurückgeben aber DB-Update ist OK

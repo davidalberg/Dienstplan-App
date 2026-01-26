@@ -41,7 +41,12 @@
       "Bash(node -e:*)",
       "Bash(if exist \".next\\\\dev\\\\lock\" del /F \".next\\\\dev\\\\lock\")",
       "Bash(npx kill-port:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(git log:*)",
+      "Bash(vercel env:*)",
+      "Bash(vercel link:*)",
+      "Bash(echo:*)",
+      "Bash(vercel:*)"
     ]
   }
 }

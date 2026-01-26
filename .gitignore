@@ -48,3 +48,4 @@ prisma/*.db-journal
 
 # temp files
 update-sheet-names.js
+.env*.local

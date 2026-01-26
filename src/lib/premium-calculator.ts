@@ -91,7 +91,7 @@ export function isSundayDate(date: Date): boolean {
 
 /**
  * Berechnet die Gesamtstunden zwischen Start und Ende
- * Unterstützt Übernacht-Dienste
+ * Unterstützt Übernacht-Dienste und 24-Stunden-Schichten
  */
 export function calculateTotalHours(start: string, end: string): number {
     const [startH, startM] = start.split(":").map(Number)
@@ -102,6 +102,11 @@ export function calculateTotalHours(start: string, end: string): number {
     // Übernacht-Dienst (Ende < Start)
     if (minutes < 0) {
         minutes += 24 * 60
+    }
+
+    // 24-Stunden-Schicht (0:00 bis 0:00 = 24 Stunden, nicht 0 Stunden)
+    if (minutes === 0 && startH === 0 && startM === 0 && endH === 0 && endM === 0) {
+        minutes = 24 * 60
     }
 
     return minutes / 60

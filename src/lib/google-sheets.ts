@@ -499,3 +499,43 @@ export async function updateBackupInSameRow(
         return false
     }
 }
+
+/**
+ * Löscht Backup- und Krank-Status (Spalten H und I) wenn Mitarbeiter wieder arbeitet
+ */
+export async function clearBackupAndSickStatus(
+    sheetId: string,
+    tabName: string,
+    date: Date,
+    employeeName: string
+) {
+    const sheets = await getGoogleSheetsClient()
+
+    // Finde die Zeile des Mitarbeiters
+    const rowIndex = await findRowIndex(sheets, sheetId, tabName, date, employeeName)
+
+    if (rowIndex !== -1) {
+        console.log(`[BACKUP SYNC] Clearing columns H and I in row ${rowIndex} in "${tabName}"`)
+
+        // Leere Spalte H (Urlaub/Krank)
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: `'${tabName}'!H${rowIndex}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[""]] }
+        })
+
+        // Leere Spalte I (Vertretung)
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: `'${tabName}'!I${rowIndex}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[""]] }
+        })
+
+        return true
+    } else {
+        console.warn(`[BACKUP SYNC] Could not find row for ${employeeName} on ${date.toDateString()} in "${tabName}"`)
+        return false
+    }
+}

@@ -32,6 +32,7 @@ export function parseTimeToMinutes(timeStr: string | null | undefined): number |
 /**
  * Calculate duration in minutes between two time strings
  * Handles overnight shifts (e.g., 23:00 to 06:00)
+ * Handles 24-hour shifts (e.g., 0:00 to 0:00 = 24 hours)
  * @param start Start time (HH:MM)
  * @param end End time (HH:MM)
  * @returns Duration in minutes, or null if invalid times
@@ -47,6 +48,11 @@ export function calculateMinutesBetween(start: string | null, end: string | null
     // Handle overnight shifts
     if (diff < 0) {
         diff += 24 * 60
+    }
+
+    // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+    if (diff === 0 && startMinutes === 0 && endMinutes === 0) {
+        diff = 24 * 60
     }
 
     return diff

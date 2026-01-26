@@ -109,6 +109,10 @@ export async function GET(req: NextRequest) {
                     const [endH, endM] = ts.plannedEnd.split(":").map(Number)
                     let diff = (endH * 60 + endM) - (startH * 60 + startM)
                     if (diff < 0) diff += 24 * 60
+                    // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+                    if (diff === 0 && startH === 0 && startM === 0 && endH === 0 && endM === 0) {
+                        diff = 24 * 60
+                    }
                     plannedMinutes += diff
                 }
 
@@ -118,6 +122,10 @@ export async function GET(req: NextRequest) {
                     const [endH, endM] = ts.actualEnd.split(":").map(Number)
                     let diff = (endH * 60 + endM) - (startH * 60 + startM)
                     if (diff < 0) diff += 24 * 60
+                    // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+                    if (diff === 0 && startH === 0 && startM === 0 && endH === 0 && endM === 0) {
+                        diff = 24 * 60
+                    }
                     actualMinutes += diff
                 }
                 // Fallback to planned times for confirmed shifts without absences
@@ -128,6 +136,10 @@ export async function GET(req: NextRequest) {
                     const [endH, endM] = ts.plannedEnd.split(":").map(Number)
                     let diff = (endH * 60 + endM) - (startH * 60 + startM)
                     if (diff < 0) diff += 24 * 60
+                    // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+                    if (diff === 0 && startH === 0 && startM === 0 && endH === 0 && endM === 0) {
+                        diff = 24 * 60
+                    }
                     actualMinutes += diff
                 }
 
@@ -142,11 +154,19 @@ export async function GET(req: NextRequest) {
                         const [pEndH, pEndM] = ts.plannedEnd.split(":").map(Number)
                         let plannedDiff = (pEndH * 60 + pEndM) - (pStartH * 60 + pStartM)
                         if (plannedDiff < 0) plannedDiff += 24 * 60
+                        // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+                        if (plannedDiff === 0 && pStartH === 0 && pStartM === 0 && pEndH === 0 && pEndM === 0) {
+                            plannedDiff = 24 * 60
+                        }
 
                         const [aStartH, aStartM] = ts.actualStart.split(":").map(Number)
                         const [aEndH, aEndM] = ts.actualEnd.split(":").map(Number)
                         let actualDiff = (aEndH * 60 + aEndM) - (aStartH * 60 + aStartM)
                         if (actualDiff < 0) actualDiff += 24 * 60
+                        // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+                        if (actualDiff === 0 && aStartH === 0 && aStartM === 0 && aEndH === 0 && aEndM === 0) {
+                            actualDiff = 24 * 60
+                        }
 
                         const diffHours = (actualDiff - plannedDiff) / 60
 
