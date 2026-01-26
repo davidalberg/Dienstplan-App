@@ -70,18 +70,39 @@ export async function GET(req: NextRequest) {
 
     // Role based filtering
     const user = session.user as any
-    let where: any = {}
 
     if (user.role === "EMPLOYEE" || user.role === "ADMIN") {
-        // Load both own shifts AND backup shifts for this employee
-        where = {
-            month,
-            year,
-            OR: [
-                { employeeId: user.id },           // Normal own shifts
-                { backupEmployeeId: user.id }      // Backup shifts where this employee is the backup
-            ]
-        }
+        // Eigene Schichten (inkl. aktivierte Backup-Schichten mit "Eingesprungen" Note)
+        const ownTimesheets = await prisma.timesheet.findMany({
+            where: { month, year, employeeId: user.id },
+            orderBy: { date: "asc" },
+        })
+
+        // Potenzielle Backup-Schichten (Schichten anderer, wo ich als Backup eingetragen bin)
+        // NUR wenn der Hauptmitarbeiter NICHT krank/Urlaub ist (sonst ist es bereits aktiviert)
+        const potentialBackupShifts = await prisma.timesheet.findMany({
+            where: {
+                month,
+                year,
+                backupEmployeeId: user.id,
+                absenceType: null, // Nur wenn Hauptmitarbeiter NICHT abwesend
+            },
+            include: {
+                employee: { select: { name: true } }
+            },
+            orderBy: { date: "asc" },
+        })
+
+        return NextResponse.json({
+            timesheets: ownTimesheets,
+            potentialBackupShifts: potentialBackupShifts.map(s => ({
+                id: s.id,
+                date: s.date,
+                plannedStart: s.plannedStart,
+                plannedEnd: s.plannedEnd,
+                employeeName: s.employee?.name || "Unbekannt",
+            }))
+        })
     } else if (user.role === "TEAMLEAD") {
         // Validate teamId from database to prevent token manipulation
         const dbUser = await prisma.user.findUnique({
@@ -93,19 +114,16 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
-        where = {
-            month,
-            year,
-            teamId: dbUser.teamId
-        }
+        const timesheets = await prisma.timesheet.findMany({
+            where: { month, year, teamId: dbUser.teamId },
+            orderBy: { date: "asc" },
+        })
+
+        return NextResponse.json({ timesheets, potentialBackupShifts: [] })
     }
 
-    const timesheets = await prisma.timesheet.findMany({
-        where,
-        orderBy: { date: "asc" },
-    })
-
-    return NextResponse.json(timesheets)
+    // Fallback für unbekannte Rollen
+    return NextResponse.json({ timesheets: [], potentialBackupShifts: [] })
     } catch (error: any) {
         console.error("[GET /api/timesheets] Error:", error)
         return NextResponse.json(

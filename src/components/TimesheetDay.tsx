@@ -104,10 +104,10 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
         if (timesheet.absenceType === "SICK") return "Krank"
         if (timesheet.absenceType === "VACATION") return "Urlaub"
 
-        // Backup-Schicht: "Eingesprungen" wenn bestätigt, "Backup-Schicht" wenn noch offen
+        // Aktivierte Backup-Schicht: "Eingesprungen" wenn bestätigt, "Einspringen erforderlich" wenn noch offen
         const isBackupShift = timesheet.note && timesheet.note.includes("Eingesprungen")
         if (isBackupShift && getCurrentStatus() === "CONFIRMED") return "Eingesprungen"
-        if (isBackupShift) return "Backup-Schicht"
+        if (isBackupShift) return "Einspringen erforderlich"
 
         const status = getCurrentStatus()
         switch (status) {

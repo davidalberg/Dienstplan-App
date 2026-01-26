@@ -7,7 +7,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns"
 import { de } from "date-fns/locale"
 import TimesheetDay from "@/components/TimesheetDay"
 import MonthlySummary from "@/components/MonthlySummary"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, ChevronRight, Shield } from "lucide-react"
 
 export default function DashboardPage() {
     const { data: session, status } = useSession()
@@ -17,6 +17,8 @@ export default function DashboardPage() {
         redirect("/admin")
     }
     const [timesheets, setTimesheets] = useState<any[]>([])
+    const [potentialBackupShifts, setPotentialBackupShifts] = useState<any[]>([])
+    const [isBackupCollapsed, setIsBackupCollapsed] = useState(true)
     const [loading, setLoading] = useState(true)
     const [currentDate, setCurrentDate] = useState(new Date())
     const [availableMonths, setAvailableMonths] = useState<{month: number, year: number}[]>([])
@@ -73,7 +75,9 @@ export default function DashboardPage() {
             const res = await fetch(`/api/timesheets?month=${month}&year=${year}`)
             if (res.ok) {
                 const data = await res.json()
-                setTimesheets(data)
+                // Neues API-Format: { timesheets, potentialBackupShifts }
+                setTimesheets(data.timesheets || data)
+                setPotentialBackupShifts(data.potentialBackupShifts || [])
                 // Restore scroll position after state update
                 setTimeout(() => window.scrollTo(0, scrollY), 0)
             }
@@ -180,6 +184,46 @@ export default function DashboardPage() {
                             month={currentDate.getMonth() + 1}
                             year={currentDate.getFullYear()}
                         />
+
+                        {/* Backup-Schichten Sektion (eingeklappt) */}
+                        {potentialBackupShifts.length > 0 && (
+                            <div className="mt-6 rounded-xl bg-gray-100 overflow-hidden border border-gray-200">
+                                <button
+                                    onClick={() => setIsBackupCollapsed(!isBackupCollapsed)}
+                                    className="w-full flex items-center justify-between p-4 hover:bg-gray-200 transition-colors"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Shield size={18} className="text-gray-500" />
+                                        <span className="font-bold text-gray-700">
+                                            Backup-Schichten ({potentialBackupShifts.length})
+                                        </span>
+                                    </div>
+                                    {isBackupCollapsed ? (
+                                        <ChevronRight size={20} className="text-gray-500" />
+                                    ) : (
+                                        <ChevronDown size={20} className="text-gray-500" />
+                                    )}
+                                </button>
+
+                                {!isBackupCollapsed && (
+                                    <div className="px-4 pb-4 space-y-2">
+                                        <p className="text-xs text-gray-500 mb-3">
+                                            Diese Schichten übernimmst du, falls der Hauptmitarbeiter ausfällt.
+                                        </p>
+                                        {potentialBackupShifts.map(shift => (
+                                            <div key={shift.id} className="flex justify-between items-center text-sm bg-white rounded-lg p-3 shadow-sm">
+                                                <span className="text-gray-600">
+                                                    Backup für <span className="font-medium text-gray-800">{shift.employeeName}</span>
+                                                </span>
+                                                <span className="font-medium text-gray-800">
+                                                    {format(new Date(shift.date), "EE dd.MM.", { locale: de })} {shift.plannedStart} - {shift.plannedEnd}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Days List */}
                         <div className="mt-6 space-y-4">
