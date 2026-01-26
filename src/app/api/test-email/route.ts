@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/auth"
+import { sendSignatureRequestEmail } from "@/lib/email"
+
+/**
+ * POST /api/test-email
+ * Test endpoint to check if email sending works
+ */
+export async function POST(req: NextRequest) {
+    try {
+        const session = await auth()
+        if (!session?.user || (session.user as any).role !== "ADMIN") {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
+        const body = await req.json()
+        const { recipientEmail, recipientName } = body
+
+        if (!recipientEmail || !recipientName) {
+            return NextResponse.json({
+                error: "recipientEmail und recipientName sind erforderlich"
+            }, { status: 400 })
+        }
+
+        console.log("[TEST-EMAIL] Attempting to send test email to:", recipientEmail)
+
+        // Send test email
+        await sendSignatureRequestEmail({
+            recipientEmail,
+            recipientName,
+            employeeName: "Test Mitarbeiter",
+            month: 1,
+            year: 2026,
+            signatureUrl: "http://localhost:3000/sign/test-token",
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        })
+
+        console.log("[TEST-EMAIL] Email sent successfully!")
+
+        return NextResponse.json({
+            success: true,
+            message: "Test-E-Mail erfolgreich versendet!"
+        })
+    } catch (error: any) {
+        console.error("[TEST-EMAIL] Error:", error)
+        return NextResponse.json({
+            error: "E-Mail-Versand fehlgeschlagen",
+            details: error.message,
+            stack: error.stack
+        }, { status: 500 })
+    }
+}
