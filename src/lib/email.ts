@@ -1,25 +1,17 @@
-import nodemailer from "nodemailer"
+import { Resend } from "resend"
 
 const MONTH_NAMES = [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember"
 ]
 
-// Create reusable transporter
-function getTransporter() {
-    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
-        throw new Error("Email configuration missing. Please set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD environment variables.")
+// Initialize Resend client
+function getResendClient() {
+    if (!process.env.RESEND_API_KEY) {
+        throw new Error("Email configuration missing. Please set RESEND_API_KEY environment variable.")
     }
 
-    return nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || "587"),
-        secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASSWORD,
-        },
-    })
+    return new Resend(process.env.RESEND_API_KEY)
 }
 
 interface SendSignatureRequestParams {
@@ -35,8 +27,8 @@ interface SendSignatureRequestParams {
 export async function sendSignatureRequestEmail(params: SendSignatureRequestParams) {
     const { recipientEmail, recipientName, employeeName, month, year, signatureUrl, expiresAt } = params
 
-    const transporter = getTransporter()
-    const fromEmail = process.env.EMAIL_FROM || `"Dienstplan App" <${process.env.SMTP_USER}>`
+    const resend = getResendClient()
+    const fromEmail = process.env.EMAIL_FROM || "Dienstplan App <onboarding@resend.dev>"
 
     const monthName = MONTH_NAMES[month - 1]
     const expiresFormatted = expiresAt.toLocaleDateString("de-DE", {
@@ -116,11 +108,10 @@ Mit freundlichen Grüßen,
 Dienstplan App
 `
 
-    await transporter.sendMail({
+    await resend.emails.send({
         from: fromEmail,
         to: recipientEmail,
         subject: `Stundennachweis zur Unterschrift - ${employeeName} ${monthName} ${year}`,
-        text: textContent,
         html: htmlContent,
     })
 }
@@ -179,8 +170,8 @@ export async function sendCompletionEmails(params: SendCompletionEmailParams) {
         sheetFileName // NEW: for team submissions
     } = params
 
-    const transporter = getTransporter()
-    const fromEmail = process.env.EMAIL_FROM || `"Dienstplan App" <${process.env.SMTP_USER}>`
+    const resend = getResendClient()
+    const fromEmail = process.env.EMAIL_FROM || "Dienstplan App <onboarding@resend.dev>"
 
     const monthName = MONTH_NAMES[month - 1]
 
@@ -308,11 +299,10 @@ Dienstplan App
         // NEW: Send to ALL employees
         for (const emp of employeeEmails!) {
             emailPromises.push(
-                transporter.sendMail({
+                resend.emails.send({
                     from: fromEmail,
                     to: emp.email,
                     subject: `✓ Stundennachweis abgeschlossen - ${monthName} ${year}`,
-                    text: textContent,
                     html: htmlContent,
                 })
             )
@@ -320,11 +310,10 @@ Dienstplan App
     } else {
         // OLD: Send to single employee
         emailPromises.push(
-            transporter.sendMail({
+            resend.emails.send({
                 from: fromEmail,
                 to: employeeEmail!,
                 subject: `✓ Stundennachweis abgeschlossen - ${monthName} ${year}`,
-                text: textContent,
                 html: htmlContent,
             })
         )
@@ -332,11 +321,10 @@ Dienstplan App
 
     // Send to recipient
     emailPromises.push(
-        transporter.sendMail({
+        resend.emails.send({
             from: fromEmail,
             to: recipientEmail,
             subject: `✓ Stundennachweis abgeschlossen - ${sheetFileName || employeeName} ${monthName} ${year}`,
-            text: textContent,
             html: htmlContent,
         })
     )
@@ -344,11 +332,10 @@ Dienstplan App
     // NEW: Send to employer
     if (employerEmail) {
         emailPromises.push(
-            transporter.sendMail({
+            resend.emails.send({
                 from: fromEmail,
                 to: employerEmail,
                 subject: `✓ Stundennachweis abgeschlossen - ${sheetFileName || employeeName} ${monthName} ${year}`,
-                text: textContent,
                 html: htmlContent,
             })
         )
