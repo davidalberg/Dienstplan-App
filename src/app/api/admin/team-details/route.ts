@@ -145,29 +145,46 @@ export async function GET(req: NextRequest) {
 
                 // Check for discrepancies
                 if (ts.plannedStart && ts.plannedEnd && ts.actualStart && ts.actualEnd) {
-                    if (ts.plannedStart !== ts.actualStart || ts.plannedEnd !== ts.actualEnd) {
+                    // Hilfsfunktion: Normalisiere Zeit für Vergleich (0:00 und 24:00 als gleich behandeln)
+                    const normalizeTime = (time: string): string => {
+                        if (time === "24:00") return "0:00"
+                        return time
+                    }
+
+                    // Prüfe ob Zeiten wirklich unterschiedlich sind (unter Berücksichtigung von 0:00 = 24:00)
+                    const plannedStartNorm = normalizeTime(ts.plannedStart)
+                    const plannedEndNorm = normalizeTime(ts.plannedEnd)
+                    const actualStartNorm = normalizeTime(ts.actualStart)
+                    const actualEndNorm = normalizeTime(ts.actualEnd)
+
+                    // Berechne tatsächliche Arbeitsminuten für beide
+                    const [pStartH, pStartM] = ts.plannedStart.split(":").map(Number)
+                    const [pEndH, pEndM] = ts.plannedEnd.split(":").map(Number)
+                    let plannedDiff = (pEndH * 60 + pEndM) - (pStartH * 60 + pStartM)
+                    if (plannedDiff < 0) plannedDiff += 24 * 60
+                    // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+                    if (plannedDiff === 0 && pStartH === 0 && pStartM === 0 && pEndH === 0 && pEndM === 0) {
+                        plannedDiff = 24 * 60
+                    }
+
+                    const [aStartH, aStartM] = ts.actualStart.split(":").map(Number)
+                    const [aEndH, aEndM] = ts.actualEnd.split(":").map(Number)
+                    let actualDiff = (aEndH * 60 + aEndM) - (aStartH * 60 + aStartM)
+                    if (actualDiff < 0) actualDiff += 24 * 60
+                    // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
+                    if (actualDiff === 0 && aStartH === 0 && aStartM === 0 && aEndH === 0 && aEndM === 0) {
+                        actualDiff = 24 * 60
+                    }
+
+                    // Nur als Abweichung zählen wenn:
+                    // 1. Die normalisierten Zeiten unterschiedlich sind UND
+                    // 2. Die tatsächliche Stundendifferenz nicht 0 ist
+                    const timesAreDifferent = plannedStartNorm !== actualStartNorm || plannedEndNorm !== actualEndNorm
+                    const hoursDiffer = Math.abs(actualDiff - plannedDiff) > 0
+
+                    if (timesAreDifferent && hoursDiffer) {
                         const plannedTime = `${ts.plannedStart}-${ts.plannedEnd}`
                         const actualTime = `${ts.actualStart}-${ts.actualEnd}`
-
-                        // Calculate difference in hours
-                        const [pStartH, pStartM] = ts.plannedStart.split(":").map(Number)
-                        const [pEndH, pEndM] = ts.plannedEnd.split(":").map(Number)
-                        let plannedDiff = (pEndH * 60 + pEndM) - (pStartH * 60 + pStartM)
-                        if (plannedDiff < 0) plannedDiff += 24 * 60
-                        // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
-                        if (plannedDiff === 0 && pStartH === 0 && pStartM === 0 && pEndH === 0 && pEndM === 0) {
-                            plannedDiff = 24 * 60
-                        }
-
-                        const [aStartH, aStartM] = ts.actualStart.split(":").map(Number)
-                        const [aEndH, aEndM] = ts.actualEnd.split(":").map(Number)
-                        let actualDiff = (aEndH * 60 + aEndM) - (aStartH * 60 + aStartM)
-                        if (actualDiff < 0) actualDiff += 24 * 60
-                        // Handle 24-hour shifts (0:00 to 0:00 = 24 hours, not 0 hours)
-                        if (actualDiff === 0 && aStartH === 0 && aStartM === 0 && aEndH === 0 && aEndM === 0) {
-                            actualDiff = 24 * 60
-                        }
-
                         const diffHours = (actualDiff - plannedDiff) / 60
 
                         discrepancies.push({
