@@ -6,6 +6,7 @@ import { getAllEmployeesInDienstplan } from "@/lib/team-submission-utils"
 /**
  * GET /api/admin/submissions
  * Get all team submissions with employee signature progress
+ * NEW: Also returns all configured Dienstpläne without submissions
  */
 export async function GET(req: NextRequest) {
     try {
@@ -13,6 +14,10 @@ export async function GET(req: NextRequest) {
         if (!session?.user || (session.user as any).role !== "ADMIN") {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
+
+        const { searchParams } = new URL(req.url)
+        const filterMonth = searchParams.get("month") ? parseInt(searchParams.get("month")!) : null
+        const filterYear = searchParams.get("year") ? parseInt(searchParams.get("year")!) : null
 
         // Get all TeamSubmissions (ordered by most recent first)
         const teamSubmissions = await prisma.teamSubmission.findMany({
@@ -73,7 +78,58 @@ export async function GET(req: NextRequest) {
             })
         )
 
-        return NextResponse.json({ submissions: submissionsWithProgress })
+        // NEW: Get all configured Dienstpläne that don't have a submission for the current/selected month
+        const currentDate = new Date()
+        const targetMonth = filterMonth || currentDate.getMonth() + 1
+        const targetYear = filterYear || currentDate.getFullYear()
+
+        // Get all DienstplanConfigs
+        const allConfigs = await prisma.dienstplanConfig.findMany({
+            orderBy: { sheetFileName: "asc" }
+        })
+
+        // Find configs that don't have a TeamSubmission for the target month/year
+        const submittedSheetFileNames = new Set(
+            teamSubmissions
+                .filter(s => s.month === targetMonth && s.year === targetYear)
+                .map(s => s.sheetFileName)
+        )
+
+        const pendingDienstplaene = await Promise.all(
+            allConfigs
+                .filter(config => !submittedSheetFileNames.has(config.sheetFileName))
+                .map(async (config) => {
+                    // Get employee count for this Dienstplan
+                    const allEmployees = await getAllEmployeesInDienstplan(
+                        config.sheetFileName,
+                        targetMonth,
+                        targetYear
+                    )
+
+                    return {
+                        id: null, // No submission yet
+                        sheetFileName: config.sheetFileName,
+                        month: targetMonth,
+                        year: targetYear,
+                        status: "NOT_STARTED",
+                        recipientEmail: config.assistantRecipientEmail,
+                        recipientName: config.assistantRecipientName,
+                        totalEmployees: allEmployees.length,
+                        signedEmployees: 0,
+                        employeeSignatures: []
+                    }
+                })
+        )
+
+        // Filter out Dienstpläne with 0 employees (no timesheets for this month)
+        const pendingWithEmployees = pendingDienstplaene.filter(d => d.totalEmployees > 0)
+
+        return NextResponse.json({
+            submissions: submissionsWithProgress,
+            pendingDienstplaene: pendingWithEmployees,
+            targetMonth,
+            targetYear
+        })
     } catch (error: any) {
         console.error("[GET /api/admin/submissions] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
