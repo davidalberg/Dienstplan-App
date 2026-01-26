@@ -13,6 +13,7 @@ interface TimesheetEntry {
     note: string | null
     status: string
     breakMinutes: number
+    employeeName?: string // NEW: For multi-employee PDFs
 }
 
 interface MonthlyStats {
@@ -27,13 +28,29 @@ interface MonthlyStats {
     vacationHours: number
 }
 
-interface SignatureData {
+interface EmployeeSignature {
     employeeName: string
+    signature: string // Base64 PNG
+    signedAt: Date
+}
+
+interface SignatureData {
+    // OLD: Single employee (for backward compatibility)
+    employeeName?: string
     employeeSignature?: string | null // Base64 PNG
     employeeSignedAt?: Date | null
+
+    // NEW: Multiple employees (multi-employee system)
+    employeeSignatures?: EmployeeSignature[]
+
+    // Recipient (Assistenznehmer)
     recipientName?: string | null
     recipientSignature?: string | null // Base64 PNG
     recipientSignedAt?: Date | null
+
+    // Manual release info
+    manuallyReleased?: boolean
+    releaseNote?: string | null
 }
 
 interface GeneratePdfOptions {
@@ -276,77 +293,186 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
     yPos += 10
 
     const signatureWidth = 60
-    const signatureHeight = 30
+    const signatureHeight = 25
 
-    // Employee signature (left side)
-    doc.setFontSize(9)
-    doc.setFont("helvetica", "bold")
-    doc.text("Mitarbeiter:", margin, yPos)
-    yPos += 3
+    // Check if multi-employee system (NEW) or single employee (OLD)
+    const isMultiEmployee = signatures.employeeSignatures && signatures.employeeSignatures.length > 0
 
-    if (signatures.employeeSignature) {
-        try {
-            doc.addImage(
-                signatures.employeeSignature,
-                "PNG",
-                margin,
-                yPos,
-                signatureWidth,
-                signatureHeight
+    if (isMultiEmployee) {
+        // NEW: Multi-Employee Signatures (4 employees on left, 1 recipient on right)
+        const leftColX = margin
+        const rightColX = pageWidth / 2 + 10
+        let leftYPos = yPos
+
+        // Title for employees
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.text("Mitarbeiter:", leftColX, leftYPos)
+        leftYPos += 5
+
+        // Display all employee signatures (stacked vertically on left side)
+        for (const empSig of signatures.employeeSignatures!) {
+            // Add signature image
+            if (empSig.signature) {
+                try {
+                    doc.addImage(
+                        empSig.signature,
+                        "PNG",
+                        leftColX,
+                        leftYPos,
+                        signatureWidth,
+                        signatureHeight
+                    )
+                } catch (e) {
+                    console.error("Failed to add employee signature image:", e)
+                }
+            }
+
+            // Draw signature line
+            doc.setLineWidth(0.3)
+            doc.line(leftColX, leftYPos + signatureHeight + 2, leftColX + signatureWidth, leftYPos + signatureHeight + 2)
+
+            // Name and date
+            doc.setFontSize(8)
+            doc.setFont("helvetica", "normal")
+            doc.text(empSig.employeeName, leftColX, leftYPos + signatureHeight + 6)
+            doc.text(
+                format(new Date(empSig.signedAt), "dd.MM.yyyy HH:mm", { locale: de }),
+                leftColX,
+                leftYPos + signatureHeight + 10
             )
-        } catch (e) {
-            console.error("Failed to add employee signature image:", e)
+
+            // Move down for next signature
+            leftYPos += signatureHeight + 15
         }
-    }
 
-    // Draw signature line
-    doc.setLineWidth(0.3)
-    doc.line(margin, yPos + signatureHeight + 2, margin + signatureWidth, yPos + signatureHeight + 2)
+        // Manual release note (if applicable)
+        if (signatures.manuallyReleased && signatures.releaseNote) {
+            doc.setFontSize(7)
+            doc.setFont("helvetica", "italic")
+            doc.setTextColor(200, 0, 0)
+            doc.text(`Hinweis: ${signatures.releaseNote}`, leftColX, leftYPos)
+            doc.setTextColor(0, 0, 0)
+            leftYPos += 5
+        }
 
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "normal")
-    doc.text(signatures.employeeName, margin, yPos + signatureHeight + 7)
-    if (signatures.employeeSignedAt) {
-        doc.text(
-            format(new Date(signatures.employeeSignedAt), "dd.MM.yyyy HH:mm", { locale: de }),
-            margin,
-            yPos + signatureHeight + 11
-        )
-    }
+        // Recipient signature (RIGHT SIDE - aligned with top of employee signatures)
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.text("Assistenznehmer:", rightColX, yPos)
+        const recipientYPos = yPos + 5
 
-    // Recipient signature (right side)
-    const rightColX = pageWidth / 2 + 10
-    doc.setFontSize(9)
-    doc.setFont("helvetica", "bold")
-    doc.text("Assistenznehmer:", rightColX, yPos - 3)
+        if (signatures.recipientSignature) {
+            try {
+                doc.addImage(
+                    signatures.recipientSignature,
+                    "PNG",
+                    rightColX,
+                    recipientYPos,
+                    signatureWidth,
+                    signatureHeight
+                )
+            } catch (e) {
+                console.error("Failed to add recipient signature image:", e)
+            }
+        }
 
-    if (signatures.recipientSignature) {
-        try {
-            doc.addImage(
-                signatures.recipientSignature,
-                "PNG",
+        // Draw signature line
+        doc.setLineWidth(0.3)
+        doc.line(rightColX, recipientYPos + signatureHeight + 2, rightColX + signatureWidth, recipientYPos + signatureHeight + 2)
+
+        // Name and date
+        doc.setFontSize(8)
+        doc.setFont("helvetica", "normal")
+        doc.text(signatures.recipientName || "Ausstehend", rightColX, recipientYPos + signatureHeight + 6)
+        if (signatures.recipientSignedAt) {
+            doc.text(
+                format(new Date(signatures.recipientSignedAt), "dd.MM.yyyy HH:mm", { locale: de }),
                 rightColX,
-                yPos,
-                signatureWidth,
-                signatureHeight
+                recipientYPos + signatureHeight + 10
             )
-        } catch (e) {
-            console.error("Failed to add recipient signature image:", e)
         }
-    }
 
-    // Draw signature line
-    doc.line(rightColX, yPos + signatureHeight + 2, rightColX + signatureWidth, yPos + signatureHeight + 2)
+        // Update yPos to continue below signatures
+        yPos = Math.max(leftYPos, recipientYPos + signatureHeight + 15)
 
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "normal")
-    doc.text(signatures.recipientName || "Ausstehend", rightColX, yPos + signatureHeight + 7)
-    if (signatures.recipientSignedAt) {
-        doc.text(
-            format(new Date(signatures.recipientSignedAt), "dd.MM.yyyy HH:mm", { locale: de }),
-            rightColX,
-            yPos + signatureHeight + 11
-        )
+    } else {
+        // OLD: Single employee signature (backward compatibility)
+        const leftColX = margin
+        const rightColX = pageWidth / 2 + 10
+
+        // Employee signature (left side)
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.text("Mitarbeiter:", leftColX, yPos)
+        yPos += 3
+
+        if (signatures.employeeSignature) {
+            try {
+                doc.addImage(
+                    signatures.employeeSignature,
+                    "PNG",
+                    leftColX,
+                    yPos,
+                    signatureWidth,
+                    signatureHeight
+                )
+            } catch (e) {
+                console.error("Failed to add employee signature image:", e)
+            }
+        }
+
+        // Draw signature line
+        doc.setLineWidth(0.3)
+        doc.line(leftColX, yPos + signatureHeight + 2, leftColX + signatureWidth, yPos + signatureHeight + 2)
+
+        doc.setFontSize(8)
+        doc.setFont("helvetica", "normal")
+        doc.text(signatures.employeeName || "Unbekannt", leftColX, yPos + signatureHeight + 7)
+        if (signatures.employeeSignedAt) {
+            doc.text(
+                format(new Date(signatures.employeeSignedAt), "dd.MM.yyyy HH:mm", { locale: de }),
+                leftColX,
+                yPos + signatureHeight + 11
+            )
+        }
+
+        // Recipient signature (right side)
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.text("Assistenznehmer:", rightColX, yPos - 3)
+
+        if (signatures.recipientSignature) {
+            try {
+                doc.addImage(
+                    signatures.recipientSignature,
+                    "PNG",
+                    rightColX,
+                    yPos,
+                    signatureWidth,
+                    signatureHeight
+                )
+            } catch (e) {
+                console.error("Failed to add recipient signature image:", e)
+            }
+        }
+
+        // Draw signature line
+        doc.line(rightColX, yPos + signatureHeight + 2, rightColX + signatureWidth, yPos + signatureHeight + 2)
+
+        doc.setFontSize(8)
+        doc.setFont("helvetica", "normal")
+        doc.text(signatures.recipientName || "Ausstehend", rightColX, yPos + signatureHeight + 7)
+        if (signatures.recipientSignedAt) {
+            doc.text(
+                format(new Date(signatures.recipientSignedAt), "dd.MM.yyyy HH:mm", { locale: de }),
+                rightColX,
+                yPos + signatureHeight + 11
+            )
+        }
+
+        // Update yPos
+        yPos += signatureHeight + 15
     }
 
     // Footer

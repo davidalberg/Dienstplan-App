@@ -125,31 +125,58 @@ Dienstplan App
     })
 }
 
+interface EmployeeInfo {
+    email: string
+    name: string
+}
+
+interface EmployeeSignatureInfo {
+    name: string
+    signedAt: Date
+}
+
 interface SendCompletionEmailParams {
-    employeeEmail: string
-    employeeName: string
+    // OLD: Single employee (for backward compatibility)
+    employeeEmail?: string
+    employeeName?: string
+    employeeSignedAt?: Date
+
+    // NEW: Multiple employees
+    employeeEmails?: EmployeeInfo[]
+    employeeSignatures?: EmployeeSignatureInfo[]
+
+    // Recipient
     recipientEmail: string
     recipientName: string
+    recipientSignedAt: Date
+
+    // Employer
+    employerEmail?: string
+
+    // Submission info
     month: number
     year: number
     pdfUrl: string
-    employeeSignedAt: Date
-    recipientSignedAt: Date
     totalHours: number
+    sheetFileName?: string
 }
 
 export async function sendCompletionEmails(params: SendCompletionEmailParams) {
     const {
-        employeeEmail,
-        employeeName,
+        employeeEmail, // OLD: single employee
+        employeeName, // OLD: single employee
+        employeeSignedAt, // OLD: single employee
+        employeeEmails, // NEW: multiple employees
+        employeeSignatures, // NEW: multiple employee signatures
         recipientEmail,
         recipientName,
+        recipientSignedAt,
+        employerEmail, // NEW: employer email
         month,
         year,
         pdfUrl,
-        employeeSignedAt,
-        recipientSignedAt,
-        totalHours
+        totalHours,
+        sheetFileName // NEW: for team submissions
     } = params
 
     const transporter = getTransporter()
@@ -165,6 +192,42 @@ export async function sendCompletionEmails(params: SendCompletionEmailParams) {
         minute: "2-digit"
     })
 
+    const isMultiEmployee = employeeEmails && employeeEmails.length > 0
+
+    // Build employee signatures list for HTML
+    let employeeSignaturesHtml = ""
+    let employeeSignaturesText = ""
+
+    if (isMultiEmployee && employeeSignatures) {
+        employeeSignaturesHtml = employeeSignatures.map((sig, idx) => `
+            <tr>
+                <td style="padding: 5px 0; color: #6b7280;">${idx === 0 ? "Mitarbeiter:" : ""}</td>
+                <td style="padding: 5px 0;">${sig.name}</td>
+            </tr>
+            <tr>
+                <td style="padding: 5px 0; color: #6b7280;"></td>
+                <td style="padding: 5px 0; font-size: 12px; color: #9ca3af;">${formatDate(sig.signedAt)}</td>
+            </tr>
+        `).join("")
+
+        employeeSignaturesText = employeeSignatures.map(sig =>
+            `- ${sig.name}, unterschrieben am ${formatDate(sig.signedAt)}`
+        ).join("\n")
+    } else {
+        // OLD: single employee
+        employeeSignaturesHtml = `
+            <tr>
+                <td style="padding: 5px 0; color: #6b7280;">Mitarbeiter:</td>
+                <td style="padding: 5px 0; font-weight: 600;">${employeeName}</td>
+            </tr>
+            <tr>
+                <td style="padding: 5px 0; color: #6b7280;">Unterschrieben am:</td>
+                <td style="padding: 5px 0;">${formatDate(employeeSignedAt!)}</td>
+            </tr>
+        `
+        employeeSignaturesText = `- Mitarbeiter: ${employeeName}, unterschrieben am ${formatDate(employeeSignedAt!)}`
+    }
+
     const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -175,24 +238,20 @@ export async function sendCompletionEmails(params: SendCompletionEmailParams) {
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
     <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0;">
         <h1 style="color: white; margin: 0; font-size: 24px;">✓ Stundennachweis abgeschlossen</h1>
-        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">${monthName} ${year}</p>
+        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">${sheetFileName || monthName} - ${monthName} ${year}</p>
     </div>
 
     <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
         <p style="font-size: 16px; color: #4b5563;">
-            Der Stundennachweis für <strong>${monthName} ${year}</strong> wurde von beiden Parteien unterschrieben und ist nun abgeschlossen.
+            Der Stundennachweis für <strong>${monthName} ${year}</strong> wurde vollständig unterschrieben und ist nun abgeschlossen.
         </p>
 
         <div style="background: #f3f4f6; border-radius: 8px; padding: 20px; margin: 20px 0;">
             <h3 style="margin: 0 0 15px 0; font-size: 14px; color: #374151; text-transform: uppercase;">Zusammenfassung</h3>
             <table style="width: 100%; font-size: 14px;">
+                ${employeeSignaturesHtml}
                 <tr>
-                    <td style="padding: 5px 0; color: #6b7280;">Mitarbeiter:</td>
-                    <td style="padding: 5px 0; font-weight: 600;">${employeeName}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 5px 0; color: #6b7280;">Unterschrieben am:</td>
-                    <td style="padding: 5px 0;">${formatDate(employeeSignedAt)}</td>
+                    <td colspan="2" style="padding: 10px 0 5px 0; border-top: 1px solid #e5e7eb;"></td>
                 </tr>
                 <tr>
                     <td style="padding: 5px 0; color: #6b7280;">Assistenznehmer:</td>
@@ -229,10 +288,10 @@ export async function sendCompletionEmails(params: SendCompletionEmailParams) {
     const textContent = `
 Stundennachweis abgeschlossen - ${monthName} ${year}
 
-Der Stundennachweis für ${monthName} ${year} wurde von beiden Parteien unterschrieben.
+Der Stundennachweis für ${monthName} ${year} wurde vollständig unterschrieben.
 
 Zusammenfassung:
-- Mitarbeiter: ${employeeName}, unterschrieben am ${formatDate(employeeSignedAt)}
+${employeeSignaturesText}
 - Assistenznehmer: ${recipientName}, unterschrieben am ${formatDate(recipientSignedAt)}
 - Gesamtstunden: ${totalHours.toFixed(2)} Std.
 
@@ -242,23 +301,58 @@ Mit freundlichen Grüßen,
 Dienstplan App
 `
 
-    // Send to both parties
-    const emailPromises = [
-        transporter.sendMail({
-            from: fromEmail,
-            to: employeeEmail,
-            subject: `✓ Stundennachweis abgeschlossen - ${monthName} ${year}`,
-            text: textContent,
-            html: htmlContent,
-        }),
+    // Build list of all recipients
+    const emailPromises = []
+
+    if (isMultiEmployee) {
+        // NEW: Send to ALL employees
+        for (const emp of employeeEmails!) {
+            emailPromises.push(
+                transporter.sendMail({
+                    from: fromEmail,
+                    to: emp.email,
+                    subject: `✓ Stundennachweis abgeschlossen - ${monthName} ${year}`,
+                    text: textContent,
+                    html: htmlContent,
+                })
+            )
+        }
+    } else {
+        // OLD: Send to single employee
+        emailPromises.push(
+            transporter.sendMail({
+                from: fromEmail,
+                to: employeeEmail!,
+                subject: `✓ Stundennachweis abgeschlossen - ${monthName} ${year}`,
+                text: textContent,
+                html: htmlContent,
+            })
+        )
+    }
+
+    // Send to recipient
+    emailPromises.push(
         transporter.sendMail({
             from: fromEmail,
             to: recipientEmail,
-            subject: `✓ Stundennachweis abgeschlossen - ${employeeName} ${monthName} ${year}`,
+            subject: `✓ Stundennachweis abgeschlossen - ${sheetFileName || employeeName} ${monthName} ${year}`,
             text: textContent,
             html: htmlContent,
         })
-    ]
+    )
+
+    // NEW: Send to employer
+    if (employerEmail) {
+        emailPromises.push(
+            transporter.sendMail({
+                from: fromEmail,
+                to: employerEmail,
+                subject: `✓ Stundennachweis abgeschlossen - ${sheetFileName || employeeName} ${monthName} ${year}`,
+                text: textContent,
+                html: htmlContent,
+            })
+        )
+    }
 
     await Promise.all(emailPromises)
 }

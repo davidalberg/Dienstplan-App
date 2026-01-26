@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { X, FileText, CheckCircle, AlertCircle, Loader2, Send } from "lucide-react"
+import { X, FileText, CheckCircle, AlertCircle, Loader2, Send, Users } from "lucide-react"
 import SignaturePad from "./SignaturePad"
 import { showToast } from "@/lib/toast-utils"
 
@@ -11,6 +11,23 @@ interface SubmitModalProps {
     month: number
     year: number
     onSuccess: () => void
+}
+
+interface Employee {
+    id: string
+    name: string | null
+    email: string
+    signed?: boolean
+}
+
+interface SubmissionData {
+    isTeamSubmission?: boolean
+    totalCount?: number
+    signedCount?: number
+    allEmployees?: Employee[]
+    signedEmployees?: Employee[]
+    currentUserSigned?: boolean
+    message?: string
 }
 
 const MONTH_NAMES = [
@@ -23,6 +40,8 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
     const [signature, setSignature] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [submissionId, setSubmissionId] = useState<string | null>(null)
+    const [submissionData, setSubmissionData] = useState<SubmissionData | null>(null)
+    const [signResponse, setSignResponse] = useState<any>(null)
 
     if (!isOpen) return null
 
@@ -47,6 +66,7 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
             }
 
             setSubmissionId(data.submission.id)
+            setSubmissionData(data)
             setStep("signature")
         } catch (err) {
             console.error(err)
@@ -85,8 +105,9 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
                 showToast("warning", data.warning)
             }
 
+            setSignResponse(data)
             setStep("success")
-            showToast("success", "Erfolgreich eingereicht!")
+            showToast("success", data.message || "Erfolgreich eingereicht!")
         } catch (err) {
             console.error(err)
             setError("Netzwerkfehler. Bitte erneut versuchen.")
@@ -102,6 +123,8 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
         setSignature(null)
         setError(null)
         setSubmissionId(null)
+        setSubmissionData(null)
+        setSignResponse(null)
         onClose()
     }
 
@@ -170,6 +193,38 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
 
                     {step === "signature" && (
                         <div className="space-y-4">
+                            {/* Team Progress - Show if this is a team submission */}
+                            {submissionData?.isTeamSubmission && submissionData.totalCount && submissionData.totalCount > 1 && (
+                                <div className="rounded-xl bg-purple-50 border border-purple-200 p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Users className="text-purple-600" size={20} />
+                                        <h3 className="font-bold text-purple-900">
+                                            Team-Einreichung
+                                        </h3>
+                                    </div>
+                                    <p className="text-sm text-purple-800 mb-3">
+                                        <strong>{submissionData.signedCount || 0} von {submissionData.totalCount}</strong> Teammitgliedern haben bereits unterschrieben.
+                                    </p>
+                                    <div className="space-y-1">
+                                        {submissionData.allEmployees?.map((emp) => {
+                                            const hasSigned = submissionData.signedEmployees?.some(se => se.id === emp.id)
+                                            return (
+                                                <div key={emp.id} className="flex items-center gap-2 text-sm">
+                                                    {hasSigned ? (
+                                                        <CheckCircle className="text-green-600" size={16} />
+                                                    ) : (
+                                                        <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
+                                                    )}
+                                                    <span className={hasSigned ? "text-green-800 font-medium" : "text-gray-600"}>
+                                                        {emp.name || emp.email}
+                                                    </span>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
                             <p className="text-sm text-gray-600 text-center">
                                 Bitte unterschreiben Sie unten mit Ihrem Finger oder der Maus.
                             </p>
@@ -204,10 +259,51 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
                                 <CheckCircle className="text-green-600" size={32} />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-gray-900">Erfolgreich eingereicht!</h3>
-                                <p className="text-sm text-gray-600 mt-1">
-                                    Ihr Assistenznehmer wurde per E-Mail benachrichtigt und kann nun gegenzeichnen.
-                                </p>
+                                <h3 className="text-lg font-bold text-gray-900">Erfolgreich unterschrieben!</h3>
+
+                                {signResponse?.allSigned ? (
+                                    // All employees have signed
+                                    <div className="space-y-2">
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            Ihr Team hat vollständig unterschrieben ({signResponse.totalCount} von {signResponse.totalCount} Mitarbeitern).
+                                        </p>
+                                        <p className="text-sm text-green-700 font-medium">
+                                            Der Assistenznehmer wurde per E-Mail benachrichtigt und kann nun gegenzeichnen.
+                                        </p>
+                                    </div>
+                                ) : signResponse?.totalCount > 1 ? (
+                                    // Not all employees have signed yet
+                                    <div className="space-y-2">
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            Ihre Unterschrift wurde gespeichert.
+                                        </p>
+                                        <p className="text-sm text-amber-700 font-medium">
+                                            Warten auf {signResponse.pendingCount || (signResponse.totalCount - signResponse.signedCount)} weitere Teammitglieder.
+                                        </p>
+                                        <div className="rounded-lg bg-gray-50 p-3 mt-3 text-left">
+                                            <p className="text-xs text-gray-500 mb-2">Status:</p>
+                                            <div className="space-y-1">
+                                                {signResponse?.employees?.map((emp: Employee) => (
+                                                    <div key={emp.id} className="flex items-center gap-2 text-sm">
+                                                        {emp.signed ? (
+                                                            <CheckCircle className="text-green-600" size={14} />
+                                                        ) : (
+                                                            <div className="h-3.5 w-3.5 rounded-full border-2 border-gray-300" />
+                                                        )}
+                                                        <span className={emp.signed ? "text-green-800" : "text-gray-600"}>
+                                                            {emp.name || emp.email}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    // Fallback (single employee or old system)
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        Ihr Assistenznehmer wurde per E-Mail benachrichtigt und kann nun gegenzeichnen.
+                                    </p>
+                                )}
                             </div>
                             <button
                                 type="button"
