@@ -14,43 +14,20 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        // Hole alle eindeutigen sheetFileNames aus der Timesheet-Tabelle
-        const sheetFileNames = await prisma.timesheet.findMany({
-            where: {
-                sheetFileName: { not: null }
-            },
-            select: {
-                sheetFileName: true
-            },
-            distinct: ['sheetFileName']
+        // Hole alle Teams (für Mitarbeiter-Zuordnung)
+        const teams = await prisma.team.findMany({
+            orderBy: { name: 'asc' }
         })
 
-        // Hole alle DienstplanConfigs
-        const configs = await prisma.dienstplanConfig.findMany()
+        // Formatiere für Frontend (verwendet "sheetFileName" als Name)
+        const result = teams.map(team => ({
+            sheetFileName: team.name,
+            assistantRecipientName: team.assistantRecipientName || team.name,
+            assistantRecipientEmail: team.assistantRecipientEmail || "",
+            id: team.id
+        }))
 
-        // Erstelle eine Map für schnellen Lookup
-        const configMap = new Map(
-            configs.map(c => [c.sheetFileName, c])
-        )
-
-        // Kombiniere die Daten
-        const result = sheetFileNames
-            .filter(item => item.sheetFileName !== null)
-            .map(item => {
-                const sheetFileName = item.sheetFileName!
-                const config = configMap.get(sheetFileName)
-
-                return {
-                    sheetFileName,
-                    configured: !!config,
-                    assistantRecipientEmail: config?.assistantRecipientEmail || null,
-                    assistantRecipientName: config?.assistantRecipientName || null,
-                    id: config?.id || null
-                }
-            })
-            .sort((a, b) => a.sheetFileName.localeCompare(b.sheetFileName))
-
-        return NextResponse.json({ dienstplaene: result })
+        return NextResponse.json({ configs: result })
     } catch (error: any) {
         console.error("[GET /api/admin/dienstplan-config] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
