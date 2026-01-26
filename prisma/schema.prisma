@@ -20,6 +20,7 @@ model User {
   auditLogs   AuditLog[]
   timesheets  Timesheet[]
   submissions MonthlySubmission[]
+  employeeSignatures EmployeeSignature[]  // NEU: Multi-Employee-Signaturen
   team        Team?       @relation(fields: [teamId], references: [id])
 
   // Neue Felder für Mitarbeiter-Verwaltung
@@ -135,4 +136,80 @@ model MonthlySubmission {
   @@unique([employeeId, month, year])
   @@index([signatureToken])
   @@index([status])
+}
+
+// NEU: Konfiguration pro Dienstplan (sheetFileName)
+model DienstplanConfig {
+  id                      String           @id @default(cuid())
+  sheetFileName           String           @unique // z.B. "Dienstplan Finn Jonschker 2026"
+  assistantRecipientEmail String
+  assistantRecipientName  String
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  teamSubmissions         TeamSubmission[]
+
+  @@index([sheetFileName])
+}
+
+// NEU: Team-basierte Einreichung (ersetzt MonthlySubmission für multi-employee)
+model TeamSubmission {
+  id                 String              @id @default(cuid())
+  month              Int
+  year               Int
+  sheetFileName      String              // z.B. "Dienstplan Finn Jonschker 2026"
+  dienstplanConfigId String
+
+  // Status: PENDING_EMPLOYEES → PENDING_RECIPIENT → COMPLETED
+  status             String              @default("PENDING_EMPLOYEES")
+
+  // Assistenznehmer-Signatur
+  recipientSignature String?             @db.Text
+  recipientSignedAt  DateTime?
+  recipientIp        String?
+
+  // Token für Assistenznehmer-Link
+  signatureToken     String              @unique
+  tokenExpiresAt     DateTime
+
+  // Finale PDF
+  pdfUrl             String?
+
+  // Admin manuelle Freigabe
+  manuallyReleasedAt DateTime?
+  manuallyReleasedBy String?
+  releaseNote        String?
+
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  // Relations
+  dienstplanConfig   DienstplanConfig    @relation(fields: [dienstplanConfigId], references: [id])
+  employeeSignatures EmployeeSignature[]
+
+  @@unique([sheetFileName, month, year])
+  @@index([signatureToken])
+  @@index([status])
+}
+
+// NEU: Einzelne Mitarbeiter-Unterschriften innerhalb einer Team-Einreichung
+model EmployeeSignature {
+  id               String         @id @default(cuid())
+  teamSubmissionId String
+  employeeId       String
+
+  // Signatur-Daten
+  signature        String         @db.Text // Base64 PNG
+  signedAt         DateTime
+  ipAddress        String
+
+  createdAt        DateTime       @default(now())
+
+  // Relations
+  teamSubmission   TeamSubmission @relation(fields: [teamSubmissionId], references: [id], onDelete: Cascade)
+  employee         User           @relation(fields: [employeeId], references: [id])
+
+  @@unique([teamSubmissionId, employeeId])
+  @@index([teamSubmissionId])
+  @@index([employeeId])
 }

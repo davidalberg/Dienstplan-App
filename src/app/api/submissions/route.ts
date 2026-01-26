@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { v4 as uuidv4 } from "uuid"
+import {
+    getEmployeesInDienstplan,
+    getAllEmployeesInDienstplan,
+    getSignedEmployees,
+    getPendingEmployees
+} from "@/lib/team-submission-utils"
 
 /**
  * GET /api/submissions
- * Get submission status for a month
+ * Get submission status for a month (supports both TeamSubmission and old MonthlySubmission)
  */
 export async function GET(req: NextRequest) {
     try {
@@ -23,7 +29,76 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Invalid month/year" }, { status: 400 })
         }
 
-        const submission = await prisma.monthlySubmission.findUnique({
+        // 1. Check for TeamSubmission (new multi-employee system)
+        // Get user's sheetFileName for this month
+        const userTimesheet = await prisma.timesheet.findFirst({
+            where: {
+                employeeId: user.id,
+                month,
+                year,
+                sheetFileName: { not: null }
+            },
+            select: { sheetFileName: true }
+        })
+
+        if (userTimesheet?.sheetFileName) {
+            // Look for TeamSubmission
+            const teamSubmission = await prisma.teamSubmission.findUnique({
+                where: {
+                    sheetFileName_month_year: {
+                        sheetFileName: userTimesheet.sheetFileName,
+                        month,
+                        year
+                    }
+                },
+                include: {
+                    dienstplanConfig: true,
+                    employeeSignatures: {
+                        include: {
+                            employee: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    email: true
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+
+            if (teamSubmission) {
+                // Get all employees in this Dienstplan
+                const allEmployees = await getAllEmployeesInDienstplan(
+                    userTimesheet.sheetFileName,
+                    month,
+                    year
+                )
+
+                // Check if current user has signed
+                const currentUserSigned = teamSubmission.employeeSignatures.some(
+                    sig => sig.employeeId === user.id
+                )
+
+                return NextResponse.json({
+                    submission: teamSubmission,
+                    isTeamSubmission: true,
+                    allEmployees,
+                    signedEmployees: teamSubmission.employeeSignatures.map(sig => ({
+                        id: sig.employee.id,
+                        name: sig.employee.name,
+                        email: sig.employee.email,
+                        signedAt: sig.signedAt
+                    })),
+                    currentUserSigned,
+                    totalCount: allEmployees.length,
+                    signedCount: teamSubmission.employeeSignatures.length
+                })
+            }
+        }
+
+        // 2. Fallback: Check for old MonthlySubmission (backward compatibility)
+        const oldSubmission = await prisma.monthlySubmission.findUnique({
             where: {
                 employeeId_month_year: {
                     employeeId: user.id,
@@ -42,7 +117,15 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        return NextResponse.json({ submission })
+        if (oldSubmission) {
+            return NextResponse.json({
+                submission: oldSubmission,
+                isTeamSubmission: false
+            })
+        }
+
+        // No submission found
+        return NextResponse.json({ submission: null })
     } catch (error: any) {
         console.error("[GET /api/submissions] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -51,7 +134,8 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/submissions
- * Create a new submission (starts the signature process)
+ * Create a new team submission (starts the multi-employee signature process)
+ * FIXES: Katharina Broll's "kein Team zugewiesen" error by using sheetFileName instead of teamId
  */
 export async function POST(req: NextRequest) {
     try {
@@ -72,52 +156,92 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Month and year required" }, { status: 400 })
         }
 
-        // Check if user has a team assigned
-        const dbUser = await prisma.user.findUnique({
-            where: { id: user.id },
+        // 1. Get user's sheetFileName from their timesheets
+        const userTimesheet = await prisma.timesheet.findFirst({
+            where: {
+                employeeId: user.id,
+                month,
+                year,
+                sheetFileName: { not: null }
+            },
+            select: { sheetFileName: true }
+        })
+
+        if (!userTimesheet?.sheetFileName) {
+            return NextResponse.json({
+                error: "Kein Dienstplan zugewiesen. Bitte kontaktieren Sie den Administrator."
+            }, { status: 400 })
+        }
+
+        const sheetFileName = userTimesheet.sheetFileName
+
+        // 2. Check if DienstplanConfig exists (REPLACES old Team check)
+        const dienstplanConfig = await prisma.dienstplanConfig.findUnique({
+            where: { sheetFileName }
+        })
+
+        if (!dienstplanConfig) {
+            return NextResponse.json({
+                error: `Der Dienstplan "${sheetFileName}" ist noch nicht konfiguriert. Bitte kontaktieren Sie den Administrator.`
+            }, { status: 400 })
+        }
+
+        // 3. Check if TeamSubmission already exists for this Dienstplan
+        let teamSubmission = await prisma.teamSubmission.findUnique({
+            where: {
+                sheetFileName_month_year: {
+                    sheetFileName,
+                    month,
+                    year
+                }
+            },
             include: {
-                team: {
-                    select: {
-                        id: true,
-                        name: true,
-                        assistantRecipientEmail: true,
-                        assistantRecipientName: true
+                employeeSignatures: {
+                    include: {
+                        employee: {
+                            select: {
+                                id: true,
+                                name: true,
+                                email: true
+                            }
+                        }
                     }
                 }
             }
         })
 
-        if (!dbUser?.teamId || !dbUser.team) {
-            return NextResponse.json({
-                error: "Kein Team zugewiesen. Bitte kontaktieren Sie den Administrator."
-            }, { status: 400 })
-        }
+        // 4. If submission exists, check if current user already signed
+        if (teamSubmission) {
+            const alreadySigned = teamSubmission.employeeSignatures.some(
+                sig => sig.employeeId === user.id
+            )
 
-        if (!dbUser.team.assistantRecipientEmail) {
-            return NextResponse.json({
-                error: "Keine Assistenznehmer-Email für dieses Team hinterlegt. Bitte kontaktieren Sie den Administrator."
-            }, { status: 400 })
-        }
-
-        // Check if submission already exists
-        const existingSubmission = await prisma.monthlySubmission.findUnique({
-            where: {
-                employeeId_month_year: {
-                    employeeId: user.id,
-                    month,
-                    year
-                }
+            if (alreadySigned) {
+                return NextResponse.json({
+                    error: "Sie haben bereits für diesen Monat unterschrieben.",
+                    submission: teamSubmission
+                }, { status: 409 })
             }
-        })
 
-        if (existingSubmission) {
+            // User hasn't signed yet, return existing submission
+            const allEmployees = await getAllEmployeesInDienstplan(sheetFileName, month, year)
+
             return NextResponse.json({
-                error: "Für diesen Monat existiert bereits eine Einreichung",
-                submission: existingSubmission
-            }, { status: 409 })
+                submission: teamSubmission,
+                allEmployees,
+                signedEmployees: teamSubmission.employeeSignatures.map(sig => ({
+                    id: sig.employee.id,
+                    name: sig.employee.name,
+                    email: sig.employee.email,
+                    signedAt: sig.signedAt
+                })),
+                totalCount: allEmployees.length,
+                signedCount: teamSubmission.employeeSignatures.length,
+                message: `${teamSubmission.employeeSignatures.length} von ${allEmployees.length} Mitarbeitern haben bereits unterschrieben.`
+            })
         }
 
-        // Check that all timesheets are confirmed
+        // 5. Check that all user's timesheets are confirmed
         const unconfirmedTimesheets = await prisma.timesheet.count({
             where: {
                 employeeId: user.id,
@@ -134,35 +258,46 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        // Generate signature token (7 days validity)
+        // 6. Create new TeamSubmission
         const signatureToken = uuidv4()
         const tokenExpiresAt = new Date()
         tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 7)
 
-        // Create submission
-        const submission = await prisma.monthlySubmission.create({
+        teamSubmission = await prisma.teamSubmission.create({
             data: {
                 month,
                 year,
-                employeeId: user.id,
-                teamId: dbUser.teamId,
+                sheetFileName,
+                dienstplanConfigId: dienstplanConfig.id,
                 signatureToken,
                 tokenExpiresAt,
-                status: "PENDING_EMPLOYEE"
+                status: "PENDING_EMPLOYEES"
             },
             include: {
-                team: {
-                    select: {
-                        name: true,
-                        assistantRecipientEmail: true,
-                        assistantRecipientName: true
+                dienstplanConfig: true,
+                employeeSignatures: {
+                    include: {
+                        employee: {
+                            select: {
+                                id: true,
+                                name: true,
+                                email: true
+                            }
+                        }
                     }
                 }
             }
         })
 
+        // 7. Get all employees in this Dienstplan
+        const allEmployees = await getAllEmployeesInDienstplan(sheetFileName, month, year)
+
         return NextResponse.json({
-            submission,
+            submission: teamSubmission,
+            allEmployees,
+            signedEmployees: [],
+            totalCount: allEmployees.length,
+            signedCount: 0,
             message: "Einreichung erstellt. Bitte unterschreiben Sie jetzt."
         })
     } catch (error: any) {
