@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { SessionProvider } from "next-auth/react";
-import { Toaster } from 'sonner';
+import { Providers } from "@/components/Providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,20 +18,9 @@ export default function RootLayout({
   return (
     <html lang="de" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
-        <SessionProvider>
+        <Providers>
           {children}
-          <Toaster
-            position="top-center"
-            toastOptions={{
-              duration: 3000,
-              style: {
-                background: 'white',
-                color: 'black',
-                border: '1px solid #e5e7eb',
-              },
-            }}
-          />
-        </SessionProvider>
+        </Providers>
       </body>
     </html>
   );

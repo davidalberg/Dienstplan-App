@@ -196,7 +196,7 @@ export default function AdminPage() {
             ts.id === editingShift.id ? optimisticUpdate : ts
         ))
         setEditingShift(null) // Dialog schließen
-        setLoading(true)
+        // WICHTIG: setLoading(true) NICHT aufrufen - UI bleibt erhalten!
 
         try {
             const res = await fetch("/api/admin/timesheets", {
@@ -234,8 +234,6 @@ export default function AdminPage() {
             showToast("error", "Netzwerkfehler beim Speichern")
             setEditingShift(oldShift)
             console.error(err)
-        } finally {
-            setLoading(false)
         }
     }
 
