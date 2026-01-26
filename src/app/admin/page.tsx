@@ -6,6 +6,7 @@ import Link from "next/link"
 import { format } from "date-fns"
 import { Database, RefreshCw, Download, Terminal, CheckCircle, AlertCircle, Search, Trash2, Edit2, Filter, Users, User, ChevronDown, ChevronUp, ExternalLink, FileText } from "lucide-react"
 import { showToast } from '@/lib/toast-utils'
+import { formatTimeRange } from '@/lib/time-utils'
 
 export default function AdminPage() {
     const { data: session } = useSession()
@@ -550,13 +551,13 @@ export default function AdminPage() {
                                                         </td>
                                                         <td className="py-4 px-4">
                                                             <span className="rounded-md bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-900">
-                                                                {ts.plannedStart} - {ts.plannedEnd}
+                                                                {formatTimeRange(ts.plannedStart, ts.plannedEnd)}
                                                             </span>
                                                         </td>
                                                         <td className="py-4 px-4">
                                                             {ts.actualStart ? (
                                                                 <span className="font-bold text-gray-800">
-                                                                    {ts.actualStart} - {ts.actualEnd}
+                                                                    {formatTimeRange(ts.actualStart, ts.actualEnd)}
                                                                 </span>
                                                             ) : (
                                                                 <span className="text-gray-300">-- : --</span>
