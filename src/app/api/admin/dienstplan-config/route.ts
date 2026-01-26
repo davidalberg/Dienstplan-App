@@ -14,20 +14,59 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        // Hole alle Teams (für Mitarbeiter-Zuordnung)
+        // 1. Hole alle eindeutigen sheetFileNames aus Timesheet-Tabelle
+        const sheetFileNames = await prisma.timesheet.findMany({
+            where: {
+                sheetFileName: { not: null }
+            },
+            select: {
+                sheetFileName: true
+            },
+            distinct: ['sheetFileName']
+        })
+
+        // 2. Hole alle DienstplanConfigs
+        const dienstplanConfigs = await prisma.dienstplanConfig.findMany()
+
+        // 3. Hole alle Teams (für Mitarbeiter-Zuordnung)
         const teams = await prisma.team.findMany({
             orderBy: { name: 'asc' }
         })
 
-        // Formatiere für Frontend (verwendet "sheetFileName" als Name)
-        const result = teams.map(team => ({
+        // 4. Erstelle eine Map für schnellen Lookup
+        const configMap = new Map(
+            dienstplanConfigs.map(c => [c.sheetFileName, c])
+        )
+
+        // 5. Kombiniere die Daten für Dienstplan-Config-Seite
+        const dienstplaene = sheetFileNames
+            .filter(item => item.sheetFileName !== null)
+            .map(item => {
+                const sheetFileName = item.sheetFileName!
+                const config = configMap.get(sheetFileName)
+
+                return {
+                    sheetFileName,
+                    configured: !!config,
+                    assistantRecipientEmail: config?.assistantRecipientEmail || null,
+                    assistantRecipientName: config?.assistantRecipientName || null,
+                    id: config?.id || null
+                }
+            })
+            .sort((a, b) => a.sheetFileName.localeCompare(b.sheetFileName))
+
+        // 6. Für Mitarbeiter-Dropdown: Teams aus Team-Tabelle
+        const configs = teams.map(team => ({
             sheetFileName: team.name,
             assistantRecipientName: team.assistantRecipientName || team.name,
             assistantRecipientEmail: team.assistantRecipientEmail || "",
             id: team.id
         }))
 
-        return NextResponse.json({ configs: result })
+        return NextResponse.json({
+            dienstplaene, // Für Dienstplan-Config-Seite (alle mit configured-Status)
+            configs // Für Mitarbeiter-Dropdown (Teams aus Team-Tabelle)
+        })
     } catch (error: any) {
         console.error("[GET /api/admin/dienstplan-config] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -63,23 +102,43 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        // Upsert: Erstellen oder aktualisieren
-        const config = await prisma.dienstplanConfig.upsert({
-            where: { sheetFileName },
-            update: {
-                assistantRecipientEmail,
-                assistantRecipientName
-            },
-            create: {
-                sheetFileName,
-                assistantRecipientEmail,
-                assistantRecipientName
-            }
+        // Upsert DienstplanConfig AND Team (beide synchron halten)
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Upsert DienstplanConfig
+            const config = await tx.dienstplanConfig.upsert({
+                where: { sheetFileName },
+                update: {
+                    assistantRecipientEmail,
+                    assistantRecipientName
+                },
+                create: {
+                    sheetFileName,
+                    assistantRecipientEmail,
+                    assistantRecipientName
+                }
+            })
+
+            // 2. Upsert Team (für Mitarbeiter-Zuordnung)
+            const team = await tx.team.upsert({
+                where: { name: sheetFileName },
+                update: {
+                    assistantRecipientEmail,
+                    assistantRecipientName
+                },
+                create: {
+                    name: sheetFileName,
+                    assistantRecipientEmail,
+                    assistantRecipientName
+                }
+            })
+
+            return { config, team }
         })
 
         return NextResponse.json({
             success: true,
-            config
+            config: result.config,
+            team: result.team
         })
     } catch (error: any) {
         console.error("[POST /api/admin/dienstplan-config] Error:", error)
