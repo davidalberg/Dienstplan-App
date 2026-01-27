@@ -4,7 +4,7 @@ import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
-import { Database, RefreshCw, Download, Terminal, CheckCircle, AlertCircle, Search, Trash2, Edit2, Filter, Users, User, ChevronDown, ChevronUp, ExternalLink, FileText } from "lucide-react"
+import { Database, RefreshCw, Download, Terminal, CheckCircle, AlertCircle, Search, Trash2, Edit2, Filter, Users, User, ChevronDown, ChevronUp, ExternalLink, FileText, Calendar } from "lucide-react"
 import { showToast } from '@/lib/toast-utils'
 import { formatTimeRange } from '@/lib/time-utils'
 
@@ -339,6 +339,13 @@ export default function AdminPage() {
                         <p className="text-gray-900 font-bold">Google Sheets Synchronisierung & Logs</p>
                     </div>
                     <div className="flex gap-3 flex-wrap">
+                        <Link
+                            href="/admin/schedule"
+                            className="flex items-center gap-2 rounded-xl border-2 border-blue-600 px-6 py-3 font-bold text-blue-600 transition-all hover:bg-blue-50"
+                        >
+                            <Calendar size={20} />
+                            Dienstplan-Editor
+                        </Link>
                         <Link
                             href="/admin/dienstplan-config"
                             className="flex items-center gap-2 rounded-xl border-2 border-green-600 px-6 py-3 font-bold text-green-600 transition-all hover:bg-green-50"
