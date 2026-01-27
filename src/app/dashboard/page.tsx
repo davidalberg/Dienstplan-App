@@ -64,6 +64,10 @@ export default function DashboardPage() {
         })
     }
 
+    const deleteSingleTimesheet = (id: string) => {
+        setTimesheets(prevTimesheets => prevTimesheets.filter(ts => ts.id !== id))
+    }
+
     const fetchTimesheets = async () => {
         setLoading(true)
         const month = currentDate.getMonth() + 1
@@ -237,6 +241,7 @@ export default function DashboardPage() {
                                         key={ts.id}
                                         timesheet={ts}
                                         onUpdate={updateSingleTimesheet}
+                                        onDelete={deleteSingleTimesheet}
                                     />
                                 ))
                             )}

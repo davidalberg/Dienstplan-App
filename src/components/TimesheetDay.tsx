@@ -7,7 +7,7 @@ import { CheckCircle2, AlertCircle, Clock, Edit3, RotateCcw, Loader2 } from "luc
 import { showToast } from '@/lib/toast-utils'
 import { formatTimeRange } from '@/lib/time-utils'
 
-export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, onUpdate: (updatedTimesheet: any) => void }) {
+export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesheet: any, onUpdate: (updatedTimesheet: any) => void, onDelete?: (id: string) => void }) {
     const [isEditing, setIsEditing] = useState(false)
     const [loading, setLoading] = useState(false)
     const [editData, setEditData] = useState({
@@ -47,8 +47,21 @@ export default function TimesheetDay({ timesheet, onUpdate }: { timesheet: any, 
             })
 
             if (res.ok) {
-                const updatedTimesheet = await res.json()
-                onUpdate(updatedTimesheet)
+                const result = await res.json()
+
+                // Wenn Backup-Schicht gelöscht wurde (Backup hat sich krank gemeldet)
+                if (result.deleted) {
+                    setIsEditing(false)
+                    setIsOptimistic(false)
+                    setOptimisticStatus(null)
+                    showToast("success", "Backup-Schicht wurde entfernt (Vertretung nicht möglich)")
+                    if (onDelete) {
+                        onDelete(timesheet.id)
+                    }
+                    return
+                }
+
+                onUpdate(result)
                 setIsEditing(false)
                 setIsOptimistic(false)
                 setOptimisticStatus(null)

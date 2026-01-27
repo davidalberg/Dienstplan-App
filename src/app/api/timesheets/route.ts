@@ -172,6 +172,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Cannot modify submitted timesheet" }, { status: 403 })
     }
 
+    // BUG-FIX: Wenn Backup-Person sich krank/Urlaub meldet → Backup-Schicht löschen
+    // Die Backup-Person bekommt KEINE Krankheitsstunden für eine Schicht, die sie nur als Vertretung hatte
+    if ((absenceType === "SICK" || absenceType === "VACATION") && existing.note?.includes("Eingesprungen")) {
+        console.log(`[BACKUP SICK] Backup employee ${existing.employeeId} is ${absenceType}, deleting backup shift`)
+
+        // Lösche die Backup-Schicht komplett
+        await prisma.timesheet.delete({
+            where: { id }
+        })
+
+        return NextResponse.json({
+            deleted: true,
+            message: "Backup-Schicht wurde gelöscht da Vertretung selbst krank/Urlaub ist"
+        })
+    }
+
     let updateData: any = {
         actualStart,
         actualEnd,
