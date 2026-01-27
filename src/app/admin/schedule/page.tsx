@@ -316,7 +316,7 @@ export default function SchedulePage() {
                             >
                                 <ChevronLeft size={20} />
                             </button>
-                            <span className="font-bold text-lg min-w-[150px] text-center">
+                            <span className="font-bold text-lg min-w-[150px] text-center text-black">
                                 {format(currentDate, "MMMM yyyy", { locale: de })}
                             </span>
                             <button
@@ -331,7 +331,7 @@ export default function SchedulePage() {
                         <select
                             value={selectedTeam}
                             onChange={(e) => setSelectedTeam(e.target.value)}
-                            className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium"
+                            className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-black"
                         >
                             <option value="">Alle Teams</option>
                             {teams.map(team => (
@@ -340,7 +340,7 @@ export default function SchedulePage() {
                         </select>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-2 text-sm text-black">
                         <span className="font-bold">{shifts.length}</span> Schichten
                         {loading && <RefreshCw size={16} className="animate-spin ml-2" />}
                     </div>
@@ -377,16 +377,16 @@ export default function SchedulePage() {
                                     </tr>
                                 ) : shifts.map(shift => (
                                     <tr key={shift.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3 font-medium">
+                                        <td className="px-4 py-3 font-medium text-black">
                                             {format(new Date(shift.date), "EEE, dd.MM.", { locale: de })}
                                         </td>
-                                        <td className="px-4 py-3">{shift.employee.name}</td>
+                                        <td className="px-4 py-3 text-black">{shift.employee.name}</td>
                                         <td className="px-4 py-3">
-                                            <span className="bg-gray-100 px-2 py-1 rounded text-sm font-medium">
+                                            <span className="bg-gray-100 px-2 py-1 rounded text-sm font-medium text-black">
                                                 {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-gray-600">
+                                        <td className="px-4 py-3 text-black">
                                             {shift.backupEmployee?.name || "-"}
                                         </td>
                                         <td className="px-4 py-3">
@@ -490,7 +490,7 @@ export default function SchedulePage() {
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
                         <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
                             <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-                                <h2 className="text-xl font-bold">
+                                <h2 className="text-xl font-bold text-black">
                                     {editingShift ? "Schicht bearbeiten" : "Neue Schicht"}
                                 </h2>
                                 <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
@@ -508,7 +508,7 @@ export default function SchedulePage() {
                                         value={formData.employeeId}
                                         onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
                                         disabled={!!editingShift}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 disabled:bg-gray-100"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 disabled:bg-gray-100 text-black"
                                     >
                                         <option value="">Auswählen...</option>
                                         {employees.map(emp => (
@@ -527,7 +527,7 @@ export default function SchedulePage() {
                                         value={formData.date}
                                         onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                         disabled={!!editingShift}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 disabled:bg-gray-100"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 disabled:bg-gray-100 text-black"
                                     />
                                 </div>
 
@@ -541,7 +541,7 @@ export default function SchedulePage() {
                                             type="time"
                                             value={formData.plannedStart}
                                             onChange={(e) => setFormData({ ...formData, plannedStart: e.target.value })}
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
                                         />
                                     </div>
                                     <div>
@@ -552,7 +552,7 @@ export default function SchedulePage() {
                                             type="time"
                                             value={formData.plannedEnd}
                                             onChange={(e) => setFormData({ ...formData, plannedEnd: e.target.value })}
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
                                         />
                                     </div>
                                 </div>
@@ -565,7 +565,7 @@ export default function SchedulePage() {
                                     <select
                                         value={formData.backupEmployeeId}
                                         onChange={(e) => setFormData({ ...formData, backupEmployeeId: e.target.value })}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
                                     >
                                         <option value="">Kein Backup</option>
                                         {employees.filter(e => e.id !== formData.employeeId).map(emp => (
@@ -582,7 +582,7 @@ export default function SchedulePage() {
                                     <textarea
                                         value={formData.note}
                                         onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
                                         rows={2}
                                     />
                                 </div>
@@ -613,7 +613,7 @@ export default function SchedulePage() {
                                                         value={formData.repeatEndDate}
                                                         onChange={(e) => setFormData({ ...formData, repeatEndDate: e.target.value })}
                                                         min={formData.date}
-                                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
                                                     />
                                                 </div>
                                                 <div>
