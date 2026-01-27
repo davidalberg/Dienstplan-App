@@ -52,3 +52,6 @@ prisma/*.db-journal
 # temp files
 update-sheet-names.js
 .env*.local
+
+# Claude Code local settings
+.claude/settings.local.json
