@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { generateTimesheetPdf } from "@/lib/pdf-generator"
 import { sendCompletionEmails } from "@/lib/email"
-import { uploadPdfToDrive } from "@/lib/google-drive"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
 import { headers } from "next/headers"
-import { getSignedEmployees } from "@/lib/team-submission-utils"
 
 /**
  * GET /api/sign/[token]
@@ -351,20 +349,8 @@ export async function POST(
             }
         })
 
-        // Upload final PDF to Drive
-        let pdfUrl = teamSubmission.pdfUrl
-        const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
-        const fileName = `Stundennachweis_${teamSubmission.sheetFileName.replace(/\s+/g, "_")}_${monthNames[teamSubmission.month - 1]}_${teamSubmission.year}_FINAL.pdf`
-
-        try {
-            const driveResult = await uploadPdfToDrive({
-                fileName,
-                pdfBuffer
-            })
-            pdfUrl = driveResult.webViewLink
-        } catch (driveError: any) {
-            console.error("[RECIPIENT SIGN] Google Drive upload failed:", driveError)
-        }
+        // PDF URL bleibt null - kein Google Drive Upload mehr
+        const pdfUrl = null
 
         // Update TeamSubmission to COMPLETED (atomically with status check to prevent re-signing)
         const updateResult = await prisma.teamSubmission.updateMany({

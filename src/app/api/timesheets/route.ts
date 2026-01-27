@@ -254,10 +254,7 @@ export async function POST(req: NextRequest) {
                     note: `Eingesprungen für ${absenceType === "SICK" ? "Krankheit" : "Urlaub"}`,
                     lastUpdatedBy: "SYSTEM_BACKUP_ACTIVATION",
                     teamId: backupEmployee.teamId,
-                    source: existing.source,
-                    sheetFileName: existing.sheetFileName,
-                    sheetId: existing.sheetId,
-                    syncVerified: true
+                    sheetFileName: existing.sheetFileName
                 }
 
                 if (backupExisting) {
@@ -339,30 +336,6 @@ export async function POST(req: NextRequest) {
     } catch (error) {
         // Audit Log Fehler sollten die Hauptoperation nicht blockieren
         console.error("Audit log failed (non-critical):", error)
-    }
-
-    // Sync zu Google Sheets - nur bei wichtigen Änderungen (nicht bei CONFIRM)
-    // Synchron ausführen um Connection Pool nicht zu erschöpfen
-    if (updated.source && updated.sheetId && action !== "CONFIRM") {
-        try {
-            const { appendShiftToSheet } = await import("@/lib/google-sheets")
-
-            const employee = await prisma.user.findUnique({
-                where: { id: updated.employeeId },
-                select: { name: true }
-            })
-
-            await appendShiftToSheet(updated.sheetId, updated.source, {
-                date: updated.date,
-                name: employee?.name || "Unknown",
-                start: updated.actualStart || updated.plannedStart || "",
-                end: updated.actualEnd || updated.plannedEnd || "",
-                note: updated.note || ""
-            })
-        } catch (error) {
-            // Google Sheets Sync Fehler loggen aber Response nicht blockieren
-            console.error("Fehler beim Sync zu Google Sheets:", error)
-        }
     }
 
     return NextResponse.json(updated)

@@ -4,17 +4,14 @@ import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
-import { Database, RefreshCw, Download, Terminal, CheckCircle, AlertCircle, Search, Trash2, Edit2, Filter, Users, User, ChevronDown, ChevronUp, ExternalLink, FileText, Calendar } from "lucide-react"
+import { Database, RefreshCw, Download, CheckCircle, AlertCircle, Trash2, Edit2, Users, ChevronDown, ChevronUp, FileText, Calendar } from "lucide-react"
 import { showToast } from '@/lib/toast-utils'
 import { formatTimeRange } from '@/lib/time-utils'
 
 export default function AdminPage() {
     const { data: session } = useSession()
-    const [logs, setLogs] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [timesheets, setTimesheets] = useState<any[]>([])
-    const [sources, setSources] = useState<string[]>([])
-    const [sheetFileNames, setSheetFileNames] = useState<string[]>([])
     const [teams, setTeams] = useState<any[]>([])
     const [employees, setEmployees] = useState<any[]>([])
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
@@ -22,8 +19,7 @@ export default function AdminPage() {
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
         employeeId: "",
-        source: "",
-        sheetFileName: ""
+        teamId: ""
     })
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
     const [editingShift, setEditingShift] = useState<any | null>(null)
@@ -36,7 +32,6 @@ export default function AdminPage() {
         status: "",
         absenceType: ""
     })
-    const [showLogs, setShowLogs] = useState(false)
     const [selectedShifts, setSelectedShifts] = useState<Set<string>>(new Set())
     const [selectAll, setSelectAll] = useState(false)
     const [showExportModal, setShowExportModal] = useState(false)
@@ -46,26 +41,19 @@ export default function AdminPage() {
     const fetchAdminData = async () => {
         setLoading(true)
         try {
-            const [logsRes, tsRes] = await Promise.all([
-                fetch("/api/admin/sync"),
-                fetch(`/api/admin/timesheets?month=${filters.month}&year=${filters.year}&employeeId=${filters.employeeId}&source=${filters.source}&sheetFileName=${filters.sheetFileName}`)
-            ])
+            const tsRes = await fetch(`/api/admin/timesheets?month=${filters.month}&year=${filters.year}&employeeId=${filters.employeeId}&teamId=${filters.teamId}`)
 
-            if (logsRes.ok) setLogs(await logsRes.ok ? await logsRes.json() : [])
             if (tsRes.ok) {
                 const data = await tsRes.json()
                 setTimesheets(data.timesheets || [])
-                setSources(data.sources || [])
-                setSheetFileNames(data.sheetFileNames || [])
                 setTeams(data.teams || [])
                 setEmployees(data.employees || [])
 
-                // Initialize expanded groups for service plans (default to collapsed/false)
-                // KORREKT: Verwendet functional update um aktuelle State zu erhalten
+                // Initialize expanded groups for teams (default to collapsed/false)
                 setExpandedGroups(prev => {
                     const newGroups = { ...prev }
-                    ;(data.sheetFileNames || []).forEach((s: string) => {
-                        if (newGroups[s] === undefined) newGroups[s] = false
+                    ;(data.teams || []).forEach((t: any) => {
+                        if (newGroups[t.id] === undefined) newGroups[t.id] = false
                     })
                     return newGroups
                 })
@@ -90,7 +78,6 @@ export default function AdminPage() {
 
             if (res.ok) {
                 showToast("success", "Eintrag erfolgreich gelöscht")
-                // Kein fetchAdminData() mehr nötig - UI ist schon aktualisiert!
             } else {
                 // Rollback bei Fehler: Eintrag wieder hinzufügen
                 if (deletedItem) {
@@ -197,7 +184,6 @@ export default function AdminPage() {
             ts.id === editingShift.id ? optimisticUpdate : ts
         ))
         setEditingShift(null) // Dialog schließen
-        // WICHTIG: setLoading(true) NICHT aufrufen - UI bleibt erhalten!
 
         try {
             const res = await fetch("/api/admin/timesheets", {
@@ -213,7 +199,6 @@ export default function AdminPage() {
                     ts.id === updated.id ? updated : ts
                 ))
                 showToast("success", "Änderungen gespeichert")
-                // Kein fetchAdminData() mehr nötig!
             } else {
                 // Rollback bei Fehler
                 if (oldShift) {
@@ -251,26 +236,9 @@ export default function AdminPage() {
         })
     }
 
-    const triggerSync = async (action: "IMPORT" | "EXPORT") => {
-        setLoading(true)
-        try {
-            await fetch("/api/admin/sync", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action })
-            })
-            fetchAdminData()
-        } catch (err) {
-            console.error(err)
-        } finally {
-            setLoading(false)
-        }
-    }
-
     const handleExportExcel = async () => {
         setLoading(true)
         try {
-            // Export all Dienstpläne for the selected month (no source filter = all sources)
             const url = `/api/timesheets/export?month=${exportMonth}&year=${exportYear}`
             const res = await fetch(url)
 
@@ -303,17 +271,16 @@ export default function AdminPage() {
         if (session) fetchAdminData()
     }, [session, filters])
 
-    // Helper to group timesheets by sheet file name (Dienstplan-Datei)
+    // Helper to group timesheets by team
     const groupedTimesheets = timesheets.reduce((acc: any, ts: any) => {
-        // Group by sheetFileName (z.B. "Dienstplan 2025") statt nach Tab-Namen
-        const key = ts.sheetFileName || ts.source || "Manuell"
+        const key = ts.team?.name || "Ohne Team"
         if (!acc[key]) acc[key] = []
         acc[key].push(ts)
         return acc
     }, {})
 
-    const toggleGroup = (source: string) => {
-        setExpandedGroups(prev => ({ ...prev, [source]: !prev[source] }))
+    const toggleGroup = (teamName: string) => {
+        setExpandedGroups(prev => ({ ...prev, [teamName]: !prev[teamName] }))
     }
 
     if (!session) return null
@@ -336,7 +303,7 @@ export default function AdminPage() {
                 <header className="mb-8 flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-black text-black">Admin Panel</h1>
-                        <p className="text-gray-900 font-bold">Google Sheets Synchronisierung & Logs</p>
+                        <p className="text-gray-900 font-bold">Schicht-Management & Übersicht</p>
                     </div>
                     <div className="flex gap-3 flex-wrap">
                         <Link
@@ -369,15 +336,6 @@ export default function AdminPage() {
                         </Link>
                         <button
                             type="button"
-                            onClick={() => triggerSync("IMPORT")}
-                            disabled={loading}
-                            className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
-                            Importieren
-                        </button>
-                        <button
-                            type="button"
                             onClick={() => setShowExportModal(true)}
                             disabled={loading}
                             className="flex items-center gap-2 rounded-xl bg-gray-900 px-6 py-3 font-bold text-white shadow-lg hover:bg-black disabled:opacity-50"
@@ -396,15 +354,15 @@ export default function AdminPage() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                             <select
-                                value={filters.sheetFileName}
-                                onChange={e => setFilters({ ...filters, sheetFileName: e.target.value })}
+                                value={filters.teamId}
+                                onChange={e => setFilters({ ...filters, teamId: e.target.value })}
                                 className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 style={{ color: '#000000' }}
                             >
-                                <option value="" style={{ color: '#000000', fontWeight: 600 }}>Alle Dienstpläne</option>
-                                {sheetFileNames.map(s => (
-                                    <option key={s} value={s} style={{ color: '#000000', fontWeight: 600 }}>
-                                        {s}
+                                <option value="" style={{ color: '#000000', fontWeight: 600 }}>Alle Teams</option>
+                                {teams.map(t => (
+                                    <option key={t.id} value={t.id} style={{ color: '#000000', fontWeight: 600 }}>
+                                        {t.name}
                                     </option>
                                 ))}
                             </select>
@@ -473,52 +431,28 @@ export default function AdminPage() {
                             </div>
                         ) : Object.keys(groupedTimesheets).length === 0 ? (
                             <div className="py-12 text-center text-black font-medium">Keine Schichten gefunden.</div>
-                        ) : Object.keys(groupedTimesheets).sort((a, b) => a.localeCompare(b, 'de')).map(planName => {
-                            // Find the sheetId for this file name - use the first timesheet's sheetId
-                            const firstTimesheet = groupedTimesheets[planName][0]
-                            const sheetUrl = firstTimesheet?.sheetId ? `https://docs.google.com/spreadsheets/d/${firstTimesheet.sheetId}/edit` : null
-
-                            return (
-                            <div key={planName} className="rounded-xl border border-gray-100 overflow-hidden">
+                        ) : Object.keys(groupedTimesheets).sort((a, b) => a.localeCompare(b, 'de')).map(teamName => (
+                            <div key={teamName} className="rounded-xl border border-gray-100 overflow-hidden">
                                 <div className="flex items-stretch">
-                                    <Link
-                                        href={`/admin/team/${encodeURIComponent(planName)}`}
-                                        className="flex items-center gap-3 bg-blue-50 px-4 py-4 transition-colors hover:bg-blue-100 border-r border-gray-100"
-                                    >
-                                        <Users size={18} className="text-blue-600" />
-                                        <span className="text-xs font-bold text-blue-600 uppercase">Team-Ansicht</span>
-                                    </Link>
                                     <button
                                         type="button"
-                                        onClick={() => toggleGroup(planName)}
+                                        onClick={() => toggleGroup(teamName)}
                                         className="flex-1 flex items-center justify-between bg-gray-50 p-4 transition-colors hover:bg-gray-100"
                                     >
                                         <div className="flex items-center gap-3">
                                             <Database size={16} className="text-blue-500" />
                                             <div>
-                                                <h3 className="text-sm font-bold text-gray-900">{planName}</h3>
+                                                <h3 className="text-sm font-bold text-gray-900">{teamName}</h3>
                                                 <p className="text-[10px] text-gray-900 font-black uppercase">
-                                                    {groupedTimesheets[planName].length} Schichten
+                                                    {groupedTimesheets[teamName].length} Schichten
                                                 </p>
                                             </div>
                                         </div>
-                                        {expandedGroups[planName] ? <ChevronUp size={18} className="text-gray-900" /> : <ChevronDown size={18} className="text-gray-900" />}
+                                        {expandedGroups[teamName] ? <ChevronUp size={18} className="text-gray-900" /> : <ChevronDown size={18} className="text-gray-900" />}
                                     </button>
-                                    {sheetUrl && (
-                                        <a
-                                            href={sheetUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-2 bg-green-50 px-4 py-4 transition-colors hover:bg-green-100 border-l border-gray-100"
-                                            title="In Google Sheets öffnen"
-                                        >
-                                            <ExternalLink size={16} className="text-green-600" />
-                                            <span className="text-xs font-bold text-green-600 uppercase">Sheets</span>
-                                        </a>
-                                    )}
                                 </div>
 
-                                {expandedGroups[planName] && (
+                                {expandedGroups[teamName] && (
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left text-sm">
                                             <thead>
@@ -540,7 +474,7 @@ export default function AdminPage() {
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
-                                                {groupedTimesheets[planName].map((ts: any) => (
+                                                {groupedTimesheets[teamName].map((ts: any) => (
                                                     <tr key={ts.id} className="hover:bg-gray-50/30 transition-colors">
                                                         <td className="py-4 px-4">
                                                             <input
@@ -571,7 +505,6 @@ export default function AdminPage() {
                                                             )}
                                                         </td>
                                                         <td className="py-4 px-4">
-                                                            {/* Status-Anzeige mit Priorität: Krank > Urlaub > Eingesprungen/Backup-Schicht > Normal */}
                                                             <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
                                                                 ts.absenceType === "SICK" ? "bg-red-100 text-red-700" :
                                                                 ts.absenceType === "VACATION" ? "bg-cyan-100 text-cyan-700" :
@@ -616,54 +549,8 @@ export default function AdminPage() {
                                     </div>
                                 )}
                             </div>
-                        )})}
+                        ))}
                     </div>
-                </div>
-
-                <div className="mt-8">
-                    <button
-                        type="button"
-                        onClick={() => setShowLogs(!showLogs)}
-                        className="flex w-full items-center justify-between rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 transition-all hover:bg-gray-50"
-                    >
-                        <div className="flex items-center gap-2 text-gray-900">
-                            <Terminal size={20} />
-                            <h2 className="text-sm font-black uppercase tracking-widest">Sync Aktivitäten</h2>
-                        </div>
-                        {showLogs ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                    </button>
-
-                    {showLogs && (
-                        <div className="mt-2 space-y-4 rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200">
-                            <div className="space-y-4">
-                                {logs.length === 0 ? (
-                                    <p className="py-8 text-center text-black font-medium font-medium">Keine Logs vorhanden.</p>
-                                ) : logs.map(log => (
-                                    <div key={log.id} className="flex items-start gap-4 rounded-xl border border-gray-100 p-4 transition-colors hover:bg-gray-50">
-                                        <div className={`mt-1 rounded-full p-1.5 ${log.status === "SUCCESS" ? "bg-green-100 text-green-600" :
-                                            log.status === "ERROR" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
-                                            }`}>
-                                            {log.status === "SUCCESS" ? <CheckCircle size={16} /> :
-                                                log.status === "ERROR" ? <AlertCircle size={16} /> : <RefreshCw size={16} className="animate-spin" />}
-                                        </div>
-                                        <div className="flex-1">
-                                            <div className="flex items-center justify-between">
-                                                <p className={`text-sm font-bold uppercase tracking-tight ${log.status === "SUCCESS" ? "text-green-700" :
-                                                    log.status === "ERROR" ? "text-red-700" : "text-blue-700"
-                                                    }`}>
-                                                    {log.status}
-                                                </p>
-                                                <p className="text-[10px] text-black font-medium uppercase font-medium">
-                                                    {format(new Date(log.startedAt), "dd.MM. HH:mm:ss")}
-                                                </p>
-                                            </div>
-                                            <p className="mt-1 text-sm text-gray-700 font-medium">{log.message || "Keine Nachricht vorhanden"}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* Edit Modal */}
@@ -778,7 +665,7 @@ export default function AdminPage() {
                         <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
                             <h3 className="mb-6 text-xl font-black text-gray-900">Excel Export</h3>
                             <p className="text-sm text-gray-600 mb-6">
-                                Wählen Sie den Monat aus, den Sie als Excel-Datei exportieren möchten. Es werden alle Dienstpläne für den ausgewählten Monat exportiert.
+                                Wählen Sie den Monat aus, den Sie als Excel-Datei exportieren möchten.
                             </p>
                             <div className="space-y-4">
                                 <div className="flex gap-4">
