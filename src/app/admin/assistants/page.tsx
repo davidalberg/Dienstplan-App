@@ -12,6 +12,10 @@ interface Employee {
     email: string
     name: string | null
     employeeId: string | null
+    hourlyWage: number | null
+    vacationDays: number
+    sickDays: number
+    entryDate: string | null
     clients: Array<{ id: string; firstName: string; lastName: string }>
 }
 
@@ -46,6 +50,7 @@ export default function AssistantsPage() {
     const [dropTarget, setDropTarget] = useState<string | null>(null)
     const [clientDropTarget, setClientDropTarget] = useState<string | null>(null)
     const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set(["unassigned"]))
+    const [highlightedEmployees, setHighlightedEmployees] = useState<Set<string>>(new Set())
 
     // Modal states
     const [showCreateEmployee, setShowCreateEmployee] = useState(false)
@@ -80,6 +85,38 @@ export default function AssistantsPage() {
             setExpandedClients(new Set(["unassigned", ...clients.map(c => c.id)]))
         }
     }, [clients.length])
+
+    // Active search with highlight and auto-expand
+    useEffect(() => {
+        if (!searchQuery.trim()) {
+            setHighlightedEmployees(new Set())
+            return
+        }
+
+        const query = searchQuery.toLowerCase()
+        const matchingEmployees = new Set<string>()
+        const clientsToExpand = new Set<string>(["unassigned"])
+
+        allEmployees.forEach(emp => {
+            const matches =
+                emp.name?.toLowerCase().includes(query) ||
+                emp.email?.toLowerCase().includes(query)
+
+            if (matches) {
+                matchingEmployees.add(emp.id)
+
+                // Expand clients that contain this employee
+                if (emp.clients && emp.clients.length > 0) {
+                    emp.clients.forEach(c => clientsToExpand.add(c.id))
+                } else {
+                    clientsToExpand.add("unassigned")
+                }
+            }
+        })
+
+        setHighlightedEmployees(matchingEmployees)
+        setExpandedClients(clientsToExpand)
+    }, [searchQuery, allEmployees])
 
     const fetchData = async () => {
         setLoading(true)
@@ -462,7 +499,7 @@ export default function AssistantsPage() {
                             placeholder="Assistenten suchen..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full pl-10 pr-4 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
                         />
                     </div>
                 </div>
@@ -526,6 +563,7 @@ export default function AssistantsPage() {
                                                 onDragStart={(e) => handleDragStart(e, employee, null)}
                                                 onEdit={() => openEditEmployee(employee)}
                                                 onDelete={() => handleDeleteEmployee(employee)}
+                                                isHighlighted={highlightedEmployees.has(employee.id)}
                                             />
                                         ))}
                                     </div>
@@ -626,6 +664,7 @@ export default function AssistantsPage() {
                                                         onDragStart={(e) => handleDragStart(e, employee, client.id)}
                                                         onEdit={() => openEditEmployee(employee)}
                                                         onDelete={() => handleDeleteEmployee(employee)}
+                                                        isHighlighted={highlightedEmployees.has(employee.id)}
                                                     />
                                                 ))}
                                             </div>
@@ -843,18 +882,24 @@ function EmployeeCard({
     employee,
     onDragStart,
     onEdit,
-    onDelete
+    onDelete,
+    isHighlighted = false
 }: {
     employee: Employee
     onDragStart: (e: DragEvent<HTMLDivElement>) => void
     onEdit: () => void
     onDelete: () => void
+    isHighlighted?: boolean
 }) {
     return (
         <div
             draggable
             onDragStart={onDragStart}
-            className="flex items-center gap-4 p-4 bg-neutral-800/30 hover:bg-neutral-800/60 rounded-lg cursor-grab active:cursor-grabbing group transition-all duration-150 border border-transparent hover:border-neutral-700"
+            className={`flex items-center gap-4 p-4 rounded-lg cursor-grab active:cursor-grabbing group transition-all duration-200 ${
+                isHighlighted
+                    ? "bg-violet-500/10 border-2 border-violet-500 shadow-lg shadow-violet-500/50"
+                    : "bg-neutral-800/30 hover:bg-neutral-800/60 border border-transparent hover:border-neutral-700"
+            }`}
         >
             {/* Drag Handle */}
             <div className="text-neutral-600 group-hover:text-neutral-400 transition-colors">
@@ -869,18 +914,45 @@ function EmployeeCard({
             </div>
 
             {/* Info */}
-            <div className="flex-1 min-w-0">
-                <p className="text-white font-medium text-base truncate">
-                    {employee.name || "Unbenannt"}
-                </p>
-                <p className="text-neutral-400 text-sm truncate mt-0.5">
-                    {employee.email}
-                </p>
+            <div className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto_auto] gap-2 lg:gap-6 items-center">
+                {/* Name & Email */}
+                <div className="min-w-0">
+                    <p className="text-white font-medium text-base truncate">
+                        {employee.name || "Unbenannt"}
+                    </p>
+                    <p className="text-neutral-400 text-sm truncate mt-0.5">
+                        {employee.email}
+                    </p>
+                </div>
+
+                {/* Hourly Wage */}
+                <div className="flex flex-col items-end">
+                    <span className="text-xs text-neutral-500 uppercase tracking-wider">Stundenlohn</span>
+                    <span className="text-sm font-semibold text-white">
+                        {employee.hourlyWage ? `${employee.hourlyWage.toFixed(2)} €` : "-"}
+                    </span>
+                </div>
+
+                {/* Vacation Days */}
+                <div className="flex flex-col items-end">
+                    <span className="text-xs text-neutral-500 uppercase tracking-wider">Urlaubstage</span>
+                    <span className="text-sm font-semibold text-white">
+                        {employee.vacationDays || 0}
+                    </span>
+                </div>
+
+                {/* Sick Days */}
+                <div className="flex flex-col items-end">
+                    <span className="text-xs text-neutral-500 uppercase tracking-wider">Kranktage</span>
+                    <span className="text-sm font-semibold text-white">
+                        {employee.sickDays || 0}
+                    </span>
+                </div>
             </div>
 
             {/* Multiple Clients Badge */}
             {employee.clients && employee.clients.length > 1 && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-500/10 border border-violet-500/20 rounded-md">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-500/10 border border-violet-500/20 rounded-md shrink-0">
                     <span className="text-xs font-medium text-violet-400">
                         +{employee.clients.length - 1} Klient{employee.clients.length > 2 ? "en" : ""}
                     </span>
@@ -888,7 +960,7 @@ function EmployeeCard({
             )}
 
             {/* Action Buttons - Hover to reveal */}
-            <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
                 <button
                     onClick={(e) => {
                         e.stopPropagation()
