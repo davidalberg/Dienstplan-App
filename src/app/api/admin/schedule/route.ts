@@ -3,37 +3,60 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { z } from "zod"
 
-// Schema für neue Schicht
+// Hilfsfunktion: Zod-Fehler in lesbare Meldung umwandeln
+function formatZodError(error: z.ZodError<unknown>): string {
+    const messages = error.issues.map((issue: z.ZodIssue) => {
+        const path = issue.path.join(".")
+        return path ? `${path}: ${issue.message}` : issue.message
+    })
+    return messages.join(", ")
+}
+
+// Schema für neue Schicht mit verbesserter Validierung
 const createShiftSchema = z.object({
-    employeeId: z.string(),
-    date: z.string(), // ISO date string
-    plannedStart: z.string(),
-    plannedEnd: z.string(),
+    employeeId: z.string().min(1, "Mitarbeiter-ID ist erforderlich"),
+    date: z.string()
+        .min(1, "Datum ist erforderlich")
+        .regex(/^\d{4}-\d{2}-\d{2}$/, "Datum muss im Format YYYY-MM-DD sein"),
+    plannedStart: z.string()
+        .min(1, "Startzeit ist erforderlich")
+        .regex(/^\d{2}:\d{2}$/, "Startzeit muss im Format HH:MM sein"),
+    plannedEnd: z.string()
+        .min(1, "Endzeit ist erforderlich")
+        .regex(/^\d{2}:\d{2}$/, "Endzeit muss im Format HH:MM sein"),
     backupEmployeeId: z.string().optional().nullable(),
-    note: z.string().optional(),
+    note: z.string().optional().nullable(),
     teamId: z.string().optional().nullable(),
 })
 
 // Schema für Schicht-Update
 const updateShiftSchema = z.object({
-    id: z.string(),
-    plannedStart: z.string().optional(),
-    plannedEnd: z.string().optional(),
+    id: z.string().min(1, "Schicht-ID ist erforderlich"),
+    plannedStart: z.string().regex(/^\d{2}:\d{2}$/, "Ungültiges Zeitformat").optional(),
+    plannedEnd: z.string().regex(/^\d{2}:\d{2}$/, "Ungültiges Zeitformat").optional(),
     backupEmployeeId: z.string().optional().nullable(),
-    note: z.string().optional(),
+    note: z.string().optional().nullable(),
 })
 
 // Schema für Bulk-Erstellung (Wiederholung)
 const bulkCreateSchema = z.object({
-    employeeId: z.string(),
-    startDate: z.string(),
-    endDate: z.string(),
-    plannedStart: z.string(),
-    plannedEnd: z.string(),
+    employeeId: z.string().min(1, "Mitarbeiter-ID ist erforderlich"),
+    startDate: z.string()
+        .min(1, "Startdatum ist erforderlich")
+        .regex(/^\d{4}-\d{2}-\d{2}$/, "Startdatum muss im Format YYYY-MM-DD sein"),
+    endDate: z.string()
+        .min(1, "Enddatum ist erforderlich")
+        .regex(/^\d{4}-\d{2}-\d{2}$/, "Enddatum muss im Format YYYY-MM-DD sein"),
+    plannedStart: z.string()
+        .min(1, "Startzeit ist erforderlich")
+        .regex(/^\d{2}:\d{2}$/, "Startzeit muss im Format HH:MM sein"),
+    plannedEnd: z.string()
+        .min(1, "Endzeit ist erforderlich")
+        .regex(/^\d{2}:\d{2}$/, "Endzeit muss im Format HH:MM sein"),
     backupEmployeeId: z.string().optional().nullable(),
-    note: z.string().optional(),
+    note: z.string().optional().nullable(),
     teamId: z.string().optional().nullable(),
-    repeatDays: z.array(z.number().min(0).max(6)), // 0=Sonntag, 1=Montag, etc.
+    repeatDays: z.array(z.number().min(0).max(6)).min(1, "Mindestens ein Wochentag muss ausgewählt sein"),
 })
 
 // GET - Alle Schichten für einen Zeitraum
@@ -106,13 +129,23 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const body = await req.json()
+        let body: unknown
+        try {
+            body = await req.json()
+        } catch {
+            return NextResponse.json({ error: "Ungültiger JSON-Body" }, { status: 400 })
+        }
+
+        // Grundlegende Typprüfung
+        if (!body || typeof body !== "object") {
+            return NextResponse.json({ error: "Request-Body muss ein Objekt sein" }, { status: 400 })
+        }
 
         // Prüfe ob es eine Bulk-Operation ist
-        if (body.bulk) {
+        if ((body as Record<string, unknown>).bulk) {
             const validated = bulkCreateSchema.safeParse(body)
             if (!validated.success) {
-                return NextResponse.json({ error: validated.error }, { status: 400 })
+                return NextResponse.json({ error: formatZodError(validated.error) }, { status: 400 })
             }
 
             const { employeeId, startDate, endDate, plannedStart, plannedEnd, backupEmployeeId, note, teamId, repeatDays } = validated.data
@@ -169,14 +202,28 @@ export async function POST(req: NextRequest) {
         // Einzelne Schicht erstellen
         const validated = createShiftSchema.safeParse(body)
         if (!validated.success) {
-            return NextResponse.json({ error: validated.error }, { status: 400 })
+            return NextResponse.json({ error: formatZodError(validated.error) }, { status: 400 })
         }
 
         const { employeeId, date, plannedStart, plannedEnd, backupEmployeeId, note, teamId } = validated.data
 
-        const dateObj = new Date(date)
-        const month = dateObj.getMonth() + 1
-        const year = dateObj.getFullYear()
+        // Robustes Date-Parsing
+        const dateObj = new Date(date + "T00:00:00Z")
+        if (isNaN(dateObj.getTime())) {
+            return NextResponse.json({ error: "Ungültiges Datumsformat" }, { status: 400 })
+        }
+
+        const month = dateObj.getUTCMonth() + 1
+        const year = dateObj.getUTCFullYear()
+
+        // Prüfe, ob der Mitarbeiter existiert
+        const employeeExists = await prisma.user.findUnique({
+            where: { id: employeeId },
+            select: { id: true }
+        })
+        if (!employeeExists) {
+            return NextResponse.json({ error: "Mitarbeiter nicht gefunden" }, { status: 400 })
+        }
 
         // Prüfe ob bereits eine Schicht existiert
         const existing = await prisma.timesheet.findUnique({
@@ -234,11 +281,17 @@ export async function PUT(req: NextRequest) {
     }
 
     try {
-        const body = await req.json()
+        let body: unknown
+        try {
+            body = await req.json()
+        } catch {
+            return NextResponse.json({ error: "Ungültiger JSON-Body" }, { status: 400 })
+        }
+
         const validated = updateShiftSchema.safeParse(body)
 
         if (!validated.success) {
-            return NextResponse.json({ error: validated.error }, { status: 400 })
+            return NextResponse.json({ error: formatZodError(validated.error) }, { status: 400 })
         }
 
         const { id, ...updateData } = validated.data

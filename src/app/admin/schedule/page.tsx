@@ -42,6 +42,14 @@ interface Team {
     name: string
 }
 
+interface Client {
+    id: string
+    firstName: string
+    lastName: string
+    isActive: boolean
+    employees: { id: string; name: string }[]
+}
+
 export default function SchedulePage() {
     const { data: session } = useSession()
     const [viewMode, setViewMode] = useState<"list" | "calendar">("list")
@@ -66,6 +74,7 @@ export default function SchedulePage() {
     const [shifts, setShifts] = useState<Shift[]>([])
     const [employees, setEmployees] = useState<Employee[]>([])
     const [teams, setTeams] = useState<Team[]>([])
+    const [clients, setClients] = useState<Client[]>([])
     const [loading, setLoading] = useState(true)
 
     // Sync SWR data to local state
@@ -76,9 +85,26 @@ export default function SchedulePage() {
         setLoading(isLoading)
     }, [swrShifts, swrEmployees, swrTeams, isLoading])
 
+    // Lade Klienten
+    useEffect(() => {
+        async function loadClients() {
+            try {
+                const res = await fetch("/api/clients")
+                if (res.ok) {
+                    const data = await res.json()
+                    setClients(data.clients || [])
+                }
+            } catch (err) {
+                console.error("Fehler beim Laden der Klienten:", err)
+            }
+        }
+        loadClients()
+    }, [])
+
     // Modal State
     const [showModal, setShowModal] = useState(false)
     const [editingShift, setEditingShift] = useState<Shift | null>(null)
+    const [selectedClientId, setSelectedClientId] = useState<string>("")
     const [formData, setFormData] = useState({
         employeeId: "",
         date: "",
@@ -96,9 +122,30 @@ export default function SchedulePage() {
     const fetchData = () => mutate()
 
     const handleCreateOrUpdate = async () => {
-        if (!formData.employeeId || !formData.date) {
-            showToast("error", "Mitarbeiter und Datum sind erforderlich")
+        // Frontend-Validierung
+        if (!formData.employeeId) {
+            showToast("error", "Bitte waehlen Sie einen Mitarbeiter aus")
             return
+        }
+        if (!formData.date) {
+            showToast("error", "Bitte waehlen Sie ein Datum aus")
+            return
+        }
+        if (!formData.plannedStart || !formData.plannedEnd) {
+            showToast("error", "Start- und Endzeit sind erforderlich")
+            return
+        }
+
+        // Wiederholung: Enddatum pruefen
+        if (formData.isRepeating) {
+            if (!formData.repeatEndDate) {
+                showToast("error", "Bitte waehlen Sie ein Enddatum fuer die Wiederholung")
+                return
+            }
+            if (formData.repeatDays.length === 0) {
+                showToast("error", "Bitte waehlen Sie mindestens einen Wochentag aus")
+                return
+            }
         }
 
         setLoading(true)
@@ -117,17 +164,31 @@ export default function SchedulePage() {
                     })
                 })
 
+                // Robustes Response-Parsing
+                let responseData: { error?: string } = {}
+                try {
+                    responseData = await res.json()
+                } catch {
+                    // JSON-Parsing fehlgeschlagen
+                    if (!res.ok) {
+                        showToast("error", `Server-Fehler (${res.status})`)
+                        return
+                    }
+                }
+
                 if (res.ok) {
                     showToast("success", "Schicht aktualisiert")
                     setShowModal(false)
                     fetchData()
                 } else {
-                    const err = await res.json()
-                    showToast("error", err.error || "Fehler beim Speichern")
+                    const errorMessage = typeof responseData.error === "string"
+                        ? responseData.error
+                        : "Fehler beim Speichern"
+                    showToast("error", errorMessage)
                 }
             } else {
                 // Create (Single oder Bulk)
-                const body: any = {
+                const body: Record<string, unknown> = {
                     employeeId: formData.employeeId,
                     plannedStart: formData.plannedStart,
                     plannedEnd: formData.plannedEnd,
@@ -150,23 +211,36 @@ export default function SchedulePage() {
                     body: JSON.stringify(body)
                 })
 
+                // Robustes Response-Parsing
+                let responseData: { error?: string; created?: number } = {}
+                try {
+                    responseData = await res.json()
+                } catch {
+                    // JSON-Parsing fehlgeschlagen
+                    if (!res.ok) {
+                        showToast("error", `Server-Fehler (${res.status})`)
+                        return
+                    }
+                }
+
                 if (res.ok) {
-                    const result = await res.json()
-                    if (result.created !== undefined) {
-                        showToast("success", `${result.created} Schichten erstellt`)
+                    if (responseData.created !== undefined) {
+                        showToast("success", `${responseData.created} Schichten erstellt`)
                     } else {
                         showToast("success", "Schicht erstellt")
                     }
                     setShowModal(false)
                     fetchData()
                 } else {
-                    const err = await res.json()
-                    showToast("error", err.error || "Fehler beim Erstellen")
+                    const errorMessage = typeof responseData.error === "string"
+                        ? responseData.error
+                        : "Fehler beim Erstellen"
+                    showToast("error", errorMessage)
                 }
             }
         } catch (err) {
-            console.error(err)
-            showToast("error", "Netzwerkfehler")
+            console.error("[handleCreateOrUpdate] Error:", err)
+            showToast("error", "Netzwerkfehler - bitte pruefen Sie Ihre Verbindung")
         } finally {
             setLoading(false)
         }
@@ -190,6 +264,7 @@ export default function SchedulePage() {
 
     const openCreateModal = (date?: Date) => {
         setEditingShift(null)
+        setSelectedClientId("")
         setFormData({
             employeeId: "",
             date: date ? format(date, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
@@ -206,6 +281,10 @@ export default function SchedulePage() {
 
     const openEditModal = (shift: Shift) => {
         setEditingShift(shift)
+        // Beim Bearbeiten ist der Client bereits implizit gewählt (durch den Mitarbeiter)
+        const employee = employees.find(e => e.id === shift.employee.id)
+        const selectedClient = clients.find(c => c.employees.some(e => e.id === shift.employee.id))
+        setSelectedClientId(selectedClient?.id || "")
         setFormData({
             employeeId: shift.employee.id,
             date: format(new Date(shift.date), "yyyy-MM-dd"),
@@ -481,165 +560,261 @@ export default function SchedulePage() {
                             </div>
 
                             <div className="p-6 space-y-4">
-                                {/* Mitarbeiter */}
-                                <div>
-                                    <label className="block text-sm font-medium text-neutral-400 mb-1">
-                                        Mitarbeiter *
-                                    </label>
-                                    <select
-                                        value={formData.employeeId}
-                                        onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-                                        disabled={!!editingShift}
-                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 disabled:opacity-50 text-white"
-                                    >
-                                        <option value="">Auswählen...</option>
-                                        {employees.map(emp => (
-                                            <option key={emp.id} value={emp.id}>{emp.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                {/* Stufe 1: Klient-Auswahl (nur bei Neuanlage ohne bereits gewählten Client) */}
+                                {!editingShift && !selectedClientId ? (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-neutral-400 mb-2">
+                                                Klient auswählen *
+                                            </label>
+                                            <p className="text-xs text-neutral-500 mb-3">
+                                                Wählen Sie zunächst den Klienten aus, für den die Schicht geplant werden soll.
+                                            </p>
+                                            <select
+                                                value={selectedClientId}
+                                                onChange={(e) => setSelectedClientId(e.target.value)}
+                                                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-3 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+                                                autoFocus
+                                            >
+                                                <option value="">Klient wählen...</option>
+                                                {clients
+                                                    .filter(c => c.isActive)
+                                                    .map(client => (
+                                                        <option key={client.id} value={client.id}>
+                                                            {client.firstName} {client.lastName}
+                                                        </option>
+                                                    ))
+                                                }
+                                            </select>
+                                        </div>
 
-                                {/* Datum */}
-                                <div>
-                                    <label className="block text-sm font-medium text-neutral-400 mb-1">
-                                        Datum *
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={formData.date}
-                                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                        disabled={!!editingShift}
-                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 disabled:opacity-50 text-white"
-                                    />
-                                </div>
-
-                                {/* Zeiten */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-neutral-400 mb-1">
-                                            Start
-                                        </label>
-                                        <input
-                                            type="time"
-                                            value={formData.plannedStart}
-                                            onChange={(e) => setFormData({ ...formData, plannedStart: e.target.value })}
-                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-neutral-400 mb-1">
-                                            Ende
-                                        </label>
-                                        <input
-                                            type="time"
-                                            value={formData.plannedEnd}
-                                            onChange={(e) => setFormData({ ...formData, plannedEnd: e.target.value })}
-                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Backup */}
-                                <div>
-                                    <label className="block text-sm font-medium text-neutral-400 mb-1">
-                                        Backup-Mitarbeiter
-                                    </label>
-                                    <select
-                                        value={formData.backupEmployeeId}
-                                        onChange={(e) => setFormData({ ...formData, backupEmployeeId: e.target.value })}
-                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white"
-                                    >
-                                        <option value="">Kein Backup</option>
-                                        {employees.filter(e => e.id !== formData.employeeId).map(emp => (
-                                            <option key={emp.id} value={emp.id}>{emp.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {/* Notiz */}
-                                <div>
-                                    <label className="block text-sm font-medium text-neutral-400 mb-1">
-                                        Notiz
-                                    </label>
-                                    <textarea
-                                        value={formData.note}
-                                        onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white"
-                                        rows={2}
-                                    />
-                                </div>
-
-                                {/* Wiederholung (nur bei Neuanlage) */}
-                                {!editingShift && (
-                                    <div className="border-t border-neutral-800 pt-4">
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.isRepeating}
-                                                onChange={(e) => setFormData({ ...formData, isRepeating: e.target.checked })}
-                                                className="w-4 h-4 rounded bg-neutral-800 border-neutral-700"
-                                            />
-                                            <span className="text-sm font-medium text-neutral-300">
-                                                Schicht wiederholen
-                                            </span>
-                                        </label>
-
-                                        {formData.isRepeating && (
-                                            <div className="mt-3 space-y-3 pl-6">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-neutral-400 mb-1">
-                                                        Bis Datum
-                                                    </label>
-                                                    <input
-                                                        type="date"
-                                                        value={formData.repeatEndDate}
-                                                        onChange={(e) => setFormData({ ...formData, repeatEndDate: e.target.value })}
-                                                        min={formData.date}
-                                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-neutral-400 mb-2">
-                                                        Wochentage
-                                                    </label>
-                                                    <div className="flex gap-1">
-                                                        {dayNames.map((name, idx) => (
-                                                            <button
-                                                                key={idx}
-                                                                type="button"
-                                                                onClick={() => toggleRepeatDay(idx)}
-                                                                className={`w-9 h-9 rounded-lg text-xs font-medium transition ${
-                                                                    formData.repeatDays.includes(idx)
-                                                                        ? "bg-blue-600 text-white"
-                                                                        : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
-                                                                }`}
-                                                            >
-                                                                {name}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
+                                        {clients.filter(c => c.isActive).length === 0 && (
+                                            <div className="bg-amber-900/20 border border-amber-700 rounded-lg p-4">
+                                                <p className="text-sm text-amber-300">
+                                                    Keine aktiven Klienten gefunden. Bitte erstellen Sie zunächst einen Klienten.
+                                                </p>
                                             </div>
                                         )}
                                     </div>
+                                ) : (
+                                    /* Stufe 2: Alle weiteren Felder */
+                                    <>
+                                        {/* Gewählter Klient (Anzeige, änderbar) */}
+                                        {!editingShift && selectedClientId && (
+                                            <div className="bg-violet-900/20 border border-violet-700 rounded-lg p-3 flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-xs text-violet-400 font-medium">Klient</p>
+                                                    <p className="text-sm text-white font-semibold">
+                                                        {clients.find(c => c.id === selectedClientId)?.firstName}{" "}
+                                                        {clients.find(c => c.id === selectedClientId)?.lastName}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedClientId("")
+                                                        setFormData({ ...formData, employeeId: "", backupEmployeeId: "" })
+                                                    }}
+                                                    className="text-xs text-violet-400 hover:text-violet-300 font-medium transition-colors"
+                                                >
+                                                    Ändern
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Mitarbeiter (gefiltert nach Klient) */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-neutral-400 mb-1">
+                                                Mitarbeiter *
+                                            </label>
+                                            <select
+                                                value={formData.employeeId}
+                                                onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+                                                disabled={!!editingShift}
+                                                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 disabled:opacity-50 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+                                            >
+                                                <option value="">Auswählen...</option>
+                                                {(() => {
+                                                    const selectedClient = clients.find(c => c.id === selectedClientId)
+                                                    const availableEmployees = selectedClient?.employees || []
+
+                                                    if (availableEmployees.length === 0) {
+                                                        return <option disabled>Keine Mitarbeiter zugeordnet</option>
+                                                    }
+
+                                                    return availableEmployees.map(emp => (
+                                                        <option key={emp.id} value={emp.id}>{emp.name}</option>
+                                                    ))
+                                                })()}
+                                            </select>
+                                            {selectedClientId && clients.find(c => c.id === selectedClientId)?.employees.length === 0 && (
+                                                <p className="text-xs text-amber-400 mt-1">
+                                                    Diesem Klienten sind noch keine Mitarbeiter zugeordnet.
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Datum */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-neutral-400 mb-1">
+                                                Datum *
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={formData.date}
+                                                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                                disabled={!!editingShift}
+                                                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 disabled:opacity-50 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+                                            />
+                                        </div>
+
+                                        {/* Zeiten */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-neutral-400 mb-1">
+                                                    Start
+                                                </label>
+                                                <input
+                                                    type="time"
+                                                    value={formData.plannedStart}
+                                                    onChange={(e) => setFormData({ ...formData, plannedStart: e.target.value })}
+                                                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-neutral-400 mb-1">
+                                                    Ende
+                                                </label>
+                                                <input
+                                                    type="time"
+                                                    value={formData.plannedEnd}
+                                                    onChange={(e) => setFormData({ ...formData, plannedEnd: e.target.value })}
+                                                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Backup */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-neutral-400 mb-1">
+                                                Backup-Mitarbeiter
+                                            </label>
+                                            <select
+                                                value={formData.backupEmployeeId}
+                                                onChange={(e) => setFormData({ ...formData, backupEmployeeId: e.target.value })}
+                                                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+                                            >
+                                                <option value="">Kein Backup</option>
+                                                {(() => {
+                                                    const selectedClient = clients.find(c => c.id === selectedClientId)
+                                                    const availableEmployees = selectedClient?.employees.filter(e => e.id !== formData.employeeId) || []
+
+                                                    return availableEmployees.map(emp => (
+                                                        <option key={emp.id} value={emp.id}>{emp.name}</option>
+                                                    ))
+                                                })()}
+                                            </select>
+                                        </div>
+
+                                        {/* Notiz */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-neutral-400 mb-1">
+                                                Notiz
+                                            </label>
+                                            <textarea
+                                                value={formData.note}
+                                                onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                                                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors resize-none"
+                                                rows={2}
+                                                placeholder="Optionale Notizen zur Schicht..."
+                                            />
+                                        </div>
+
+                                        {/* Wiederholung (nur bei Neuanlage) */}
+                                        {!editingShift && (
+                                            <div className="border-t border-neutral-800 pt-4">
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={formData.isRepeating}
+                                                        onChange={(e) => setFormData({ ...formData, isRepeating: e.target.checked })}
+                                                        className="w-4 h-4 rounded bg-neutral-800 border-neutral-700 text-violet-600 focus:ring-violet-500"
+                                                    />
+                                                    <span className="text-sm font-medium text-neutral-300">
+                                                        Schicht wiederholen
+                                                    </span>
+                                                </label>
+
+                                                {formData.isRepeating && (
+                                                    <div className="mt-3 space-y-3 pl-6">
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-neutral-400 mb-1">
+                                                                Bis Datum
+                                                            </label>
+                                                            <input
+                                                                type="date"
+                                                                value={formData.repeatEndDate}
+                                                                onChange={(e) => setFormData({ ...formData, repeatEndDate: e.target.value })}
+                                                                min={formData.date}
+                                                                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-neutral-400 mb-2">
+                                                                Wochentage
+                                                            </label>
+                                                            <div className="flex gap-1">
+                                                                {dayNames.map((name, idx) => (
+                                                                    <button
+                                                                        key={idx}
+                                                                        type="button"
+                                                                        onClick={() => toggleRepeatDay(idx)}
+                                                                        className={`w-9 h-9 rounded-lg text-xs font-medium transition-colors ${
+                                                                            formData.repeatDays.includes(idx)
+                                                                                ? "bg-violet-600 text-white hover:bg-violet-700"
+                                                                                : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+                                                                        }`}
+                                                                    >
+                                                                        {name}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
 
                             <div className="sticky bottom-0 bg-neutral-900 border-t border-neutral-800 px-6 py-4 flex gap-3">
-                                <button
-                                    onClick={handleCreateOrUpdate}
-                                    disabled={loading}
-                                    className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 transition"
-                                >
-                                    <Save size={18} />
-                                    {loading ? "Speichert..." : "Speichern"}
-                                </button>
-                                <button
-                                    onClick={() => setShowModal(false)}
-                                    className="flex-1 border border-neutral-700 py-2.5 rounded-xl font-bold text-neutral-400 hover:bg-neutral-800 transition"
-                                >
-                                    Abbrechen
-                                </button>
+                                {!editingShift && !selectedClientId ? (
+                                    /* Stufe 1: Nur Abbrechen-Button */
+                                    <button
+                                        onClick={() => setShowModal(false)}
+                                        className="flex-1 border border-neutral-700 py-2.5 rounded-xl font-bold text-neutral-400 hover:bg-neutral-800 transition-colors"
+                                    >
+                                        Abbrechen
+                                    </button>
+                                ) : (
+                                    /* Stufe 2: Speichern + Abbrechen */
+                                    <>
+                                        <button
+                                            onClick={handleCreateOrUpdate}
+                                            disabled={loading}
+                                            className="flex-1 bg-violet-600 text-white py-2.5 rounded-xl font-bold hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                                        >
+                                            <Save size={18} />
+                                            {loading ? "Speichert..." : "Speichern"}
+                                        </button>
+                                        <button
+                                            onClick={() => setShowModal(false)}
+                                            className="flex-1 border border-neutral-700 py-2.5 rounded-xl font-bold text-neutral-400 hover:bg-neutral-800 transition-colors"
+                                        >
+                                            Abbrechen
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
