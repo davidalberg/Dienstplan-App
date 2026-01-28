@@ -12,6 +12,8 @@ import {
     Trash2,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
+    ChevronUp,
     X,
     Save
 } from "lucide-react"
@@ -26,7 +28,19 @@ interface Shift {
     plannedEnd: string
     status: string
     note: string | null
-    employee: { id: string; name: string }
+    employee: {
+        id: string
+        name: string
+        team?: {
+            id: string
+            name: string
+            client?: {
+                id: string
+                firstName: string
+                lastName: string
+            } | null
+        } | null
+    }
     backupEmployee: { id: string; name: string } | null
 }
 
@@ -57,6 +71,7 @@ export default function SchedulePage() {
     // Filter
     const [currentDate, setCurrentDate] = useState(new Date())
     const [selectedTeam, setSelectedTeam] = useState<string>("")
+    const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
 
     const month = currentDate.getMonth() + 1
     const year = currentDate.getFullYear()
@@ -100,6 +115,65 @@ export default function SchedulePage() {
         }
         loadClients()
     }, [])
+
+    // Expand all clients by default when data loads
+    useEffect(() => {
+        if (shifts.length > 0) {
+            const clientIds = new Set<string>()
+            shifts.forEach(shift => {
+                const clientId = shift.employee.team?.client?.id
+                if (clientId) clientIds.add(clientId)
+            })
+            clientIds.add("unassigned") // Immer "Ohne Klient" expandieren
+            setExpandedClients(clientIds)
+        }
+    }, [shifts.length])
+
+    // Gruppiere Schichten nach Klient
+    const groupedShifts = () => {
+        const groups: Record<string, { client: Client | null; shifts: Shift[] }> = {}
+
+        shifts.forEach(shift => {
+            const client = shift.employee.team?.client
+            const clientId = client?.id || "unassigned"
+
+            if (!groups[clientId]) {
+                groups[clientId] = {
+                    client: client ? {
+                        id: client.id,
+                        firstName: client.firstName,
+                        lastName: client.lastName,
+                        isActive: true,
+                        employees: []
+                    } : null,
+                    shifts: []
+                }
+            }
+
+            groups[clientId].shifts.push(shift)
+        })
+
+        // Sortiere nach Klient-Name
+        return Object.entries(groups).sort(([aId, a], [bId, b]) => {
+            if (aId === "unassigned") return 1 // "Ohne Klient" am Ende
+            if (bId === "unassigned") return -1
+            const aName = `${a.client?.firstName} ${a.client?.lastName}`
+            const bName = `${b.client?.firstName} ${b.client?.lastName}`
+            return aName.localeCompare(bName)
+        })
+    }
+
+    const toggleClientExpansion = (clientId: string) => {
+        setExpandedClients(prev => {
+            const next = new Set(prev)
+            if (next.has(clientId)) {
+                next.delete(clientId)
+            } else {
+                next.add(clientId)
+            }
+            return next
+        })
+    }
 
     // Modal State
     const [showModal, setShowModal] = useState(false)
@@ -416,72 +490,106 @@ export default function SchedulePage() {
 
                 {/* Content */}
                 {viewMode === "list" ? (
-                    /* Listen-Ansicht */
-                    <div className="bg-neutral-900 rounded-xl overflow-hidden">
-                        <table className="w-full">
-                            <thead className="bg-neutral-800">
-                                <tr>
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Datum</th>
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Mitarbeiter</th>
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Zeit</th>
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Backup</th>
-                                    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Status</th>
-                                    <th className="px-3 py-2 text-right text-xs font-semibold text-neutral-400 uppercase tracking-wide">Aktionen</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-800">
-                                {shifts.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className="py-8 text-center text-neutral-500">
-                                            Keine Schichten für diesen Monat
-                                        </td>
-                                    </tr>
-                                ) : shifts.map(shift => (
-                                    <tr key={shift.id} className="hover:bg-neutral-800/50 transition">
-                                        <td className="px-3 py-2 font-medium text-white text-sm">
-                                            {format(new Date(shift.date), "EEE, dd.MM.", { locale: de })}
-                                        </td>
-                                        <td className="px-3 py-2 text-neutral-300 text-sm">{shift.employee.name}</td>
-                                        <td className="px-3 py-2">
-                                            <span className="bg-neutral-800 px-2 py-0.5 rounded text-xs font-medium text-neutral-300">
-                                                {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
-                                            </span>
-                                        </td>
-                                        <td className="px-3 py-2 text-neutral-400 text-sm">
-                                            {shift.backupEmployee?.name || "-"}
-                                        </td>
-                                        <td className="px-3 py-2">
-                                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase ${
-                                                shift.status === "CONFIRMED" ? "bg-green-900/50 text-green-400" :
-                                                shift.status === "CHANGED" ? "bg-amber-900/50 text-amber-400" :
-                                                shift.status === "SUBMITTED" ? "bg-blue-900/50 text-blue-400" :
-                                                "bg-neutral-800 text-neutral-400"
-                                            }`}>
-                                                {shift.status === "CONFIRMED" ? "Bestätigt" :
-                                                 shift.status === "CHANGED" ? "Geändert" :
-                                                 shift.status === "SUBMITTED" ? "Eingereicht" : "Geplant"}
-                                            </span>
-                                        </td>
-                                        <td className="px-3 py-2 text-right">
-                                            <div className="flex gap-1 justify-end">
-                                                <button
-                                                    onClick={() => openEditModal(shift)}
-                                                    className="p-1.5 text-neutral-500 hover:text-blue-400 hover:bg-blue-900/30 rounded transition"
-                                                >
-                                                    <Edit2 size={14} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(shift.id)}
-                                                    className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-900/30 rounded transition"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
+                    /* Listen-Ansicht mit Klient-Gruppierung */
+                    <div className="space-y-4">
+                        {shifts.length === 0 ? (
+                            <div className="bg-neutral-900 rounded-xl p-8 text-center text-neutral-500">
+                                Keine Schichten für diesen Monat
+                            </div>
+                        ) : (
+                            groupedShifts().map(([clientId, group]) => {
+                                const isExpanded = expandedClients.has(clientId)
+                                const clientName = group.client
+                                    ? `${group.client.firstName} ${group.client.lastName}`
+                                    : "Ohne Klient"
+
+                                return (
+                                    <div key={clientId} className="bg-neutral-900 rounded-xl overflow-hidden">
+                                        {/* Klient Header */}
+                                        <button
+                                            onClick={() => toggleClientExpansion(clientId)}
+                                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-neutral-800/50 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                {isExpanded ? (
+                                                    <ChevronDown className="text-neutral-400" size={20} />
+                                                ) : (
+                                                    <ChevronRight className="text-neutral-400" size={20} />
+                                                )}
+                                                <span className="text-lg font-semibold text-white">
+                                                    {clientName}
+                                                </span>
+                                                <span className="bg-violet-600/20 text-violet-400 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                                                    {group.shifts.length}
+                                                </span>
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        </button>
+
+                                        {/* Schichten-Tabelle (nur wenn expanded) */}
+                                        {isExpanded && (
+                                            <table className="w-full">
+                                                <thead className="bg-neutral-800">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Datum</th>
+                                                        <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Mitarbeiter</th>
+                                                        <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Zeit</th>
+                                                        <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Backup</th>
+                                                        <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Status</th>
+                                                        <th className="px-3 py-2 text-right text-xs font-semibold text-neutral-400 uppercase tracking-wide">Aktionen</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-neutral-800">
+                                                    {group.shifts.map(shift => (
+                                                        <tr key={shift.id} className="hover:bg-neutral-800/50 transition">
+                                                            <td className="px-3 py-2 font-medium text-white text-sm">
+                                                                {format(new Date(shift.date), "EEE, dd.MM.", { locale: de })}
+                                                            </td>
+                                                            <td className="px-3 py-2 text-neutral-300 text-sm">{shift.employee.name}</td>
+                                                            <td className="px-3 py-2">
+                                                                <span className="bg-neutral-800 px-2 py-0.5 rounded text-xs font-medium text-neutral-300">
+                                                                    {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-3 py-2 text-neutral-400 text-sm">
+                                                                {shift.backupEmployee?.name || "-"}
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase ${
+                                                                    shift.status === "CONFIRMED" ? "bg-green-900/50 text-green-400" :
+                                                                    shift.status === "CHANGED" ? "bg-amber-900/50 text-amber-400" :
+                                                                    shift.status === "SUBMITTED" ? "bg-blue-900/50 text-blue-400" :
+                                                                    "bg-neutral-800 text-neutral-400"
+                                                                }`}>
+                                                                    {shift.status === "CONFIRMED" ? "Bestätigt" :
+                                                                     shift.status === "CHANGED" ? "Geändert" :
+                                                                     shift.status === "SUBMITTED" ? "Eingereicht" : "Geplant"}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-3 py-2 text-right">
+                                                                <div className="flex gap-1 justify-end">
+                                                                    <button
+                                                                        onClick={() => openEditModal(shift)}
+                                                                        className="p-1.5 text-neutral-500 hover:text-blue-400 hover:bg-blue-900/30 rounded transition"
+                                                                    >
+                                                                        <Edit2 size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDelete(shift.id)}
+                                                                        className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-900/30 rounded transition"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
+                                    </div>
+                                )
+                            })
+                        )}
                     </div>
                 ) : (
                     /* Kalender-Ansicht */

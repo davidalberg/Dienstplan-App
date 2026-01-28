@@ -92,7 +92,24 @@ export async function GET(req: NextRequest) {
                 where,
                 include: {
                     employee: {
-                        select: { id: true, name: true, email: true }
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                            team: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    client: {
+                                        select: {
+                                            id: true,
+                                            firstName: true,
+                                            lastName: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 },
                 orderBy: [{ date: "asc" }, { plannedStart: "asc" }]

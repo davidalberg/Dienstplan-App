@@ -468,43 +468,57 @@ export default function AssistantsPage() {
                 </div>
 
                 {/* Client Sections (Klienten = Teams) */}
-                <div className="space-y-4">
+                <div className="space-y-6">
                     {/* Ohne Klient Section */}
                     <div
-                        className={`bg-neutral-900 border rounded-xl overflow-hidden transition-colors ${
-                            dropTarget === "unassigned" ? "border-blue-500 bg-blue-500/10" : "border-neutral-800"
+                        className={`bg-neutral-900 border rounded-xl overflow-hidden transition-all duration-200 ${
+                            dropTarget === "unassigned" ? "border-violet-500 bg-violet-500/5 shadow-lg shadow-violet-500/20" : "border-neutral-800"
                         }`}
                         onDragOver={(e) => handleDragOver(e, null)}
                         onDragLeave={handleDragLeave}
                         onDrop={(e) => handleDrop(e, null)}
                     >
-                        <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={() => toggleClientExpanded("unassigned")}
-                                    className="p-1 hover:bg-neutral-800 rounded transition"
-                                >
+                        {/* Klient Header */}
+                        <button
+                            onClick={() => toggleClientExpanded("unassigned")}
+                            className="w-full flex items-center gap-4 p-5 hover:bg-neutral-800/50 transition-colors duration-150 group"
+                        >
+                            <div className="flex items-center gap-4 flex-1">
+                                {/* Chevron Icon */}
+                                <div className="text-neutral-400 group-hover:text-neutral-300 transition-colors">
                                     {expandedClients.has("unassigned") ? (
-                                        <ChevronDown size={18} className="text-neutral-400" />
+                                        <ChevronDown size={20} strokeWidth={2} />
                                     ) : (
-                                        <ChevronRight size={18} className="text-neutral-400" />
+                                        <ChevronRight size={20} strokeWidth={2} />
                                     )}
-                                </button>
-                                <span className="font-medium text-white">Ohne Klient</span>
-                                <span className="text-xs bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded">
-                                    {filterEmployees(unassignedEmployees).length}
-                                </span>
-                            </div>
-                        </div>
+                                </div>
 
+                                {/* Klient Name */}
+                                <h3 className="text-lg font-semibold text-white">
+                                    Ohne Klient
+                                </h3>
+
+                                {/* Badge mit Anzahl */}
+                                <div className="flex items-center gap-2 px-3 py-1 bg-neutral-800 rounded-full">
+                                    <Users size={14} className="text-neutral-400" />
+                                    <span className="text-sm font-medium text-neutral-300">
+                                        {filterEmployees(unassignedEmployees).length}
+                                    </span>
+                                </div>
+                            </div>
+                        </button>
+
+                        {/* Mitarbeiter-Liste */}
                         {expandedClients.has("unassigned") && (
-                            <div className="p-2 min-h-[60px]">
+                            <div className="border-t border-neutral-800">
                                 {filterEmployees(unassignedEmployees).length === 0 ? (
-                                    <div className="text-center py-4 text-neutral-500 text-sm">
-                                        {searchQuery ? "Keine Treffer" : "Assistenten hierher ziehen"}
+                                    <div className="text-center py-8 px-4">
+                                        <p className="text-neutral-500 text-sm">
+                                            {searchQuery ? "Keine Treffer" : "Assistenten hierher ziehen"}
+                                        </p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-1">
+                                    <div className="p-3 space-y-2">
                                         {filterEmployees(unassignedEmployees).map((employee) => (
                                             <EmployeeCard
                                                 key={employee.id}
@@ -526,6 +540,13 @@ export default function AssistantsPage() {
                         return (
                             <div
                                 key={client.id}
+                                className={`bg-neutral-900 border rounded-xl overflow-hidden transition-all duration-200 ${
+                                    dropTarget === client.id
+                                        ? "border-violet-500 bg-violet-500/5 shadow-lg shadow-violet-500/20"
+                                        : clientDropTarget === client.id
+                                            ? "border-blue-500 bg-blue-500/5 shadow-lg shadow-blue-500/20"
+                                            : "border-neutral-800"
+                                }`}
                                 draggable
                                 onDragStart={(e) => handleClientDragStart(e, client)}
                                 onDragOver={(e) => {
@@ -543,51 +564,61 @@ export default function AssistantsPage() {
                                         handleDrop(e, client.id)
                                     }
                                 }}
-                                className={`bg-neutral-900 border rounded-xl overflow-hidden transition-colors ${
-                                    dropTarget === client.id
-                                        ? "border-blue-500 bg-blue-500/10"
-                                        : clientDropTarget === client.id
-                                            ? "border-purple-500 bg-purple-500/10"
-                                            : "border-neutral-800"
-                                }`}
                             >
-                                <div className="flex items-center justify-between p-4 border-b border-neutral-800 cursor-grab active:cursor-grabbing">
-                                    <div className="flex items-center gap-3 flex-1">
-                                        <GripVertical size={16} className="text-neutral-600 hover:text-neutral-400" />
-                                        <button
-                                            onClick={() => toggleClientExpanded(client.id)}
-                                            className="p-1 hover:bg-neutral-800 rounded transition"
-                                        >
-                                            {expandedClients.has(client.id) ? (
-                                                <ChevronDown size={18} className="text-neutral-400" />
-                                            ) : (
-                                                <ChevronRight size={18} className="text-neutral-400" />
-                                            )}
-                                        </button>
+                                {/* Klient Header */}
+                                <div className="flex items-center gap-4 p-5 cursor-grab active:cursor-grabbing group hover:bg-neutral-800/50 transition-colors duration-150">
+                                    {/* Drag Handle */}
+                                    <div className="text-neutral-600 group-hover:text-neutral-400 transition-colors">
+                                        <GripVertical size={20} strokeWidth={2} />
+                                    </div>
 
-                                        <div className={`w-8 h-8 rounded-full ${getAvatarColor(client.firstName + client.lastName)} flex items-center justify-center`}>
-                                            <span className="text-white text-sm font-medium">
-                                                {client.firstName.charAt(0).toUpperCase()}
-                                            </span>
-                                        </div>
+                                    {/* Chevron Button */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            toggleClientExpanded(client.id)
+                                        }}
+                                        className="text-neutral-400 hover:text-neutral-300 transition-colors"
+                                    >
+                                        {expandedClients.has(client.id) ? (
+                                            <ChevronDown size={20} strokeWidth={2} />
+                                        ) : (
+                                            <ChevronRight size={20} strokeWidth={2} />
+                                        )}
+                                    </button>
 
-                                        <span className="font-medium text-white">
-                                            {client.firstName} {client.lastName}
+                                    {/* Avatar */}
+                                    <div className={`w-10 h-10 rounded-full ${getAvatarColor(client.firstName + client.lastName)} flex items-center justify-center shrink-0`}>
+                                        <span className="text-white text-base font-semibold">
+                                            {client.firstName.charAt(0).toUpperCase()}
                                         </span>
-                                        <span className="text-xs bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded">
+                                    </div>
+
+                                    {/* Klient Name */}
+                                    <h3 className="text-lg font-semibold text-white flex-1">
+                                        {client.firstName} {client.lastName}
+                                    </h3>
+
+                                    {/* Badge mit Anzahl */}
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-neutral-800 rounded-full">
+                                        <Users size={14} className="text-neutral-400" />
+                                        <span className="text-sm font-medium text-neutral-300">
                                             {clientEmployees.length}
                                         </span>
                                     </div>
                                 </div>
 
+                                {/* Mitarbeiter-Liste */}
                                 {expandedClients.has(client.id) && (
-                                    <div className="p-2 min-h-[60px]">
+                                    <div className="border-t border-neutral-800">
                                         {clientEmployees.length === 0 ? (
-                                            <div className="text-center py-4 text-neutral-500 text-sm">
-                                                {searchQuery ? "Keine Treffer" : "Assistenten hierher ziehen"}
+                                            <div className="text-center py-8 px-4">
+                                                <p className="text-neutral-500 text-sm">
+                                                    {searchQuery ? "Keine Treffer" : "Assistenten hierher ziehen"}
+                                                </p>
                                             </div>
                                         ) : (
-                                            <div className="space-y-1">
+                                            <div className="p-3 space-y-2">
                                                 {clientEmployees.map((employee) => (
                                                     <EmployeeCard
                                                         key={employee.id}
@@ -823,48 +854,62 @@ function EmployeeCard({
         <div
             draggable
             onDragStart={onDragStart}
-            className="flex items-center gap-3 p-3 bg-neutral-800/50 hover:bg-neutral-800 rounded-lg cursor-grab active:cursor-grabbing group transition"
+            className="flex items-center gap-4 p-4 bg-neutral-800/30 hover:bg-neutral-800/60 rounded-lg cursor-grab active:cursor-grabbing group transition-all duration-150 border border-transparent hover:border-neutral-700"
         >
-            <GripVertical size={16} className="text-neutral-600 group-hover:text-neutral-400" />
+            {/* Drag Handle */}
+            <div className="text-neutral-600 group-hover:text-neutral-400 transition-colors">
+                <GripVertical size={18} strokeWidth={2} />
+            </div>
 
-            <div className={`w-9 h-9 rounded-full ${getAvatarColor(employee.name || employee.email)} flex items-center justify-center shrink-0`}>
-                <span className="text-white text-sm font-medium">
+            {/* Avatar */}
+            <div className={`w-10 h-10 rounded-full ${getAvatarColor(employee.name || employee.email)} flex items-center justify-center shrink-0 shadow-sm`}>
+                <span className="text-white text-base font-semibold">
                     {(employee.name || employee.email).charAt(0).toUpperCase()}
                 </span>
             </div>
 
+            {/* Info */}
             <div className="flex-1 min-w-0">
-                <p className="text-white font-medium text-sm truncate">{employee.name || "Unbenannt"}</p>
-                <p className="text-neutral-500 text-xs truncate">{employee.email}</p>
+                <p className="text-white font-medium text-base truncate">
+                    {employee.name || "Unbenannt"}
+                </p>
+                <p className="text-neutral-400 text-sm truncate mt-0.5">
+                    {employee.email}
+                </p>
             </div>
 
-            {/* Show if employee has multiple clients */}
+            {/* Multiple Clients Badge */}
             {employee.clients && employee.clients.length > 1 && (
-                <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded">
-                    +{employee.clients.length - 1} Klient{employee.clients.length > 2 ? "en" : ""}
-                </span>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-500/10 border border-violet-500/20 rounded-md">
+                    <span className="text-xs font-medium text-violet-400">
+                        +{employee.clients.length - 1} Klient{employee.clients.length > 2 ? "en" : ""}
+                    </span>
+                </div>
             )}
 
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+            {/* Action Buttons - Hover to reveal */}
+            <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                 <button
                     onClick={(e) => {
                         e.stopPropagation()
                         onEdit()
                     }}
-                    className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-700 rounded transition"
+                    className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-700 rounded-md transition-colors"
                     title="Bearbeiten"
+                    aria-label="Assistent bearbeiten"
                 >
-                    <Edit2 size={14} />
+                    <Edit2 size={16} strokeWidth={2} />
                 </button>
                 <button
                     onClick={(e) => {
                         e.stopPropagation()
                         onDelete()
                     }}
-                    className="p-1.5 text-neutral-400 hover:text-red-400 hover:bg-neutral-700 rounded transition"
+                    className="p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-700 rounded-md transition-colors"
                     title="Löschen"
+                    aria-label="Assistent löschen"
                 >
-                    <Trash2 size={14} />
+                    <Trash2 size={16} strokeWidth={2} />
                 </button>
             </div>
         </div>
