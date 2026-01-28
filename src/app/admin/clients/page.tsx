@@ -5,6 +5,12 @@ import { UserCircle, Edit2, Trash2, Plus, X, Save, Search, ArrowUpDown, Users, C
 import { useClients } from "@/hooks/use-admin-data"
 import { toast } from "sonner"
 
+interface Employee {
+    id: string
+    name: string | null
+    email: string
+}
+
 interface Client {
     id: string
     firstName: string
@@ -13,13 +19,7 @@ interface Client {
     phone: string | null
     state: string | null
     isActive: boolean
-    teams: Array<{ id: string; name: string }>
-}
-
-interface Team {
-    id: string
-    name: string
-    clientId: string | null
+    employees: Employee[]
 }
 
 const BUNDESLAENDER = [
@@ -68,7 +68,7 @@ export default function ClientsPage() {
 
     // Lokaler State für optimistische Updates
     const [clients, setClients] = useState<Client[]>([])
-    const [teams, setTeams] = useState<Team[]>([])
+    const [allEmployees, setAllEmployees] = useState<Employee[]>([])
     const [loading, setLoading] = useState(false)
 
     // Sync SWR data to local state
@@ -77,17 +77,17 @@ export default function ClientsPage() {
         setLoading(isLoading)
     }, [swrClients, isLoading])
 
-    // Teams laden
+    // Alle Assistenzkräfte laden
     useEffect(() => {
-        fetchTeams()
+        fetchEmployees()
     }, [])
 
-    const fetchTeams = async () => {
+    const fetchEmployees = async () => {
         try {
-            const res = await fetch("/api/admin/teams")
+            const res = await fetch("/api/admin/employees")
             if (res.ok) {
                 const data = await res.json()
-                setTeams(data.teams || [])
+                setAllEmployees(data.employees || [])
             }
         } catch (err) {
             console.error(err)
@@ -105,7 +105,7 @@ export default function ClientsPage() {
         email: "",
         phone: "",
         state: "",
-        teamIds: [] as string[]
+        employeeIds: [] as string[]
     })
 
     // Alte fetchClients-Funktion durch mutate() ersetzen
@@ -119,7 +119,7 @@ export default function ClientsPage() {
             email: "",
             phone: "",
             state: "",
-            teamIds: []
+            employeeIds: []
         })
         setShowModal(true)
     }
@@ -132,7 +132,7 @@ export default function ClientsPage() {
             email: client.email || "",
             phone: client.phone || "",
             state: client.state || "",
-            teamIds: client.teams.map(t => t.id)
+            employeeIds: client.employees.map(e => e.id)
         })
         setShowModal(true)
     }
@@ -157,7 +157,6 @@ export default function ClientsPage() {
                     toast.success("Klient aktualisiert")
                     setShowModal(false)
                     fetchClients()
-                    fetchTeams()
                 } else {
                     const err = await res.json()
                     toast.error(err.error)
@@ -339,12 +338,12 @@ export default function ClientsPage() {
                                         </p>
                                     </div>
 
-                                    {/* Teams Badge */}
-                                    {client.teams.length > 0 && (
+                                    {/* Employees Badge */}
+                                    {client.employees.length > 0 && (
                                         <div className="hidden sm:flex items-center gap-1">
                                             <Users className="w-3 h-3 text-purple-400" />
                                             <span className="text-xs text-purple-400">
-                                                {client.teams.length} Team{client.teams.length > 1 ? 's' : ''}
+                                                {client.employees.length} Assistenzkraft{client.employees.length > 1 ? 'kräfte' : ''}
                                             </span>
                                         </div>
                                     )}
@@ -404,7 +403,7 @@ export default function ClientsPage() {
                 {showModal && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center">
                         <div className="absolute inset-0 bg-black/60" onClick={() => setShowModal(false)} />
-                        <div className="relative bg-neutral-900 border border-neutral-700 rounded-xl p-6 w-full max-w-md shadow-2xl">
+                        <div className="relative bg-neutral-900 border border-neutral-700 rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-xl font-bold text-white">
                                     {editingClient ? "Klient bearbeiten" : "Klient erstellen"}
@@ -484,59 +483,56 @@ export default function ClientsPage() {
                                     </select>
                                 </div>
 
-                                {/* Teams zuweisen */}
+                                {/* Assistenzkräfte zuweisen */}
                                 {editingClient && (
                                     <div>
                                         <label className="block text-sm font-medium text-neutral-300 mb-2">
                                             <Users className="inline-block w-4 h-4 mr-1" />
-                                            Zugewiesene Teams
+                                            Zugewiesene Assistenzkräfte
                                         </label>
-                                        <div className="space-y-2 max-h-40 overflow-y-auto p-2 bg-neutral-800 border border-neutral-700 rounded-lg">
-                                            {teams.length === 0 ? (
-                                                <p className="text-neutral-500 text-sm py-2">Keine Teams vorhanden</p>
+                                        <div className="space-y-2 max-h-48 overflow-y-auto p-2 bg-neutral-800 border border-neutral-700 rounded-lg">
+                                            {allEmployees.length === 0 ? (
+                                                <p className="text-neutral-500 text-sm py-2">Keine Assistenzkräfte vorhanden</p>
                                             ) : (
-                                                teams.map((team) => (
+                                                allEmployees.map((emp) => (
                                                     <label
-                                                        key={team.id}
+                                                        key={emp.id}
                                                         className="flex items-center gap-3 p-2 rounded hover:bg-neutral-700/50 cursor-pointer"
                                                     >
                                                         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                                            formData.teamIds.includes(team.id)
+                                                            formData.employeeIds.includes(emp.id)
                                                                 ? "bg-purple-600 border-purple-600"
                                                                 : "border-neutral-600"
                                                         }`}>
-                                                            {formData.teamIds.includes(team.id) && (
+                                                            {formData.employeeIds.includes(emp.id) && (
                                                                 <Check className="w-3 h-3 text-white" />
                                                             )}
                                                         </div>
                                                         <input
                                                             type="checkbox"
-                                                            checked={formData.teamIds.includes(team.id)}
+                                                            checked={formData.employeeIds.includes(emp.id)}
                                                             onChange={(e) => {
                                                                 if (e.target.checked) {
                                                                     setFormData({
                                                                         ...formData,
-                                                                        teamIds: [...formData.teamIds, team.id]
+                                                                        employeeIds: [...formData.employeeIds, emp.id]
                                                                     })
                                                                 } else {
                                                                     setFormData({
                                                                         ...formData,
-                                                                        teamIds: formData.teamIds.filter(id => id !== team.id)
+                                                                        employeeIds: formData.employeeIds.filter(id => id !== emp.id)
                                                                     })
                                                                 }
                                                             }}
                                                             className="sr-only"
                                                         />
-                                                        <span className="text-white text-sm">{team.name}</span>
-                                                        {team.clientId && team.clientId !== editingClient.id && (
-                                                            <span className="text-xs text-amber-400">(bereits zugewiesen)</span>
-                                                        )}
+                                                        <span className="text-white text-sm">{emp.name || emp.email}</span>
                                                     </label>
                                                 ))
                                             )}
                                         </div>
                                         <p className="text-xs text-neutral-500 mt-1">
-                                            Teams werden diesem Klienten für den Stundennachweis zugeordnet
+                                            Assistenzkräfte die für diesen Klienten arbeiten
                                         </p>
                                     </div>
                                 )}

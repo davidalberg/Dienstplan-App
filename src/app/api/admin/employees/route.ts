@@ -46,6 +46,13 @@ export async function GET(req: NextRequest) {
                 team: {
                     select: { name: true }
                 },
+                clients: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true
+                    }
+                },
                 _count: {
                     select: { timesheets: true }
                 },
@@ -64,12 +71,14 @@ export async function GET(req: NextRequest) {
             const sickDays = emp.timesheets.filter(ts => ts.absenceType === "SICK").length
 
             // Remove timesheets from response (we only needed them for counting)
+            // Keep clients for the Assistenten page
             const { timesheets, ...employeeData } = emp
 
             return {
                 ...employeeData,
                 vacationDays,
-                sickDays
+                sickDays,
+                clients: emp.clients || []
             }
         })
 

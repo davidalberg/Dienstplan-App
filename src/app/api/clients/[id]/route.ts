@@ -18,10 +18,11 @@ export async function GET(
         const client = await prisma.client.findUnique({
             where: { id },
             include: {
-                teams: {
+                employees: {
                     select: {
                         id: true,
-                        name: true
+                        name: true,
+                        email: true
                     }
                 }
             }
@@ -78,21 +79,11 @@ export async function PUT(
         if (state !== undefined) updateData.state = state || null
         if (isActive !== undefined) updateData.isActive = isActive
 
-        // Team-Zuweisungen aktualisieren (teamIds = Array von Team-IDs)
-        const { teamIds } = body
-        if (teamIds !== undefined) {
-            // Erst alle Teams von diesem Client entfernen
-            await prisma.team.updateMany({
-                where: { clientId: id },
-                data: { clientId: null }
-            })
-
-            // Dann die neuen Teams zuweisen
-            if (teamIds.length > 0) {
-                await prisma.team.updateMany({
-                    where: { id: { in: teamIds } },
-                    data: { clientId: id }
-                })
+        // Assistenzkräfte-Zuweisungen aktualisieren (employeeIds = Array von User-IDs)
+        const { employeeIds } = body
+        if (employeeIds !== undefined) {
+            updateData.employees = {
+                set: employeeIds.map((empId: string) => ({ id: empId }))
             }
         }
 
@@ -100,10 +91,11 @@ export async function PUT(
             where: { id },
             data: updateData,
             include: {
-                teams: {
+                employees: {
                     select: {
                         id: true,
-                        name: true
+                        name: true,
+                        email: true
                     }
                 }
             }

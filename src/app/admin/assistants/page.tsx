@@ -3,29 +3,24 @@
 import { useEffect, useState, DragEvent } from "react"
 import {
     Users, Edit2, Trash2, X, Save, Search,
-    GripVertical, UserPlus, FolderPlus, Check, ChevronDown, ChevronRight
+    GripVertical, UserPlus, ChevronDown, ChevronRight
 } from "lucide-react"
 import { toast } from "sonner"
 
 interface Employee {
     id: string
     email: string
-    name: string
+    name: string | null
     employeeId: string | null
-}
-
-interface Team {
-    id: string
-    name: string
-    clientId: string | null
-    client: { id: string; firstName: string; lastName: string } | null
-    members: Employee[]
+    clients: Array<{ id: string; firstName: string; lastName: string }>
 }
 
 interface Client {
     id: string
     firstName: string
     lastName: string
+    displayOrder: number
+    employees: Array<{ id: string; name: string | null; email: string }>
 }
 
 function getAvatarColor(name: string): string {
@@ -42,23 +37,19 @@ function getAvatarColor(name: string): string {
 }
 
 export default function AssistantsPage() {
-    const [teams, setTeams] = useState<Team[]>([])
-    const [unassignedEmployees, setUnassignedEmployees] = useState<Employee[]>([])
     const [clients, setClients] = useState<Client[]>([])
+    const [allEmployees, setAllEmployees] = useState<Employee[]>([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
-    const [draggedEmployee, setDraggedEmployee] = useState<{ employee: Employee; fromTeamId: string | null } | null>(null)
+    const [draggedEmployee, setDraggedEmployee] = useState<{ employee: Employee; fromClientId: string | null } | null>(null)
+    const [draggedClient, setDraggedClient] = useState<Client | null>(null)
     const [dropTarget, setDropTarget] = useState<string | null>(null)
-    const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set(["unassigned"]))
+    const [clientDropTarget, setClientDropTarget] = useState<string | null>(null)
+    const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set(["unassigned"]))
 
     // Modal states
-    const [showCreateTeam, setShowCreateTeam] = useState(false)
     const [showCreateEmployee, setShowCreateEmployee] = useState(false)
     const [showEditEmployee, setShowEditEmployee] = useState<Employee | null>(null)
-    const [newTeamName, setNewTeamName] = useState("")
-    const [newTeamClientId, setNewTeamClientId] = useState("")
-    const [editingTeamId, setEditingTeamId] = useState<string | null>(null)
-    const [editingTeamName, setEditingTeamName] = useState("")
 
     // Employee form
     const [employeeForm, setEmployeeForm] = useState({
@@ -67,7 +58,6 @@ export default function AssistantsPage() {
         password: "",
         name: "",
         employeeId: "",
-        team: "",
         entryDate: "",
         exitDate: "",
         hourlyWage: 0,
@@ -84,30 +74,29 @@ export default function AssistantsPage() {
         fetchData()
     }, [])
 
-    // Expand all teams by default after loading
+    // Expand all clients by default after loading
     useEffect(() => {
-        if (teams.length > 0) {
-            setExpandedTeams(new Set(["unassigned", ...teams.map(t => t.id)]))
+        if (clients.length > 0) {
+            setExpandedClients(new Set(["unassigned", ...clients.map(c => c.id)]))
         }
-    }, [teams.length])
+    }, [clients.length])
 
     const fetchData = async () => {
         setLoading(true)
         try {
-            const [teamsRes, clientsRes] = await Promise.all([
-                fetch("/api/admin/teams"),
-                fetch("/api/clients")
+            const [clientsRes, employeesRes] = await Promise.all([
+                fetch("/api/clients?isActive=true"),
+                fetch("/api/admin/employees")
             ])
-
-            if (teamsRes.ok) {
-                const data = await teamsRes.json()
-                setTeams(data.teams || [])
-                setUnassignedEmployees(data.unassignedEmployees || [])
-            }
 
             if (clientsRes.ok) {
                 const data = await clientsRes.json()
                 setClients(data.clients || [])
+            }
+
+            if (employeesRes.ok) {
+                const data = await employeesRes.json()
+                setAllEmployees(data.employees || [])
             }
         } catch (err) {
             console.error(err)
@@ -117,66 +106,82 @@ export default function AssistantsPage() {
         }
     }
 
-    // Drag & Drop handlers
-    const handleDragStart = (e: DragEvent, employee: Employee, fromTeamId: string | null) => {
-        setDraggedEmployee({ employee, fromTeamId })
+    // Get unassigned employees (those not assigned to any client)
+    const unassignedEmployees = allEmployees.filter(e => !e.clients || e.clients.length === 0)
+
+    // Get employees for a specific client
+    const getEmployeesForClient = (clientId: string) => {
+        return allEmployees.filter(e => e.clients?.some(c => c.id === clientId))
+    }
+
+    // Drag & Drop handlers for employees
+    const handleDragStart = (e: DragEvent, employee: Employee, fromClientId: string | null) => {
+        setDraggedEmployee({ employee, fromClientId })
+        setDraggedClient(null)
         e.dataTransfer.effectAllowed = "move"
         e.dataTransfer.setData("text/plain", employee.id)
     }
 
-    const handleDragOver = (e: DragEvent, teamId: string | null) => {
+    const handleDragOver = (e: DragEvent, clientId: string | null) => {
         e.preventDefault()
         e.dataTransfer.dropEffect = "move"
-        setDropTarget(teamId)
+        if (draggedEmployee) {
+            setDropTarget(clientId)
+        }
     }
 
     const handleDragLeave = () => {
         setDropTarget(null)
     }
 
-    const handleDrop = async (e: DragEvent, toTeamId: string | null) => {
+    const handleDrop = async (e: DragEvent, toClientId: string | null) => {
         e.preventDefault()
         setDropTarget(null)
 
         if (!draggedEmployee) return
-        if (draggedEmployee.fromTeamId === toTeamId) {
+        if (draggedEmployee.fromClientId === toClientId) {
             setDraggedEmployee(null)
             return
         }
 
-        const { employee, fromTeamId } = draggedEmployee
+        const { employee, fromClientId } = draggedEmployee
         setDraggedEmployee(null)
 
         // Optimistic update
-        if (fromTeamId) {
-            setTeams(prev => prev.map(t =>
-                t.id === fromTeamId
-                    ? { ...t, members: t.members.filter(m => m.id !== employee.id) }
-                    : t
-            ))
-        } else {
-            setUnassignedEmployees(prev => prev.filter(e => e.id !== employee.id))
-        }
+        setAllEmployees(prev => prev.map(emp => {
+            if (emp.id !== employee.id) return emp
 
-        if (toTeamId) {
-            setTeams(prev => prev.map(t =>
-                t.id === toTeamId
-                    ? { ...t, members: [...t.members, employee] }
-                    : t
-            ))
-        } else {
-            setUnassignedEmployees(prev => [...prev, employee])
-        }
+            let newClients = [...(emp.clients || [])]
+
+            // Remove from old client
+            if (fromClientId) {
+                newClients = newClients.filter(c => c.id !== fromClientId)
+            }
+
+            // Add to new client
+            if (toClientId) {
+                const targetClient = clients.find(c => c.id === toClientId)
+                if (targetClient && !newClients.some(c => c.id === toClientId)) {
+                    newClients.push({
+                        id: targetClient.id,
+                        firstName: targetClient.firstName,
+                        lastName: targetClient.lastName
+                    })
+                }
+            }
+
+            return { ...emp, clients: newClients }
+        }))
 
         // API call
         try {
-            const res = await fetch("/api/admin/teams", {
+            const res = await fetch("/api/admin/employee-assignment", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    action: "assignEmployee",
                     employeeId: employee.id,
-                    teamId: toTeamId
+                    fromClientId,
+                    toClientId
                 })
             })
 
@@ -184,7 +189,10 @@ export default function AssistantsPage() {
                 throw new Error("Failed to assign")
             }
 
-            toast.success(`${employee.name} wurde verschoben`)
+            const targetName = toClientId
+                ? clients.find(c => c.id === toClientId)?.firstName + " " + clients.find(c => c.id === toClientId)?.lastName
+                : "Ohne Klient"
+            toast.success(`${employee.name || employee.email} → ${targetName}`)
         } catch {
             // Rollback on error
             fetchData()
@@ -192,88 +200,68 @@ export default function AssistantsPage() {
         }
     }
 
-    const handleCreateTeam = async () => {
-        if (!newTeamName.trim()) {
-            toast.error("Teamname erforderlich")
-            return
-        }
+    // Drag & Drop handlers for clients (reordering)
+    const handleClientDragStart = (e: DragEvent, client: Client) => {
+        setDraggedClient(client)
+        setDraggedEmployee(null)
+        e.dataTransfer.effectAllowed = "move"
+        e.dataTransfer.setData("text/plain", client.id)
+    }
 
-        try {
-            const res = await fetch("/api/admin/teams", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: newTeamName,
-                    clientId: newTeamClientId || null
-                })
-            })
-
-            if (res.ok) {
-                toast.success("Team erstellt")
-                setShowCreateTeam(false)
-                setNewTeamName("")
-                setNewTeamClientId("")
-                fetchData()
-            } else {
-                const err = await res.json()
-                toast.error(err.error)
-            }
-        } catch {
-            toast.error("Fehler beim Erstellen")
+    const handleClientDragOver = (e: DragEvent, clientId: string) => {
+        e.preventDefault()
+        if (draggedClient && draggedClient.id !== clientId) {
+            setClientDropTarget(clientId)
         }
     }
 
-    const handleDeleteTeam = async (team: Team) => {
-        const hasMembers = team.members.length > 0
-        const message = hasMembers
-            ? `Team "${team.name}" hat ${team.members.length} Mitarbeiter. Diese werden in "Ohne Team" verschoben. Fortfahren?`
-            : `Team "${team.name}" wirklich löschen?`
-
-        if (!confirm(message)) return
-
-        try {
-            const res = await fetch(`/api/admin/teams?id=${team.id}&force=true`, {
-                method: "DELETE"
-            })
-
-            if (res.ok) {
-                toast.success("Team gelöscht")
-                fetchData()
-            } else {
-                const err = await res.json()
-                toast.error(err.error)
-            }
-        } catch {
-            toast.error("Fehler beim Löschen")
-        }
+    const handleClientDragLeave = () => {
+        setClientDropTarget(null)
     }
 
-    const handleRenameTeam = async (teamId: string) => {
-        if (!editingTeamName.trim()) {
-            setEditingTeamId(null)
+    const handleClientDrop = async (e: DragEvent, targetClientId: string) => {
+        e.preventDefault()
+        setClientDropTarget(null)
+
+        if (!draggedClient || draggedClient.id === targetClientId) {
+            setDraggedClient(null)
             return
         }
 
+        const draggedId = draggedClient.id
+        setDraggedClient(null)
+
+        // Find indices
+        const currentIndex = clients.findIndex(c => c.id === draggedId)
+        const targetIndex = clients.findIndex(c => c.id === targetClientId)
+
+        if (currentIndex === -1 || targetIndex === -1) return
+
+        // Optimistic reorder
+        const newClients = [...clients]
+        const [removed] = newClients.splice(currentIndex, 1)
+        newClients.splice(targetIndex, 0, removed)
+        setClients(newClients)
+
+        // API call to save new order
         try {
-            const res = await fetch("/api/admin/teams", {
+            const res = await fetch("/api/clients/reorder", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    teamId,
-                    name: editingTeamName
+                    clientIds: newClients.map(c => c.id)
                 })
             })
 
-            if (res.ok) {
-                toast.success("Team umbenannt")
-                setEditingTeamId(null)
-                fetchData()
-            } else {
-                const err = await res.json()
-                toast.error(err.error)
+            if (!res.ok) {
+                throw new Error("Failed to reorder")
             }
+
+            toast.success("Reihenfolge gespeichert")
         } catch {
-            toast.error("Fehler beim Umbenennen")
+            // Rollback on error
+            fetchData()
+            toast.error("Fehler beim Speichern der Reihenfolge")
         }
     }
 
@@ -368,7 +356,6 @@ export default function AssistantsPage() {
                         password: "",
                         name: fullEmployee.name || "",
                         employeeId: fullEmployee.employeeId || "",
-                        team: fullEmployee.team?.name || "",
                         entryDate: fullEmployee.entryDate ? new Date(fullEmployee.entryDate).toISOString().split('T')[0] : "",
                         exitDate: fullEmployee.exitDate ? new Date(fullEmployee.exitDate).toISOString().split('T')[0] : "",
                         hourlyWage: fullEmployee.hourlyWage || 0,
@@ -395,7 +382,6 @@ export default function AssistantsPage() {
             password: "",
             name: "",
             employeeId: "",
-            team: "",
             entryDate: "",
             exitDate: "",
             hourlyWage: 0,
@@ -409,13 +395,13 @@ export default function AssistantsPage() {
         })
     }
 
-    const toggleTeamExpanded = (teamId: string) => {
-        setExpandedTeams(prev => {
+    const toggleClientExpanded = (clientId: string) => {
+        setExpandedClients(prev => {
             const next = new Set(prev)
-            if (next.has(teamId)) {
-                next.delete(teamId)
+            if (next.has(clientId)) {
+                next.delete(clientId)
             } else {
-                next.add(teamId)
+                next.add(clientId)
             }
             return next
         })
@@ -431,7 +417,7 @@ export default function AssistantsPage() {
         )
     }
 
-    const totalEmployees = teams.reduce((acc, t) => acc + t.members.length, 0) + unassignedEmployees.length
+    const totalEmployees = allEmployees.length
 
     if (loading) {
         return (
@@ -452,28 +438,19 @@ export default function AssistantsPage() {
                             Assistenten
                         </h1>
                         <p className="text-neutral-500 text-sm mt-1">
-                            {totalEmployees} Mitarbeiter in {teams.length} Teams - Drag & Drop zum Verschieben
+                            {totalEmployees} Assistenzkräfte - Drag & Drop zum Verschieben
                         </p>
                     </div>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setShowCreateTeam(true)}
-                            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg transition flex items-center gap-2"
-                        >
-                            <FolderPlus size={18} />
-                            Neues Team
-                        </button>
-                        <button
-                            onClick={() => {
-                                resetEmployeeForm()
-                                setShowCreateEmployee(true)
-                            }}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2"
-                        >
-                            <UserPlus size={18} />
-                            Neuer Assistent
-                        </button>
-                    </div>
+                    <button
+                        onClick={() => {
+                            resetEmployeeForm()
+                            setShowCreateEmployee(true)
+                        }}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2"
+                    >
+                        <UserPlus size={18} />
+                        Neuer Assistent
+                    </button>
                 </div>
 
                 {/* Search */}
@@ -490,9 +467,9 @@ export default function AssistantsPage() {
                     </div>
                 </div>
 
-                {/* Teams */}
+                {/* Client Sections (Klienten = Teams) */}
                 <div className="space-y-4">
-                    {/* Ohne Team Section */}
+                    {/* Ohne Klient Section */}
                     <div
                         className={`bg-neutral-900 border rounded-xl overflow-hidden transition-colors ${
                             dropTarget === "unassigned" ? "border-blue-500 bg-blue-500/10" : "border-neutral-800"
@@ -504,23 +481,23 @@ export default function AssistantsPage() {
                         <div className="flex items-center justify-between p-4 border-b border-neutral-800">
                             <div className="flex items-center gap-3">
                                 <button
-                                    onClick={() => toggleTeamExpanded("unassigned")}
+                                    onClick={() => toggleClientExpanded("unassigned")}
                                     className="p-1 hover:bg-neutral-800 rounded transition"
                                 >
-                                    {expandedTeams.has("unassigned") ? (
+                                    {expandedClients.has("unassigned") ? (
                                         <ChevronDown size={18} className="text-neutral-400" />
                                     ) : (
                                         <ChevronRight size={18} className="text-neutral-400" />
                                     )}
                                 </button>
-                                <span className="font-medium text-white">Ohne Team</span>
+                                <span className="font-medium text-white">Ohne Klient</span>
                                 <span className="text-xs bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded">
                                     {filterEmployees(unassignedEmployees).length}
                                 </span>
                             </div>
                         </div>
 
-                        {expandedTeams.has("unassigned") && (
+                        {expandedClients.has("unassigned") && (
                             <div className="p-2 min-h-[60px]">
                                 {filterEmployees(unassignedEmployees).length === 0 ? (
                                     <div className="text-center py-4 text-neutral-500 text-sm">
@@ -543,176 +520,100 @@ export default function AssistantsPage() {
                         )}
                     </div>
 
-                    {/* Team Sections */}
-                    {teams.map((team) => (
-                        <div
-                            key={team.id}
-                            className={`bg-neutral-900 border rounded-xl overflow-hidden transition-colors ${
-                                dropTarget === team.id ? "border-blue-500 bg-blue-500/10" : "border-neutral-800"
-                            }`}
-                            onDragOver={(e) => handleDragOver(e, team.id)}
-                            onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDrop(e, team.id)}
-                        >
-                            <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-                                <div className="flex items-center gap-3 flex-1">
-                                    <button
-                                        onClick={() => toggleTeamExpanded(team.id)}
-                                        className="p-1 hover:bg-neutral-800 rounded transition"
-                                    >
-                                        {expandedTeams.has(team.id) ? (
-                                            <ChevronDown size={18} className="text-neutral-400" />
-                                        ) : (
-                                            <ChevronRight size={18} className="text-neutral-400" />
-                                        )}
-                                    </button>
-
-                                    {editingTeamId === team.id ? (
-                                        <div className="flex items-center gap-2 flex-1">
-                                            <input
-                                                type="text"
-                                                value={editingTeamName}
-                                                onChange={(e) => setEditingTeamName(e.target.value)}
-                                                className="flex-1 px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-white text-sm"
-                                                autoFocus
-                                                onKeyDown={(e) => {
-                                                    if (e.key === "Enter") handleRenameTeam(team.id)
-                                                    if (e.key === "Escape") setEditingTeamId(null)
-                                                }}
-                                            />
-                                            <button
-                                                onClick={() => handleRenameTeam(team.id)}
-                                                className="p-1 text-green-400 hover:bg-neutral-800 rounded"
-                                            >
-                                                <Check size={16} />
-                                            </button>
-                                            <button
-                                                onClick={() => setEditingTeamId(null)}
-                                                className="p-1 text-neutral-400 hover:bg-neutral-800 rounded"
-                                            >
-                                                <X size={16} />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <span className="font-medium text-white">{team.name}</span>
-                                            {team.client && (
-                                                <span className="text-xs bg-violet-500/20 text-violet-400 px-2 py-0.5 rounded">
-                                                    {team.client.firstName} {team.client.lastName}
-                                                </span>
+                    {/* Client Sections (Klienten als Teams) */}
+                    {clients.map((client) => {
+                        const clientEmployees = filterEmployees(getEmployeesForClient(client.id))
+                        return (
+                            <div
+                                key={client.id}
+                                draggable
+                                onDragStart={(e) => handleClientDragStart(e, client)}
+                                onDragOver={(e) => {
+                                    handleDragOver(e, client.id)
+                                    handleClientDragOver(e, client.id)
+                                }}
+                                onDragLeave={() => {
+                                    handleDragLeave()
+                                    handleClientDragLeave()
+                                }}
+                                onDrop={(e) => {
+                                    if (draggedClient) {
+                                        handleClientDrop(e, client.id)
+                                    } else {
+                                        handleDrop(e, client.id)
+                                    }
+                                }}
+                                className={`bg-neutral-900 border rounded-xl overflow-hidden transition-colors ${
+                                    dropTarget === client.id
+                                        ? "border-blue-500 bg-blue-500/10"
+                                        : clientDropTarget === client.id
+                                            ? "border-purple-500 bg-purple-500/10"
+                                            : "border-neutral-800"
+                                }`}
+                            >
+                                <div className="flex items-center justify-between p-4 border-b border-neutral-800 cursor-grab active:cursor-grabbing">
+                                    <div className="flex items-center gap-3 flex-1">
+                                        <GripVertical size={16} className="text-neutral-600 hover:text-neutral-400" />
+                                        <button
+                                            onClick={() => toggleClientExpanded(client.id)}
+                                            className="p-1 hover:bg-neutral-800 rounded transition"
+                                        >
+                                            {expandedClients.has(client.id) ? (
+                                                <ChevronDown size={18} className="text-neutral-400" />
+                                            ) : (
+                                                <ChevronRight size={18} className="text-neutral-400" />
                                             )}
-                                            <span className="text-xs bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded">
-                                                {filterEmployees(team.members).length}
+                                        </button>
+
+                                        <div className={`w-8 h-8 rounded-full ${getAvatarColor(client.firstName + client.lastName)} flex items-center justify-center`}>
+                                            <span className="text-white text-sm font-medium">
+                                                {client.firstName.charAt(0).toUpperCase()}
                                             </span>
-                                        </>
-                                    )}
+                                        </div>
+
+                                        <span className="font-medium text-white">
+                                            {client.firstName} {client.lastName}
+                                        </span>
+                                        <span className="text-xs bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded">
+                                            {clientEmployees.length}
+                                        </span>
+                                    </div>
                                 </div>
 
-                                {editingTeamId !== team.id && (
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => {
-                                                setEditingTeamId(team.id)
-                                                setEditingTeamName(team.name)
-                                            }}
-                                            className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded transition"
-                                            title="Umbenennen"
-                                        >
-                                            <Edit2 size={16} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteTeam(team)}
-                                            className="p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-800 rounded transition"
-                                            title="Löschen"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
+                                {expandedClients.has(client.id) && (
+                                    <div className="p-2 min-h-[60px]">
+                                        {clientEmployees.length === 0 ? (
+                                            <div className="text-center py-4 text-neutral-500 text-sm">
+                                                {searchQuery ? "Keine Treffer" : "Assistenten hierher ziehen"}
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-1">
+                                                {clientEmployees.map((employee) => (
+                                                    <EmployeeCard
+                                                        key={employee.id}
+                                                        employee={employee}
+                                                        onDragStart={(e) => handleDragStart(e, employee, client.id)}
+                                                        onEdit={() => openEditEmployee(employee)}
+                                                        onDelete={() => handleDeleteEmployee(employee)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
+                        )
+                    })}
 
-                            {expandedTeams.has(team.id) && (
-                                <div className="p-2 min-h-[60px]">
-                                    {filterEmployees(team.members).length === 0 ? (
-                                        <div className="text-center py-4 text-neutral-500 text-sm">
-                                            {searchQuery ? "Keine Treffer" : "Assistenten hierher ziehen"}
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-1">
-                                            {filterEmployees(team.members).map((employee) => (
-                                                <EmployeeCard
-                                                    key={employee.id}
-                                                    employee={employee}
-                                                    onDragStart={(e) => handleDragStart(e, employee, team.id)}
-                                                    onEdit={() => openEditEmployee(employee)}
-                                                    onDelete={() => handleDeleteEmployee(employee)}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                    {clients.length === 0 && (
+                        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 text-center">
+                            <p className="text-neutral-500">Keine aktiven Klienten vorhanden.</p>
+                            <p className="text-neutral-600 text-sm mt-1">
+                                Erstelle zuerst Klienten unter &quot;Klienten&quot;.
+                            </p>
                         </div>
-                    ))}
+                    )}
                 </div>
-
-                {/* Create Team Modal */}
-                {showCreateTeam && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center">
-                        <div className="absolute inset-0 bg-black/60" onClick={() => setShowCreateTeam(false)} />
-                        <div className="relative bg-neutral-900 border border-neutral-700 rounded-xl p-6 w-full max-w-md shadow-2xl">
-                            <h2 className="text-xl font-bold text-white mb-4">Neues Team erstellen</h2>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-neutral-300 mb-1">Teamname *</label>
-                                    <input
-                                        type="text"
-                                        value={newTeamName}
-                                        onChange={(e) => setNewTeamName(e.target.value)}
-                                        placeholder="z.B. Team Max Mustermann"
-                                        className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        autoFocus
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-neutral-300 mb-1">Klient (optional)</label>
-                                    <select
-                                        value={newTeamClientId}
-                                        onChange={(e) => setNewTeamClientId(e.target.value)}
-                                        className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="">Kein Klient</option>
-                                        {clients.map((c) => (
-                                            <option key={c.id} value={c.id}>
-                                                {c.firstName} {c.lastName}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-neutral-500 mt-1">
-                                        Verknüpft das Team mit einem Assistenznehmer
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3 mt-6">
-                                <button
-                                    onClick={() => setShowCreateTeam(false)}
-                                    className="flex-1 px-4 py-2 border border-neutral-700 text-neutral-300 rounded-lg hover:bg-neutral-800 transition"
-                                >
-                                    Abbrechen
-                                </button>
-                                <button
-                                    onClick={handleCreateTeam}
-                                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-                                >
-                                    Erstellen
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 {/* Create/Edit Employee Modal */}
                 {(showCreateEmployee || showEditEmployee) && (
@@ -770,19 +671,6 @@ export default function AssistantsPage() {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-neutral-300 mb-1">Team</label>
-                                            <select
-                                                value={employeeForm.team}
-                                                onChange={(e) => setEmployeeForm({ ...employeeForm, team: e.target.value })}
-                                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            >
-                                                <option value="">Kein Team</option>
-                                                {teams.map((t) => (
-                                                    <option key={t.id} value={t.name}>{t.name}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="col-span-2">
                                             <label className="block text-sm font-medium text-neutral-300 mb-1">
                                                 {showEditEmployee ? "Passwort (leer = keine Änderung)" : "Passwort *"}
                                             </label>
@@ -949,6 +837,13 @@ function EmployeeCard({
                 <p className="text-white font-medium text-sm truncate">{employee.name || "Unbenannt"}</p>
                 <p className="text-neutral-500 text-xs truncate">{employee.email}</p>
             </div>
+
+            {/* Show if employee has multiple clients */}
+            {employee.clients && employee.clients.length > 1 && (
+                <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded">
+                    +{employee.clients.length - 1} Klient{employee.clients.length > 2 ? "en" : ""}
+                </span>
+            )}
 
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
                 <button

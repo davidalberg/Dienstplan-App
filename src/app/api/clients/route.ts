@@ -21,14 +21,16 @@ export async function GET(req: NextRequest) {
         const clients = await prisma.client.findMany({
             where: whereClause,
             include: {
-                teams: {
+                employees: {
                     select: {
                         id: true,
-                        name: true
+                        name: true,
+                        email: true
                     }
                 }
             },
             orderBy: [
+                { displayOrder: "asc" },
                 { lastName: "asc" },
                 { firstName: "asc" }
             ]

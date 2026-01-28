@@ -23,6 +23,9 @@ model User {
   employeeSignatures EmployeeSignature[]  // NEU: Multi-Employee-Signaturen
   team        Team?       @relation(fields: [teamId], references: [id])
 
+  // Many-to-many: Assistenzkraft arbeitet für mehrere Klienten
+  clients     Client[]
+
   // Neue Felder für Mitarbeiter-Verwaltung
   entryDate                DateTime?
   exitDate                 DateTime?
@@ -60,10 +63,12 @@ model Client {
   phone        String?
   state        String?   // Bundesland
   isActive     Boolean   @default(true)
+  displayOrder Int       @default(0)  // Für Sortierung/Reihenfolge
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   teams        Team[]
+  employees    User[]    // Many-to-many: Assistenzkräfte die für diesen Klienten arbeiten
 }
 
 model Timesheet {
