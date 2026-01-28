@@ -20,17 +20,17 @@ const Status = {
 async function main() {
     const hashedPassword = await bcrypt.hash('password123', 10)
 
-    // 1. Create Teams
+    // 1. Create Teams (für Test-Daten)
     const teamA = await prisma.team.upsert({
-        where: { name: 'Pflegedienst Nord' },
+        where: { name: 'Test Team A' },
         update: {},
-        create: { name: 'Pflegedienst Nord' },
+        create: { name: 'Test Team A' },
     })
 
     const teamB = await prisma.team.upsert({
-        where: { name: 'Pflegedienst Süd' },
+        where: { name: 'Test Team B' },
         update: {},
-        create: { name: 'Pflegedienst Süd' },
+        create: { name: 'Test Team B' },
     })
 
     // 2. Create Admin
