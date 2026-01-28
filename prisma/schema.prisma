@@ -229,3 +229,21 @@ model EmployeeSignature {
   @@index([teamSubmissionId])
   @@index([employeeId])
 }
+
+// Aktivitätsprotokoll für System-Events und Debugging
+model ActivityLog {
+  id          String   @id @default(cuid())
+  type        String   // INFO, WARNING, ERROR, SUCCESS
+  category    String   // SHIFT, SUBMISSION, CLIENT, EMPLOYEE, SYSTEM
+  action      String   // z.B. "Schicht erstellt", "Signatur hinzugefügt"
+  details     String?  @db.Text // JSON mit zusätzlichen Details
+  userId      String?  // Wer hat die Aktion ausgeführt
+  userName    String?  // Cached Name für schnelle Anzeige
+  entityId    String?  // ID des betroffenen Objekts
+  entityType  String?  // Typ: Timesheet, User, Client, etc.
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([type])
+  @@index([category])
+}

@@ -132,3 +132,27 @@ export function useAdminSubmissions(month?: number, year?: number) {
         mutate
     }
 }
+
+// Activity Log / Aktivitätsprotokoll
+export function useActivityLog(limit = 50, type?: string, category?: string) {
+    const params = new URLSearchParams({ limit: String(limit) })
+    if (type) params.set('type', type)
+    if (category) params.set('category', category)
+
+    const { data, error, isLoading, mutate } = useSWR(
+        `/api/admin/activity?${params}`,
+        fetcher,
+        {
+            ...swrConfig,
+            refreshInterval: 30000, // Auto-refresh alle 30 Sekunden
+        }
+    )
+
+    return {
+        activities: data?.activities || [],
+        total: data?.total || 0,
+        isLoading,
+        isError: error,
+        mutate
+    }
+}
