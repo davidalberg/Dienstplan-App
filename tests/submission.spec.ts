@@ -113,8 +113,8 @@ test.describe('Einreichungs-Prozess', () => {
         await page.locator('button[type="submit"]').click()
         await page.waitForURL('**/admin')
 
-        // Navigiere zu Einreichungen
-        await page.locator('text=Einreichungen').click()
+        // Navigiere zu Stundennachweise
+        await page.locator('text=Stundennachweise').click()
         await page.waitForURL('**/admin/submissions')
 
         // Seite sollte laden

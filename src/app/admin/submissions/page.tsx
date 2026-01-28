@@ -1,9 +1,23 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Calendar, Users, CheckCircle, Clock, AlertCircle, Download, Trash2, RotateCcw, XCircle, Eye, FileText, ChevronDown, ChevronRight } from "lucide-react"
+import {
+    ChevronLeft,
+    ChevronRight,
+    ChevronDown,
+    ChevronUp,
+    Plus,
+    Check,
+    Clock,
+    ExternalLink,
+    Eye,
+    RotateCcw,
+    Trash2,
+    XCircle,
+    Download,
+    FileText
+} from "lucide-react"
 import { formatTimeRange } from "@/lib/time-utils"
 
 interface EmployeeSignature {
@@ -67,36 +81,63 @@ const MONTH_NAMES = [
     "Juli", "August", "September", "Oktober", "November", "Dezember"
 ]
 
-const STATUS_LABELS: { [key: string]: string } = {
-    "NOT_STARTED": "Noch nicht gestartet",
-    "PENDING_EMPLOYEES": "Warten auf Mitarbeiter",
-    "PENDING_RECIPIENT": "Warten auf Assistenznehmer",
-    "COMPLETED": "Abgeschlossen"
+const MONTH_SHORT = [
+    "Jan.", "Feb.", "Mär.", "Apr.", "Mai", "Jun.",
+    "Jul.", "Aug.", "Sep.", "Okt.", "Nov.", "Dez."
+]
+
+// Emoji avatars for variety
+const AVATARS = ["😊", "😎", "🙂", "😄", "🤗", "😃", "🙃", "😌"]
+
+function getAvatar(index: number) {
+    return AVATARS[index % AVATARS.length]
 }
 
-const STATUS_COLORS: { [key: string]: string } = {
-    "NOT_STARTED": "bg-gray-100 text-gray-800",
-    "PENDING_EMPLOYEES": "bg-amber-100 text-amber-800",
-    "PENDING_RECIPIENT": "bg-blue-100 text-blue-800",
-    "COMPLETED": "bg-green-100 text-green-800"
+// Signature badge component
+function SignatureBadge({
+    type,
+    signed,
+    label
+}: {
+    type: "A" | "K"
+    signed: boolean
+    label: string
+}) {
+    return (
+        <div className="relative group">
+            <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold border-2 transition-colors ${
+                    signed
+                        ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                        : "bg-neutral-800 border-neutral-600 text-neutral-500"
+                }`}
+            >
+                {signed && <Check className="w-3.5 h-3.5" />}
+                {!signed && type}
+            </div>
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-neutral-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-neutral-700">
+                {label}: {signed ? "Unterschrieben" : "Ausstehend"}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-neutral-800" />
+            </div>
+        </div>
+    )
 }
 
 export default function AdminSubmissionsPage() {
-    const router = useRouter()
     const [submissions, setSubmissions] = useState<Submission[]>([])
     const [pendingDienstplaene, setPendingDienstplaene] = useState<Submission[]>([])
     const [loading, setLoading] = useState(true)
-    const [releasingId, setReleasingId] = useState<string | null>(null)
-    const [releaseNote, setReleaseNote] = useState("")
+    const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
+    const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+
+    // Modal states
     const [showReleaseModal, setShowReleaseModal] = useState(false)
-    const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null)
-
-    // New states for reset operations
     const [showSignatureModal, setShowSignatureModal] = useState(false)
-    const [processing, setProcessing] = useState(false)
-
-    // Preview modal states
     const [showPreviewModal, setShowPreviewModal] = useState(false)
+    const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null)
+    const [releaseNote, setReleaseNote] = useState("")
+    const [processing, setProcessing] = useState(false)
     const [previewLoading, setPreviewLoading] = useState(false)
     const [previewData, setPreviewData] = useState<PreviewData | null>(null)
     const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set())
@@ -128,6 +169,73 @@ export default function AdminSubmissionsPage() {
         }
     }
 
+    const goToToday = () => {
+        const now = new Date()
+        setFilterMonth(now.getMonth() + 1)
+        setFilterYear(now.getFullYear())
+    }
+
+    const navigateMonth = (direction: -1 | 1) => {
+        let newMonth = filterMonth + direction
+        let newYear = filterYear
+
+        if (newMonth < 1) {
+            newMonth = 12
+            newYear--
+        } else if (newMonth > 12) {
+            newMonth = 1
+            newYear++
+        }
+
+        setFilterMonth(newMonth)
+        setFilterYear(newYear)
+    }
+
+    const toggleClientExpand = (clientName: string) => {
+        setExpandedClients(prev => {
+            const next = new Set(prev)
+            if (next.has(clientName)) {
+                next.delete(clientName)
+            } else {
+                next.add(clientName)
+            }
+            return next
+        })
+    }
+
+    const toggleItemSelect = (id: string) => {
+        setSelectedItems(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) {
+                next.delete(id)
+            } else {
+                next.add(id)
+            }
+            return next
+        })
+    }
+
+    // Get submissions for current month grouped by client
+    const activeSubmissions = submissions.filter(s => s.month === filterMonth && s.year === filterYear)
+    const allDienstplaene = [...activeSubmissions, ...pendingDienstplaene].sort((a, b) =>
+        a.recipientName.localeCompare(b.recipientName)
+    )
+
+    // Group by client (recipientName)
+    const clientGroups = allDienstplaene.reduce((acc, sub) => {
+        const clientName = sub.recipientName || "Unbekannt"
+        if (!acc[clientName]) {
+            acc[clientName] = []
+        }
+        acc[clientName].push(sub)
+        return acc
+    }, {} as Record<string, Submission[]>)
+
+    // Calculate totals
+    const totalCount = allDienstplaene.length
+    const totalHours = allDienstplaene.reduce((sum, s) => sum + (s.totalEmployees * 8), 0) // Placeholder
+
+    // Modal handlers
     const openReleaseModal = (submission: Submission) => {
         setSelectedSubmission(submission)
         setReleaseNote("")
@@ -140,7 +248,7 @@ export default function AdminSubmissionsPage() {
             return
         }
 
-        setReleasingId(selectedSubmission.id)
+        setProcessing(true)
         try {
             const res = await fetch(`/api/admin/submissions/${selectedSubmission.id}/release`, {
                 method: "POST",
@@ -163,13 +271,12 @@ export default function AdminSubmissionsPage() {
             console.error("Error releasing submission:", error)
             toast.error("Fehler beim Freigeben")
         } finally {
-            setReleasingId(null)
+            setProcessing(false)
         }
     }
 
-    // NEW: Revert manual release
     const handleRevertRelease = async (submissionId: string) => {
-        if (!window.confirm("Möchten Sie die manuelle Freigabe wirklich widerrufen?\n\nDie Einreichung wird zurück in den Status 'Warten auf Mitarbeiter' gesetzt.")) {
+        if (!window.confirm("Möchten Sie die manuelle Freigabe wirklich widerrufen?")) {
             return
         }
 
@@ -195,15 +302,13 @@ export default function AdminSubmissionsPage() {
         }
     }
 
-    // NEW: Open signature management modal
     const openSignatureModal = (submission: Submission) => {
         setSelectedSubmission(submission)
         setShowSignatureModal(true)
     }
 
-    // NEW: Delete individual signature
     const handleDeleteSignature = async (submissionId: string, employeeId: string, employeeName: string) => {
-        if (!window.confirm(`Unterschrift von ${employeeName} wirklich löschen?\n\nDer Mitarbeiter muss danach erneut unterschreiben.`)) {
+        if (!window.confirm(`Unterschrift von ${employeeName} wirklich löschen?`)) {
             return
         }
 
@@ -216,7 +321,7 @@ export default function AdminSubmissionsPage() {
             const data = await res.json()
 
             if (res.ok) {
-                toast.success(`Unterschrift gelöscht. Status: ${data.signedCount}/${data.totalCount} unterschrieben`)
+                toast.success(`Unterschrift gelöscht`)
                 setShowSignatureModal(false)
                 setSelectedSubmission(null)
                 await fetchSubmissions()
@@ -231,24 +336,11 @@ export default function AdminSubmissionsPage() {
         }
     }
 
-    // NEW: Complete reset
     const handleReset = async (submissionId: string, sheetFileName: string) => {
-        const reason = window.prompt(
-            "WARNUNG: Alle Unterschriften werden gelöscht!\n\n" +
-            `Einreichung: ${sheetFileName}\n\n` +
-            "Grund für Reset (optional):"
-        )
+        const reason = window.prompt("Grund für Reset (optional):")
+        if (reason === null) return
 
-        if (reason === null) return // Cancelled
-
-        if (!window.confirm(
-            "Wirklich ALLE Unterschriften löschen?\n\n" +
-            "Dies kann nicht rückgängig gemacht werden!\n" +
-            "- Alle Mitarbeiter-Unterschriften werden gelöscht\n" +
-            "- Assistenznehmer-Unterschrift wird gelöscht\n" +
-            "- Neuer Token wird generiert (alter wird ungültig)\n" +
-            "- PDF wird gelöscht"
-        )) {
+        if (!window.confirm("Wirklich ALLE Unterschriften löschen?")) {
             return
         }
 
@@ -263,7 +355,7 @@ export default function AdminSubmissionsPage() {
             const data = await res.json()
 
             if (res.ok) {
-                toast.success(`Einreichung zurückgesetzt. ${data.resetCount} Unterschriften gelöscht.`)
+                toast.success(`Einreichung zurückgesetzt`)
                 await fetchSubmissions()
             } else {
                 toast.error(data.error || "Fehler beim Zurücksetzen")
@@ -276,7 +368,6 @@ export default function AdminSubmissionsPage() {
         }
     }
 
-    // NEW: Open preview modal
     const openPreviewModal = async (submission: Submission) => {
         setSelectedSubmission(submission)
         setShowPreviewModal(true)
@@ -316,486 +407,462 @@ export default function AdminSubmissionsPage() {
         })
     }
 
-    // Combine active submissions and pending for current month/year
-    const activeSubmissions = submissions.filter(s => s.month === filterMonth && s.year === filterYear)
-    const allDienstplaene = [...activeSubmissions, ...pendingDienstplaene].sort((a, b) => a.sheetFileName.localeCompare(b.sheetFileName))
+    // Format date for display
+    const formatDisplayDate = (dateStr?: string) => {
+        if (!dateStr) return ""
+        const date = new Date(dateStr)
+        return `${MONTH_SHORT[date.getMonth()]} ${date.getDate()}`
+    }
 
-    // Render a submission card
-    const renderSubmissionCard = (submission: Submission) => (
-        <div key={submission.id || submission.sheetFileName} className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
-            <div className="flex items-start justify-between">
-                <div className="flex-1">
-                    {/* Title */}
-                    <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-bold text-gray-900">
-                            {submission.sheetFileName}
-                        </h3>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[submission.status]}`}>
-                            {STATUS_LABELS[submission.status]}
+    return (
+        <div className="min-h-screen bg-neutral-950 text-white">
+            {/* Header */}
+            <div className="border-b border-neutral-800 px-6 py-4">
+                <div className="flex items-center justify-between">
+                    <h1 className="text-xl font-semibold">Stundennachweise</h1>
+                    <button className="flex items-center gap-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm font-medium transition-colors">
+                        <Plus className="w-4 h-4" />
+                        Erstellen
+                    </button>
+                </div>
+
+                {/* Filter bar */}
+                <div className="flex items-center gap-4 mt-4">
+                    {/* Count badge */}
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-800 rounded-lg text-sm">
+                        <span className="text-neutral-400">≡</span>
+                        <span className="font-medium">{totalCount}</span>
+                    </div>
+
+                    {/* Month navigation */}
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => navigateMonth(-1)}
+                            className="p-2 hover:bg-neutral-800 rounded-lg transition-colors"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="px-3 py-1.5 font-medium min-w-[140px] text-center">
+                            {MONTH_NAMES[filterMonth - 1]} {filterYear}
                         </span>
+                        <button
+                            onClick={() => navigateMonth(1)}
+                            className="p-2 hover:bg-neutral-800 rounded-lg transition-colors"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
                     </div>
 
-                    {/* Info Row */}
-                    <div className="flex items-center gap-6 text-sm text-gray-600 mb-3">
-                        <div className="flex items-center gap-2">
-                            <Calendar size={16} />
-                            <span>{MONTH_NAMES[submission.month - 1]} {submission.year}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Users size={16} />
-                            <span>
-                                {submission.signedEmployees} von {submission.totalEmployees} Mitarbeitern
-                            </span>
-                        </div>
-                        {submission.recipientSignedAt && (
-                            <div className="flex items-center gap-2">
-                                <CheckCircle size={16} className="text-green-600" />
-                                <span>Assistenznehmer unterschrieben</span>
-                            </div>
-                        )}
+                    {/* Today button */}
+                    <button
+                        onClick={goToToday}
+                        className="px-3 py-1.5 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
+                    >
+                        Heute
+                    </button>
+                </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4">
+                {loading ? (
+                    <div className="text-center py-12 text-neutral-500">
+                        Laden...
                     </div>
+                ) : Object.keys(clientGroups).length === 0 ? (
+                    <div className="text-center py-12 text-neutral-500">
+                        Keine Stundennachweise für {MONTH_NAMES[filterMonth - 1]} {filterYear}
+                    </div>
+                ) : (
+                    <div className="space-y-1">
+                        {Object.entries(clientGroups).map(([clientName, clientSubmissions], clientIndex) => {
+                            const isExpanded = expandedClients.has(clientName)
+                            const totalClientHours = clientSubmissions.reduce((sum, s) => {
+                                // Calculate actual hours from employee signatures or estimate
+                                return sum + (s.signedEmployees * 8)
+                            }, 0)
+                            const allSigned = clientSubmissions.every(s =>
+                                s.signedEmployees === s.totalEmployees && s.recipientSignedAt
+                            )
 
-                    {/* Recipient Info for NOT_STARTED */}
-                    {submission.status === "NOT_STARTED" && (
-                        <div className="text-sm text-gray-500 mb-3">
-                            <span className="font-medium">Assistenznehmer:</span> {submission.recipientName} ({submission.recipientEmail})
-                        </div>
-                    )}
+                            return (
+                                <div key={clientName} className="bg-neutral-900 rounded-xl overflow-hidden">
+                                    {/* Client header */}
+                                    <button
+                                        onClick={() => toggleClientExpand(clientName)}
+                                        className="w-full flex items-center gap-4 px-4 py-3 hover:bg-neutral-800/50 transition-colors"
+                                    >
+                                        {/* Checkbox */}
+                                        <div
+                                            className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                                allSigned
+                                                    ? "bg-emerald-500 border-emerald-500"
+                                                    : "border-neutral-600"
+                                            }`}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                            }}
+                                        >
+                                            {allSigned && <Check className="w-3 h-3 text-white" />}
+                                        </div>
 
-                    {/* Manual Release Note */}
-                    {submission.manuallyReleasedAt && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
-                            <div className="flex items-start gap-2">
-                                <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={16} />
-                                <div className="text-sm">
-                                    <p className="text-amber-900 font-medium">Manuell freigegeben</p>
-                                    <p className="text-amber-800 text-xs">
-                                        {submission.releaseNote}
-                                    </p>
-                                    <p className="text-amber-600 text-xs mt-1">
-                                        von {submission.manuallyReleasedBy} am {new Date(submission.manuallyReleasedAt).toLocaleDateString("de-DE")}
-                                    </p>
+                                        {/* Avatar */}
+                                        <div className="w-8 h-8 rounded-lg bg-red-500 flex items-center justify-center text-lg">
+                                            {getAvatar(clientIndex)}
+                                        </div>
+
+                                        {/* Client name */}
+                                        <span className="font-medium flex-1 text-left">{clientName}</span>
+
+                                        {/* Expand icon */}
+                                        <ExternalLink className="w-4 h-4 text-neutral-500" />
+
+                                        {/* Chevron */}
+                                        {isExpanded ? (
+                                            <ChevronUp className="w-4 h-4 text-neutral-500" />
+                                        ) : (
+                                            <ChevronDown className="w-4 h-4 text-neutral-500" />
+                                        )}
+                                    </button>
+
+                                    {/* Expanded employee list */}
+                                    {isExpanded && (
+                                        <div className="border-t border-neutral-800">
+                                            {clientSubmissions.map((submission, subIndex) => {
+                                                const assistentSigned = submission.signedEmployees === submission.totalEmployees
+                                                const klientSigned = !!submission.recipientSignedAt
+
+                                                return (
+                                                    <div
+                                                        key={submission.id || `${submission.sheetFileName}-${subIndex}`}
+                                                        className="flex items-center gap-4 px-4 py-3 hover:bg-neutral-800/30 transition-colors border-t border-neutral-800/50 first:border-t-0"
+                                                    >
+                                                        {/* Checkbox */}
+                                                        <div
+                                                            className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer ${
+                                                                selectedItems.has(submission.id || submission.sheetFileName)
+                                                                    ? "bg-violet-500 border-violet-500"
+                                                                    : "border-neutral-600 hover:border-neutral-500"
+                                                            }`}
+                                                            onClick={() => toggleItemSelect(submission.id || submission.sheetFileName)}
+                                                        >
+                                                            {selectedItems.has(submission.id || submission.sheetFileName) && (
+                                                                <Check className="w-3 h-3 text-white" />
+                                                            )}
+                                                        </div>
+
+                                                        {/* Avatar */}
+                                                        <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center text-lg">
+                                                            {getAvatar(subIndex + 5)}
+                                                        </div>
+
+                                                        {/* Dienstplan name */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <span className="font-medium truncate block">
+                                                                {submission.sheetFileName}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Hours */}
+                                                        <span className="text-neutral-400 text-sm tabular-nums">
+                                                            {submission.signedEmployees > 0
+                                                                ? `${submission.signedEmployees * 8}h`
+                                                                : "0m"
+                                                            }
+                                                        </span>
+
+                                                        {/* Action buttons (on hover) */}
+                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    openPreviewModal(submission)
+                                                                }}
+                                                                className="p-1.5 hover:bg-neutral-700 rounded text-neutral-400 hover:text-white"
+                                                                title="Vorschau"
+                                                            >
+                                                                <Eye className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Signature badges */}
+                                                        <div className="flex items-center gap-2">
+                                                            <SignatureBadge
+                                                                type="A"
+                                                                signed={assistentSigned}
+                                                                label="Assistent"
+                                                            />
+                                                            <SignatureBadge
+                                                                type="K"
+                                                                signed={klientSigned}
+                                                                label="Klient"
+                                                            />
+                                                        </div>
+
+                                                        {/* Date */}
+                                                        <span className="text-neutral-500 text-sm w-16 text-right">
+                                                            {formatDisplayDate(submission.updatedAt || submission.createdAt)}
+                                                        </span>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        </div>
-                    )}
+                            )
+                        })}
+                    </div>
+                )}
+            </div>
 
-                    {/* Employee Signatures */}
-                    {submission.employeeSignatures.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                            {submission.employeeSignatures.map((sig) => (
-                                <div key={sig.employeeId} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-green-100 text-green-800 text-xs">
-                                    <CheckCircle size={12} />
-                                    <span>{sig.employeeName || sig.employeeEmail}</span>
+            {/* Release Modal */}
+            {showReleaseModal && selectedSubmission && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+                    <div className="bg-neutral-900 rounded-xl border border-neutral-800 max-w-md w-full p-6">
+                        <h2 className="text-xl font-bold mb-4">Einreichung manuell freigeben</h2>
+
+                        <div className="mb-4 text-sm text-neutral-400">
+                            <strong className="text-white">{selectedSubmission.sheetFileName}</strong>
+                            <br />
+                            {selectedSubmission.signedEmployees} von {selectedSubmission.totalEmployees} Mitarbeitern haben unterschrieben.
+                        </div>
+
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium mb-2">
+                                Grund für die Freigabe *
+                            </label>
+                            <textarea
+                                value={releaseNote}
+                                onChange={(e) => setReleaseNote(e.target.value)}
+                                placeholder="z.B. Mitarbeiter im Urlaub, Krankheit, etc."
+                                rows={3}
+                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                            />
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowReleaseModal(false)
+                                    setSelectedSubmission(null)
+                                    setReleaseNote("")
+                                }}
+                                disabled={processing}
+                                className="px-4 py-2 text-neutral-400 hover:text-white"
+                            >
+                                Abbrechen
+                            </button>
+                            <button
+                                onClick={handleRelease}
+                                disabled={processing || !releaseNote.trim()}
+                                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                            >
+                                {processing ? "Wird freigegeben..." : "Freigeben"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Signature Management Modal */}
+            {showSignatureModal && selectedSubmission && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+                    <div className="bg-neutral-900 rounded-xl border border-neutral-800 max-w-lg w-full p-6">
+                        <h2 className="text-xl font-bold mb-4">Unterschriften verwalten</h2>
+
+                        <div className="mb-4 text-sm text-neutral-400">
+                            <strong className="text-white">{selectedSubmission.sheetFileName}</strong>
+                            <br />
+                            {selectedSubmission.employeeSignatures.length} Unterschrift(en) vorhanden
+                        </div>
+
+                        <div className="space-y-2 mb-6 max-h-96 overflow-y-auto">
+                            {selectedSubmission.employeeSignatures.map((sig) => (
+                                <div key={sig.employeeId} className="flex items-center justify-between p-3 bg-neutral-800 rounded-lg">
+                                    <div>
+                                        <p className="font-medium">{sig.employeeName || sig.employeeEmail}</p>
+                                        <p className="text-xs text-neutral-500">
+                                            {new Date(sig.signedAt).toLocaleString("de-DE")}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDeleteSignature(selectedSubmission.id!, sig.employeeId, sig.employeeName || sig.employeeEmail)}
+                                        disabled={processing}
+                                        className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             ))}
                         </div>
-                    )}
-                </div>
 
-                {/* Actions */}
-                <div className="flex flex-col gap-2 ml-4">
-                    {/* Preview Button - always show */}
-                    <button
-                        onClick={() => openPreviewModal(submission)}
-                        disabled={processing}
-                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium text-sm whitespace-nowrap disabled:opacity-50"
-                    >
-                        <Eye size={16} />
-                        Vorschau
-                    </button>
-
-                    {/* Manual Release */}
-                    {submission.status === "PENDING_EMPLOYEES" && submission.id && (
-                        <button
-                            onClick={() => openReleaseModal(submission)}
-                            disabled={processing}
-                            className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 font-medium text-sm whitespace-nowrap disabled:opacity-50"
-                        >
-                            Manuell freigeben
-                        </button>
-                    )}
-
-                    {/* Revert Release */}
-                    {submission.status === "PENDING_RECIPIENT" && !submission.recipientSignedAt && submission.id && (
-                        <button
-                            onClick={() => handleRevertRelease(submission.id!)}
-                            disabled={processing}
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 font-medium text-sm whitespace-nowrap disabled:opacity-50"
-                        >
-                            <RotateCcw size={16} />
-                            Widerrufen
-                        </button>
-                    )}
-
-                    {/* Manage Signatures */}
-                    {submission.employeeSignatures.length > 0 && submission.status !== "COMPLETED" && submission.id && (
-                        <button
-                            onClick={() => openSignatureModal(submission)}
-                            disabled={processing}
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium text-sm whitespace-nowrap disabled:opacity-50"
-                        >
-                            <Trash2 size={16} />
-                            Verwalten
-                        </button>
-                    )}
-
-                    {/* Complete Reset */}
-                    {submission.status !== "COMPLETED" && submission.status !== "NOT_STARTED" && submission.id && (
-                        <button
-                            onClick={() => handleReset(submission.id!, submission.sheetFileName)}
-                            disabled={processing}
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-medium text-sm whitespace-nowrap disabled:opacity-50"
-                        >
-                            <XCircle size={16} />
-                            Reset
-                        </button>
-                    )}
-
-                    {/* PDF Download */}
-                    {submission.pdfUrl && (
-                        <a
-                            href={submission.pdfUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium text-sm"
-                        >
-                            <Download size={16} />
-                            PDF
-                        </a>
-                    )}
-                </div>
-            </div>
-        </div>
-    )
-
-    return (
-        <div className="admin-dark min-h-screen bg-neutral-950 p-6">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-2xl font-bold text-white">
-                        Einreichungen
-                    </h1>
-                    <p className="text-neutral-400 mt-1">
-                        Übersicht aller Team-Einreichungen
-                    </p>
-                </div>
-
-                {/* Month/Year Filter */}
-                <div className="bg-white rounded-lg shadow p-4 mb-6 flex items-center gap-4">
-                    <span className="font-medium text-gray-700">Zeitraum:</span>
-                    <select
-                        value={filterMonth}
-                        onChange={(e) => setFilterMonth(parseInt(e.target.value))}
-                        className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    >
-                        {MONTH_NAMES.map((name, idx) => (
-                            <option key={idx} value={idx + 1}>{name}</option>
-                        ))}
-                    </select>
-                    <input
-                        type="number"
-                        value={filterYear}
-                        onChange={(e) => setFilterYear(parseInt(e.target.value))}
-                        className="border border-gray-300 rounded-md px-3 py-2 text-sm w-24"
-                        min={2020}
-                        max={2100}
-                    />
-                </div>
-
-                {/* Submissions List */}
-                {allDienstplaene.length === 0 ? (
-                    <div className="bg-white rounded-lg shadow p-8 text-center">
-                        <p className="text-gray-600">Keine Dienstpläne für {MONTH_NAMES[filterMonth - 1]} {filterYear} gefunden</p>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        {allDienstplaene.map(renderSubmissionCard)}
-                    </div>
-                )}
-
-                {/* Release Modal */}
-                {showReleaseModal && selectedSubmission && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">
-                                Einreichung manuell freigeben
-                            </h2>
-
-                            <div className="mb-4">
-                                <p className="text-sm text-gray-600 mb-2">
-                                    <strong>{selectedSubmission.sheetFileName}</strong> - {MONTH_NAMES[selectedSubmission.month - 1]} {selectedSubmission.year}
-                                </p>
-                                <p className="text-sm text-amber-700">
-                                    Nur {selectedSubmission.signedEmployees} von {selectedSubmission.totalEmployees} Mitarbeitern haben unterschrieben.
-                                </p>
-                            </div>
-
-                            <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Grund für die Freigabe *
-                                </label>
-                                <textarea
-                                    value={releaseNote}
-                                    onChange={(e) => setReleaseNote(e.target.value)}
-                                    placeholder="z.B. Mitarbeiter im Urlaub, Krankheit, etc."
-                                    rows={3}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                />
-                            </div>
-
-                            <div className="flex justify-end gap-3">
-                                <button
-                                    onClick={() => {
-                                        setShowReleaseModal(false)
-                                        setSelectedSubmission(null)
-                                        setReleaseNote("")
-                                    }}
-                                    disabled={!!releasingId}
-                                    className="px-4 py-2 text-gray-700 hover:text-gray-900 disabled:opacity-50"
-                                >
-                                    Abbrechen
-                                </button>
-                                <button
-                                    onClick={handleRelease}
-                                    disabled={!!releasingId || !releaseNote.trim()}
-                                    className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {releasingId ? "Wird freigegeben..." : "Freigeben"}
-                                </button>
-                            </div>
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => {
+                                    setShowSignatureModal(false)
+                                    setSelectedSubmission(null)
+                                }}
+                                disabled={processing}
+                                className="px-4 py-2 text-neutral-400 hover:text-white"
+                            >
+                                Schließen
+                            </button>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Signature Management Modal */}
-                {showSignatureModal && selectedSubmission && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">
-                                Unterschriften verwalten
+            {/* Preview Modal */}
+            {showPreviewModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+                    <div className="bg-neutral-900 rounded-xl border border-neutral-800 max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-neutral-800 bg-gradient-to-r from-violet-600 to-purple-600">
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                <Eye className="w-5 h-5" />
+                                Vorschau
                             </h2>
-
-                            <div className="mb-4">
-                                <p className="text-sm text-gray-600 mb-2">
-                                    <strong>{selectedSubmission.sheetFileName}</strong> - {MONTH_NAMES[selectedSubmission.month - 1]} {selectedSubmission.year}
+                            {previewData && (
+                                <p className="text-violet-200 text-sm mt-1">
+                                    {previewData.sheetFileName} - {MONTH_NAMES[previewData.month - 1]} {previewData.year}
                                 </p>
-                                <p className="text-sm text-gray-700">
-                                    {selectedSubmission.employeeSignatures.length} Unterschrift(en) vorhanden
-                                </p>
-                            </div>
-
-                            <div className="space-y-2 mb-6 max-h-96 overflow-y-auto">
-                                {selectedSubmission.employeeSignatures.map((sig) => (
-                                    <div key={sig.employeeId} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                                        <div className="flex-1">
-                                            <p className="font-medium text-gray-900">{sig.employeeName || sig.employeeEmail}</p>
-                                            <p className="text-xs text-gray-500">
-                                                Unterschrieben am: {new Date(sig.signedAt).toLocaleString("de-DE")}
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => handleDeleteSignature(selectedSubmission.id!, sig.employeeId, sig.employeeName || sig.employeeEmail)}
-                                            disabled={processing}
-                                            className="inline-flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm disabled:opacity-50"
-                                        >
-                                            <Trash2 size={16} />
-                                            Löschen
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="flex justify-end gap-3">
-                                <button
-                                    onClick={() => {
-                                        setShowSignatureModal(false)
-                                        setSelectedSubmission(null)
-                                    }}
-                                    disabled={processing}
-                                    className="px-4 py-2 text-gray-700 hover:text-gray-900 disabled:opacity-50"
-                                >
-                                    Schließen
-                                </button>
-                            </div>
+                            )}
                         </div>
-                    </div>
-                )}
 
-                {/* Preview Modal */}
-                {showPreviewModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                            {/* Header */}
-                            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-purple-600 to-blue-600">
-                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <Eye size={24} />
-                                    Vorschau: Was der Assistenznehmer sieht
-                                </h2>
-                                {previewData && (
-                                    <p className="text-purple-100 text-sm mt-1">
-                                        {previewData.sheetFileName} - {MONTH_NAMES[previewData.month - 1]} {previewData.year}
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* Content */}
-                            <div className="flex-1 overflow-y-auto p-6">
-                                {previewLoading ? (
-                                    <div className="text-center py-12">
-                                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                                        <p className="mt-2 text-gray-600">Lade Vorschau...</p>
-                                    </div>
-                                ) : previewData ? (
-                                    <div className="space-y-6">
-                                        {/* Summary */}
-                                        <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                                            <h3 className="font-bold text-blue-900 mb-3">Zusammenfassung</h3>
-                                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                                <div>
-                                                    <span className="text-blue-700">Assistenznehmer:</span>
-                                                    <span className="ml-2 font-medium text-blue-900">{previewData.recipientName}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-blue-700">E-Mail:</span>
-                                                    <span className="ml-2 font-medium text-blue-900">{previewData.recipientEmail}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-blue-700">Mitarbeiter:</span>
-                                                    <span className="ml-2 font-medium text-blue-900">{previewData.employees.length}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-blue-700">Gesamtstunden:</span>
-                                                    <span className="ml-2 font-medium text-blue-900">{previewData.totalHours.toFixed(2)} Std.</span>
-                                                </div>
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {previewLoading ? (
+                                <div className="text-center py-12 text-neutral-500">
+                                    Lade Vorschau...
+                                </div>
+                            ) : previewData ? (
+                                <div className="space-y-6">
+                                    {/* Summary */}
+                                    <div className="bg-neutral-800 rounded-lg p-4">
+                                        <h3 className="font-bold mb-3">Zusammenfassung</h3>
+                                        <div className="grid grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <span className="text-neutral-400">Assistenznehmer:</span>
+                                                <span className="ml-2">{previewData.recipientName}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-neutral-400">Mitarbeiter:</span>
+                                                <span className="ml-2">{previewData.employees.length}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-neutral-400">Gesamtstunden:</span>
+                                                <span className="ml-2">{previewData.totalHours.toFixed(2)} Std.</span>
                                             </div>
                                         </div>
+                                    </div>
 
-                                        {/* Employees */}
-                                        <div>
-                                            <h3 className="font-bold text-gray-900 mb-3">Mitarbeiter-Details</h3>
-                                            <div className="space-y-3">
-                                                {previewData.employees.map((emp) => (
-                                                    <div key={emp.id} className="border rounded-lg overflow-hidden">
-                                                        <button
-                                                            onClick={() => toggleEmployeeExpand(emp.id)}
-                                                            className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100"
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                {expandedEmployees.has(emp.id) ? (
-                                                                    <ChevronDown size={20} className="text-gray-500" />
-                                                                ) : (
-                                                                    <ChevronRight size={20} className="text-gray-500" />
-                                                                )}
-                                                                <span className="font-medium text-gray-900">{emp.name}</span>
-                                                                <span className="text-sm text-gray-500">({emp.email})</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-4 text-sm">
-                                                                <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                                                                    {emp.totalHours.toFixed(1)} Std.
+                                    {/* Employees */}
+                                    <div>
+                                        <h3 className="font-bold mb-3">Mitarbeiter-Details</h3>
+                                        <div className="space-y-2">
+                                            {previewData.employees.map((emp) => (
+                                                <div key={emp.id} className="bg-neutral-800 rounded-lg overflow-hidden">
+                                                    <button
+                                                        onClick={() => toggleEmployeeExpand(emp.id)}
+                                                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-700/50"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            {expandedEmployees.has(emp.id) ? (
+                                                                <ChevronDown className="w-4 h-4 text-neutral-500" />
+                                                            ) : (
+                                                                <ChevronRight className="w-4 h-4 text-neutral-500" />
+                                                            )}
+                                                            <span className="font-medium">{emp.name}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-3 text-sm">
+                                                            <span className="bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded">
+                                                                {emp.totalHours.toFixed(1)} Std.
+                                                            </span>
+                                                            {emp.nightHours > 0 && (
+                                                                <span className="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded">
+                                                                    {emp.nightHours.toFixed(1)}h Nacht
                                                                 </span>
-                                                                {emp.nightHours > 0 && (
-                                                                    <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded">
-                                                                        {emp.nightHours.toFixed(1)}h Nacht
-                                                                    </span>
-                                                                )}
-                                                                {emp.sickDays > 0 && (
-                                                                    <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded">
-                                                                        {emp.sickDays} Krank
-                                                                    </span>
-                                                                )}
-                                                                {emp.vacationDays > 0 && (
-                                                                    <span className="bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded">
-                                                                        {emp.vacationDays} Urlaub
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </button>
+                                                            )}
+                                                        </div>
+                                                    </button>
 
-                                                        {expandedEmployees.has(emp.id) && (
-                                                            <div className="p-4 border-t">
-                                                                <table className="w-full text-sm">
-                                                                    <thead>
-                                                                        <tr className="text-left text-gray-500">
-                                                                            <th className="py-1">Datum</th>
-                                                                            <th className="py-1">Geplant</th>
-                                                                            <th className="py-1">Tatsächlich</th>
-                                                                            <th className="py-1">Status</th>
+                                                    {expandedEmployees.has(emp.id) && (
+                                                        <div className="px-4 pb-4 border-t border-neutral-700">
+                                                            <table className="w-full text-sm mt-3">
+                                                                <thead>
+                                                                    <tr className="text-left text-neutral-500">
+                                                                        <th className="py-1">Datum</th>
+                                                                        <th className="py-1">Geplant</th>
+                                                                        <th className="py-1">Tatsächlich</th>
+                                                                        <th className="py-1">Status</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {emp.timesheets.map((ts, idx) => (
+                                                                        <tr key={idx} className="border-t border-neutral-700/50">
+                                                                            <td className="py-2">
+                                                                                {new Date(ts.date).toLocaleDateString("de-DE", {
+                                                                                    weekday: 'short',
+                                                                                    day: '2-digit',
+                                                                                    month: '2-digit'
+                                                                                })}
+                                                                            </td>
+                                                                            <td className="py-2">{formatTimeRange(ts.plannedStart, ts.plannedEnd)}</td>
+                                                                            <td className="py-2">
+                                                                                {ts.absenceType === "SICK" ? (
+                                                                                    <span className="text-red-400">Krank</span>
+                                                                                ) : ts.absenceType === "VACATION" ? (
+                                                                                    <span className="text-cyan-400">Urlaub</span>
+                                                                                ) : ts.actualStart ? (
+                                                                                    formatTimeRange(ts.actualStart, ts.actualEnd)
+                                                                                ) : (
+                                                                                    <span className="text-neutral-500">-</span>
+                                                                                )}
+                                                                            </td>
+                                                                            <td className="py-2">
+                                                                                <span className={`px-2 py-0.5 rounded text-xs ${
+                                                                                    ts.status === "SUBMITTED" ? "bg-blue-500/20 text-blue-300" :
+                                                                                    ts.status === "CONFIRMED" ? "bg-green-500/20 text-green-300" :
+                                                                                    ts.status === "CHANGED" ? "bg-amber-500/20 text-amber-300" :
+                                                                                    "bg-neutral-700 text-neutral-400"
+                                                                                }`}>
+                                                                                    {ts.status}
+                                                                                </span>
+                                                                            </td>
                                                                         </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        {emp.timesheets.map((ts, idx) => (
-                                                                            <tr key={idx} className="border-t border-gray-100">
-                                                                                <td className="py-2">{new Date(ts.date).toLocaleDateString("de-DE", { weekday: 'short', day: '2-digit', month: '2-digit' })}</td>
-                                                                                <td className="py-2">{formatTimeRange(ts.plannedStart, ts.plannedEnd)}</td>
-                                                                                <td className="py-2">
-                                                                                    {ts.absenceType === "SICK" ? (
-                                                                                        <span className="text-red-600">Krank</span>
-                                                                                    ) : ts.absenceType === "VACATION" ? (
-                                                                                        <span className="text-cyan-600">Urlaub</span>
-                                                                                    ) : ts.actualStart ? (
-                                                                                        formatTimeRange(ts.actualStart, ts.actualEnd)
-                                                                                    ) : (
-                                                                                        <span className="text-gray-400">-</span>
-                                                                                    )}
-                                                                                </td>
-                                                                                <td className="py-2">
-                                                                                    <span className={`px-2 py-0.5 rounded text-xs ${
-                                                                                        ts.status === "SUBMITTED" ? "bg-blue-100 text-blue-800" :
-                                                                                        ts.status === "CONFIRMED" ? "bg-green-100 text-green-800" :
-                                                                                        ts.status === "CHANGED" ? "bg-amber-100 text-amber-800" :
-                                                                                        "bg-gray-100 text-gray-800"
-                                                                                    }`}>
-                                                                                        {ts.status}
-                                                                                    </span>
-                                                                                </td>
-                                                                            </tr>
-                                                                        ))}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Email Preview */}
-                                        <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
-                                            <h3 className="font-bold text-amber-900 mb-2 flex items-center gap-2">
-                                                <FileText size={18} />
-                                                E-Mail-Vorschau
-                                            </h3>
-                                            <p className="text-sm text-amber-800">
-                                                Der Assistenznehmer erhält eine E-Mail mit einem Link zur Unterschriftsseite. Dort sieht er alle Mitarbeiter-Timesheets und kann das Dokument digital unterschreiben.
-                                            </p>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className="text-center py-12 text-gray-500">
-                                        Keine Daten verfügbar
-                                    </div>
-                                )}
-                            </div>
+                                </div>
+                            ) : (
+                                <div className="text-center py-12 text-neutral-500">
+                                    Keine Daten verfügbar
+                                </div>
+                            )}
+                        </div>
 
-                            {/* Footer */}
-                            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
-                                <button
-                                    onClick={() => {
-                                        setShowPreviewModal(false)
-                                        setSelectedSubmission(null)
-                                        setPreviewData(null)
-                                    }}
-                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-                                >
-                                    Schließen
-                                </button>
-                            </div>
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t border-neutral-800 flex justify-end">
+                            <button
+                                onClick={() => {
+                                    setShowPreviewModal(false)
+                                    setSelectedSubmission(null)
+                                    setPreviewData(null)
+                                }}
+                                className="px-4 py-2 bg-neutral-800 text-white rounded-lg hover:bg-neutral-700"
+                            >
+                                Schließen
+                            </button>
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     )
 }

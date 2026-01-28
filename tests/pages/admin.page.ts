@@ -29,17 +29,17 @@ export class AdminPage {
     }
 
     async navigateToScheduleEditor() {
-        await this.page.locator('text=Dienstplan-Editor').click()
+        await this.page.locator('text=Kalender').click()
         await this.page.waitForURL('**/admin/schedule')
     }
 
     async navigateToEmployees() {
-        await this.page.locator('text=Mitarbeiter').click()
-        await this.page.waitForURL('**/admin/employees')
+        await this.page.locator('text=Assistenten').click()
+        await this.page.waitForURL('**/admin/assistants')
     }
 
     async navigateToSubmissions() {
-        await this.page.locator('text=Einreichungen').click()
+        await this.page.locator('text=Stundennachweise').click()
         await this.page.waitForURL('**/admin/submissions')
     }
 

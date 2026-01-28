@@ -15,7 +15,8 @@ import {
     ChevronLeft,
     ChevronRight,
     LogOut,
-    Search
+    Search,
+    Activity
 } from "lucide-react"
 
 interface NavItem {
@@ -36,15 +37,14 @@ export function Sidebar({ onExportClick }: SidebarProps) {
     const [collapsed, setCollapsed] = useState(false)
 
     const mainNavItems: NavItem[] = [
-        { icon: LayoutDashboard, label: "Dashboard", href: "/admin" },
-        { icon: Calendar, label: "Dienstplan", href: "/admin/schedule" },
-        { icon: FileText, label: "Einreichungen", href: "/admin/submissions" },
+        { icon: Calendar, label: "Kalender", href: "/admin/schedule" },
         { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
         { icon: Users, label: "Assistenten", href: "/admin/assistants" },
+        { icon: FileText, label: "Stundennachweise", href: "/admin/submissions" },
     ]
 
     const secondaryNavItems: NavItem[] = [
-        { icon: Download, label: "Exportieren", onClick: onExportClick },
+        { icon: Activity, label: "Aktivitätsprotokoll", href: "/admin/settings" },
         { icon: Settings, label: "Einstellungen", href: "/admin/settings" },
     ]
 
