@@ -226,14 +226,6 @@ export default function ClientsPage() {
     const activeCount = clients.filter(c => c.isActive).length
     const inactiveCount = clients.filter(c => !c.isActive).length
 
-    if (loading && clients.length === 0) {
-        return (
-            <div className="admin-dark min-h-screen bg-neutral-950 flex items-center justify-center">
-                <div className="text-xl text-neutral-400">Lädt...</div>
-            </div>
-        )
-    }
-
     return (
         <div className="admin-dark min-h-screen bg-neutral-950 p-6">
             <div className="max-w-4xl mx-auto">

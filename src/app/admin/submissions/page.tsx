@@ -505,12 +505,7 @@ export default function AdminSubmissionsPage() {
                 </div>
 
                 {/* Submissions List */}
-                {loading ? (
-                    <div className="text-center py-12">
-                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                        <p className="mt-2 text-gray-600">Lade Einreichungen...</p>
-                    </div>
-                ) : allDienstplaene.length === 0 ? (
+                {allDienstplaene.length === 0 ? (
                     <div className="bg-white rounded-lg shadow p-8 text-center">
                         <p className="text-gray-600">Keine Dienstpläne für {MONTH_NAMES[filterMonth - 1]} {filterYear} gefunden</p>
                     </div>

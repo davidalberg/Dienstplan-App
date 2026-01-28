@@ -10,14 +10,12 @@ import {
     FileText,
     Users,
     UserCircle,
-    UserCog,
     Download,
     Settings,
     ChevronLeft,
     ChevronRight,
     LogOut,
-    Search,
-    FileStack
+    Search
 } from "lucide-react"
 
 interface NavItem {
@@ -43,7 +41,6 @@ export function Sidebar({ onExportClick }: SidebarProps) {
         { icon: FileText, label: "Einreichungen", href: "/admin/submissions" },
         { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
         { icon: Users, label: "Assistenten", href: "/admin/assistants" },
-        { icon: UserCog, label: "Mitarbeiter", href: "/admin/employees" },
     ]
 
     const secondaryNavItems: NavItem[] = [

@@ -13,12 +13,8 @@ import {
     Trash2,
     ChevronLeft,
     ChevronRight,
-    Users,
-    Clock,
     X,
-    Save,
-    Copy,
-    RefreshCw
+    Save
 } from "lucide-react"
 import { showToast } from "@/lib/toast-utils"
 import { formatTimeRange } from "@/lib/time-utils"
@@ -301,22 +297,22 @@ export default function SchedulePage() {
                 </div>
 
                 {/* Filter Bar */}
-                <div className="bg-white rounded-xl shadow-sm p-4 mb-6 flex items-center justify-between">
+                <div className="bg-neutral-900 rounded-xl p-4 mb-6 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         {/* Month Navigation */}
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => navigateMonth(-1)}
-                                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                                className="p-2 hover:bg-neutral-800 rounded-lg transition text-neutral-400 hover:text-white"
                             >
                                 <ChevronLeft size={20} />
                             </button>
-                            <span className="font-bold text-lg min-w-[150px] text-center text-black">
+                            <span className="font-bold text-lg min-w-[150px] text-center text-white">
                                 {format(currentDate, "MMMM yyyy", { locale: de })}
                             </span>
                             <button
                                 onClick={() => navigateMonth(1)}
-                                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                                className="p-2 hover:bg-neutral-800 rounded-lg transition text-neutral-400 hover:text-white"
                             >
                                 <ChevronRight size={20} />
                             </button>
@@ -326,7 +322,7 @@ export default function SchedulePage() {
                         <select
                             value={selectedTeam}
                             onChange={(e) => setSelectedTeam(e.target.value)}
-                            className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-black"
+                            className="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm font-medium text-white"
                         >
                             <option value="">Alle Teams</option>
                             {teams.map(team => (
@@ -335,80 +331,72 @@ export default function SchedulePage() {
                         </select>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-black">
-                        <span className="font-bold">{shifts.length}</span> Schichten
-                        {loading && <RefreshCw size={16} className="animate-spin ml-2" />}
+                    <div className="text-sm text-neutral-400">
+                        <span className="font-bold text-white">{shifts.length}</span> Schichten
                     </div>
                 </div>
 
                 {/* Content */}
                 {viewMode === "list" ? (
                     /* Listen-Ansicht */
-                    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div className="bg-neutral-900 rounded-xl overflow-hidden">
                         <table className="w-full">
-                            <thead className="bg-gray-100">
+                            <thead className="bg-neutral-800">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Datum</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Mitarbeiter</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Zeit</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Backup</th>
-                                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
-                                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Aktionen</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Datum</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Mitarbeiter</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Zeit</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Backup</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Status</th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold text-neutral-400 uppercase tracking-wide">Aktionen</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {loading ? (
+                            <tbody className="divide-y divide-neutral-800">
+                                {shifts.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="py-12 text-center text-gray-500">
-                                            <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
-                                            Lade Schichten...
-                                        </td>
-                                    </tr>
-                                ) : shifts.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className="py-12 text-center text-gray-500">
+                                        <td colSpan={6} className="py-8 text-center text-neutral-500">
                                             Keine Schichten für diesen Monat
                                         </td>
                                     </tr>
                                 ) : shifts.map(shift => (
-                                    <tr key={shift.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3 font-medium text-black">
+                                    <tr key={shift.id} className="hover:bg-neutral-800/50 transition">
+                                        <td className="px-3 py-2 font-medium text-white text-sm">
                                             {format(new Date(shift.date), "EEE, dd.MM.", { locale: de })}
                                         </td>
-                                        <td className="px-4 py-3 text-black">{shift.employee.name}</td>
-                                        <td className="px-4 py-3">
-                                            <span className="bg-gray-100 px-2 py-1 rounded text-sm font-medium text-black">
+                                        <td className="px-3 py-2 text-neutral-300 text-sm">{shift.employee.name}</td>
+                                        <td className="px-3 py-2">
+                                            <span className="bg-neutral-800 px-2 py-0.5 rounded text-xs font-medium text-neutral-300">
                                                 {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-black">
+                                        <td className="px-3 py-2 text-neutral-400 text-sm">
                                             {shift.backupEmployee?.name || "-"}
                                         </td>
-                                        <td className="px-4 py-3">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${
-                                                shift.status === "CONFIRMED" ? "bg-green-100 text-green-700" :
-                                                shift.status === "CHANGED" ? "bg-amber-100 text-amber-700" :
-                                                shift.status === "SUBMITTED" ? "bg-blue-100 text-blue-700" :
-                                                "bg-gray-100 text-gray-700"
+                                        <td className="px-3 py-2">
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase ${
+                                                shift.status === "CONFIRMED" ? "bg-green-900/50 text-green-400" :
+                                                shift.status === "CHANGED" ? "bg-amber-900/50 text-amber-400" :
+                                                shift.status === "SUBMITTED" ? "bg-blue-900/50 text-blue-400" :
+                                                "bg-neutral-800 text-neutral-400"
                                             }`}>
                                                 {shift.status === "CONFIRMED" ? "Bestätigt" :
                                                  shift.status === "CHANGED" ? "Geändert" :
                                                  shift.status === "SUBMITTED" ? "Eingereicht" : "Geplant"}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-right">
+                                        <td className="px-3 py-2 text-right">
                                             <div className="flex gap-1 justify-end">
                                                 <button
                                                     onClick={() => openEditModal(shift)}
-                                                    className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                                    className="p-1.5 text-neutral-500 hover:text-blue-400 hover:bg-blue-900/30 rounded transition"
                                                 >
-                                                    <Edit2 size={16} />
+                                                    <Edit2 size={14} />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(shift.id)}
-                                                    className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                                                    className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-900/30 rounded transition"
                                                 >
-                                                    <Trash2 size={16} />
+                                                    <Trash2 size={14} />
                                                 </button>
                                             </div>
                                         </td>
@@ -419,11 +407,11 @@ export default function SchedulePage() {
                     </div>
                 ) : (
                     /* Kalender-Ansicht */
-                    <div className="bg-white rounded-xl shadow-sm p-4">
+                    <div className="bg-neutral-900 rounded-xl p-4">
                         {/* Wochentage Header */}
                         <div className="grid grid-cols-7 gap-1 mb-2">
                             {dayNames.map(day => (
-                                <div key={day} className="text-center text-sm font-bold text-gray-600 py-2">
+                                <div key={day} className="text-center text-xs font-bold text-neutral-500 py-2 uppercase tracking-wide">
                                     {day}
                                 </div>
                             ))}
@@ -433,7 +421,7 @@ export default function SchedulePage() {
                         <div className="grid grid-cols-7 gap-1">
                             {/* Leere Zellen für Tage vor Monatsanfang */}
                             {Array.from({ length: getDay(monthStart) }).map((_, i) => (
-                                <div key={`empty-${i}`} className="min-h-[100px] bg-gray-50 rounded-lg" />
+                                <div key={`empty-${i}`} className="min-h-[80px] bg-neutral-950 rounded-lg" />
                             ))}
 
                             {/* Tage des Monats */}
@@ -445,19 +433,19 @@ export default function SchedulePage() {
                                 return (
                                     <div
                                         key={dateKey}
-                                        className={`min-h-[100px] border rounded-lg p-2 cursor-pointer hover:bg-blue-50 transition ${
-                                            isToday ? "border-blue-500 border-2" : "border-gray-200"
+                                        className={`min-h-[80px] border rounded-lg p-1.5 cursor-pointer hover:bg-neutral-800 transition ${
+                                            isToday ? "border-blue-500 border-2 bg-blue-950/20" : "border-neutral-800 bg-neutral-900"
                                         }`}
                                         onClick={() => openCreateModal(day)}
                                     >
-                                        <div className={`text-sm font-bold mb-1 ${isToday ? "text-blue-600" : "text-gray-700"}`}>
+                                        <div className={`text-xs font-bold mb-1 ${isToday ? "text-blue-400" : "text-neutral-400"}`}>
                                             {format(day, "d")}
                                         </div>
-                                        <div className="space-y-1">
+                                        <div className="space-y-0.5">
                                             {dayShifts.slice(0, 3).map(shift => (
                                                 <div
                                                     key={shift.id}
-                                                    className="text-xs bg-blue-100 text-blue-800 px-1 py-0.5 rounded truncate"
+                                                    className="text-[10px] bg-blue-900/50 text-blue-300 px-1 py-0.5 rounded truncate cursor-pointer hover:bg-blue-900"
                                                     onClick={(e) => {
                                                         e.stopPropagation()
                                                         openEditModal(shift)
@@ -468,7 +456,7 @@ export default function SchedulePage() {
                                                 </div>
                                             ))}
                                             {dayShifts.length > 3 && (
-                                                <div className="text-xs text-gray-500">
+                                                <div className="text-[10px] text-neutral-500">
                                                     +{dayShifts.length - 3} mehr
                                                 </div>
                                             )}
@@ -482,13 +470,13 @@ export default function SchedulePage() {
 
                 {/* Modal für Schicht erstellen/bearbeiten */}
                 {showModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-                            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-                                <h2 className="text-xl font-bold text-black">
+                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+                        <div className="bg-neutral-900 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-neutral-800">
+                            <div className="sticky top-0 bg-neutral-900 border-b border-neutral-800 px-6 py-4 flex items-center justify-between">
+                                <h2 className="text-xl font-bold text-white">
                                     {editingShift ? "Schicht bearbeiten" : "Neue Schicht"}
                                 </h2>
-                                <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
+                                <button onClick={() => setShowModal(false)} className="text-neutral-500 hover:text-white transition">
                                     <X size={24} />
                                 </button>
                             </div>
@@ -496,14 +484,14 @@ export default function SchedulePage() {
                             <div className="p-6 space-y-4">
                                 {/* Mitarbeiter */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-neutral-400 mb-1">
                                         Mitarbeiter *
                                     </label>
                                     <select
                                         value={formData.employeeId}
                                         onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
                                         disabled={!!editingShift}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 disabled:bg-gray-100 text-black"
+                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 disabled:opacity-50 text-white"
                                     >
                                         <option value="">Auswählen...</option>
                                         {employees.map(emp => (
@@ -514,7 +502,7 @@ export default function SchedulePage() {
 
                                 {/* Datum */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-neutral-400 mb-1">
                                         Datum *
                                     </label>
                                     <input
@@ -522,45 +510,45 @@ export default function SchedulePage() {
                                         value={formData.date}
                                         onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                         disabled={!!editingShift}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 disabled:bg-gray-100 text-black"
+                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 disabled:opacity-50 text-white"
                                     />
                                 </div>
 
                                 {/* Zeiten */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <label className="block text-sm font-medium text-neutral-400 mb-1">
                                             Start
                                         </label>
                                         <input
                                             type="time"
                                             value={formData.plannedStart}
                                             onChange={(e) => setFormData({ ...formData, plannedStart: e.target.value })}
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
+                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        <label className="block text-sm font-medium text-neutral-400 mb-1">
                                             Ende
                                         </label>
                                         <input
                                             type="time"
                                             value={formData.plannedEnd}
                                             onChange={(e) => setFormData({ ...formData, plannedEnd: e.target.value })}
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
+                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white"
                                         />
                                     </div>
                                 </div>
 
                                 {/* Backup */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-neutral-400 mb-1">
                                         Backup-Mitarbeiter
                                     </label>
                                     <select
                                         value={formData.backupEmployeeId}
                                         onChange={(e) => setFormData({ ...formData, backupEmployeeId: e.target.value })}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
+                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white"
                                     >
                                         <option value="">Kein Backup</option>
                                         {employees.filter(e => e.id !== formData.employeeId).map(emp => (
@@ -571,28 +559,28 @@ export default function SchedulePage() {
 
                                 {/* Notiz */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-neutral-400 mb-1">
                                         Notiz
                                     </label>
                                     <textarea
                                         value={formData.note}
                                         onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
+                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white"
                                         rows={2}
                                     />
                                 </div>
 
                                 {/* Wiederholung (nur bei Neuanlage) */}
                                 {!editingShift && (
-                                    <div className="border-t pt-4">
+                                    <div className="border-t border-neutral-800 pt-4">
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={formData.isRepeating}
                                                 onChange={(e) => setFormData({ ...formData, isRepeating: e.target.checked })}
-                                                className="w-4 h-4 rounded"
+                                                className="w-4 h-4 rounded bg-neutral-800 border-neutral-700"
                                             />
-                                            <span className="text-sm font-medium text-gray-700">
+                                            <span className="text-sm font-medium text-neutral-300">
                                                 Schicht wiederholen
                                             </span>
                                         </label>
@@ -600,7 +588,7 @@ export default function SchedulePage() {
                                         {formData.isRepeating && (
                                             <div className="mt-3 space-y-3 pl-6">
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    <label className="block text-sm font-medium text-neutral-400 mb-1">
                                                         Bis Datum
                                                     </label>
                                                     <input
@@ -608,11 +596,11 @@ export default function SchedulePage() {
                                                         value={formData.repeatEndDate}
                                                         onChange={(e) => setFormData({ ...formData, repeatEndDate: e.target.value })}
                                                         min={formData.date}
-                                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
+                                                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white"
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    <label className="block text-sm font-medium text-neutral-400 mb-2">
                                                         Wochentage
                                                     </label>
                                                     <div className="flex gap-1">
@@ -621,10 +609,10 @@ export default function SchedulePage() {
                                                                 key={idx}
                                                                 type="button"
                                                                 onClick={() => toggleRepeatDay(idx)}
-                                                                className={`w-10 h-10 rounded-lg text-sm font-medium transition ${
+                                                                className={`w-9 h-9 rounded-lg text-xs font-medium transition ${
                                                                     formData.repeatDays.includes(idx)
                                                                         ? "bg-blue-600 text-white"
-                                                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                                                        : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
                                                                 }`}
                                                             >
                                                                 {name}
@@ -638,18 +626,18 @@ export default function SchedulePage() {
                                 )}
                             </div>
 
-                            <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex gap-3">
+                            <div className="sticky bottom-0 bg-neutral-900 border-t border-neutral-800 px-6 py-4 flex gap-3">
                                 <button
                                     onClick={handleCreateOrUpdate}
                                     disabled={loading}
-                                    className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                    className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 transition"
                                 >
-                                    <Save size={20} />
+                                    <Save size={18} />
                                     {loading ? "Speichert..." : "Speichern"}
                                 </button>
                                 <button
                                     onClick={() => setShowModal(false)}
-                                    className="flex-1 border border-gray-300 py-3 rounded-xl font-bold text-gray-600 hover:bg-gray-50"
+                                    className="flex-1 border border-neutral-700 py-2.5 rounded-xl font-bold text-neutral-400 hover:bg-neutral-800 transition"
                                 >
                                     Abbrechen
                                 </button>

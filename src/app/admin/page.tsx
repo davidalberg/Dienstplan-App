@@ -3,7 +3,7 @@
 import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
 import { format } from "date-fns"
-import { Database, RefreshCw, Trash2, Edit2, Users, ChevronDown, ChevronUp, X } from "lucide-react"
+import { Database, Trash2, Edit2, Users, ChevronDown, ChevronUp, X } from "lucide-react"
 import { showToast } from '@/lib/toast-utils'
 import { formatTimeRange } from '@/lib/time-utils'
 
@@ -330,12 +330,7 @@ export default function AdminPage() {
                     )}
 
                     <div className="space-y-4">
-                        {loading ? (
-                            <div className="py-12 text-center text-neutral-500">
-                                <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
-                                Lade Schichten...
-                            </div>
-                        ) : Object.keys(groupedTimesheets).length === 0 ? (
+                        {Object.keys(groupedTimesheets).length === 0 ? (
                             <div className="py-12 text-center text-neutral-400 font-medium">Keine Schichten gefunden.</div>
                         ) : Object.keys(groupedTimesheets).sort((a, b) => a.localeCompare(b, 'de')).map(teamName => (
                             <div key={teamName} className="rounded-xl border border-neutral-800 overflow-hidden">
