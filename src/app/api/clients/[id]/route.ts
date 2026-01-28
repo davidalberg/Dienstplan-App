@@ -78,9 +78,35 @@ export async function PUT(
         if (state !== undefined) updateData.state = state || null
         if (isActive !== undefined) updateData.isActive = isActive
 
+        // Team-Zuweisungen aktualisieren (teamIds = Array von Team-IDs)
+        const { teamIds } = body
+        if (teamIds !== undefined) {
+            // Erst alle Teams von diesem Client entfernen
+            await prisma.team.updateMany({
+                where: { clientId: id },
+                data: { clientId: null }
+            })
+
+            // Dann die neuen Teams zuweisen
+            if (teamIds.length > 0) {
+                await prisma.team.updateMany({
+                    where: { id: { in: teamIds } },
+                    data: { clientId: id }
+                })
+            }
+        }
+
         const client = await prisma.client.update({
             where: { id },
-            data: updateData
+            data: updateData,
+            include: {
+                teams: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            }
         })
 
         return NextResponse.json({ client })

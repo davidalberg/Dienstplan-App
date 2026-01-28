@@ -5,18 +5,15 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { useState } from "react"
 import {
-    LayoutDashboard,
     Calendar,
     FileText,
     Users,
     UserCircle,
-    Download,
     Settings,
     ChevronLeft,
     ChevronRight,
     LogOut,
-    Search,
-    Activity
+    Search
 } from "lucide-react"
 
 interface NavItem {
@@ -44,7 +41,6 @@ export function Sidebar({ onExportClick }: SidebarProps) {
     ]
 
     const secondaryNavItems: NavItem[] = [
-        { icon: Activity, label: "Aktivitätsprotokoll", href: "/admin/settings" },
         { icon: Settings, label: "Einstellungen", href: "/admin/settings" },
     ]
 

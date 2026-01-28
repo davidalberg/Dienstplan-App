@@ -1,9 +1,9 @@
 "use client"
 
-import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { UserCircle, Edit2, Trash2, Plus, X, Save, Search, ArrowUpDown } from "lucide-react"
+import { UserCircle, Edit2, Trash2, Plus, X, Save, Search, ArrowUpDown, Users, Check } from "lucide-react"
 import { useClients } from "@/hooks/use-admin-data"
+import { toast } from "sonner"
 
 interface Client {
     id: string
@@ -14,6 +14,12 @@ interface Client {
     state: string | null
     isActive: boolean
     teams: Array<{ id: string; name: string }>
+}
+
+interface Team {
+    id: string
+    name: string
+    clientId: string | null
 }
 
 const BUNDESLAENDER = [
@@ -57,13 +63,12 @@ function getAvatarColor(name: string): string {
 }
 
 export default function ClientsPage() {
-    const { data: session } = useSession()
-
     // SWR für Daten-Caching
     const { clients: swrClients, isLoading, mutate } = useClients()
 
     // Lokaler State für optimistische Updates
     const [clients, setClients] = useState<Client[]>([])
+    const [teams, setTeams] = useState<Team[]>([])
     const [loading, setLoading] = useState(false)
 
     // Sync SWR data to local state
@@ -71,6 +76,23 @@ export default function ClientsPage() {
         if (swrClients) setClients(swrClients)
         setLoading(isLoading)
     }, [swrClients, isLoading])
+
+    // Teams laden
+    useEffect(() => {
+        fetchTeams()
+    }, [])
+
+    const fetchTeams = async () => {
+        try {
+            const res = await fetch("/api/admin/teams")
+            if (res.ok) {
+                const data = await res.json()
+                setTeams(data.teams || [])
+            }
+        } catch (err) {
+            console.error(err)
+        }
+    }
 
     const [showModal, setShowModal] = useState(false)
     const [editingClient, setEditingClient] = useState<Client | null>(null)
@@ -82,7 +104,8 @@ export default function ClientsPage() {
         lastName: "",
         email: "",
         phone: "",
-        state: ""
+        state: "",
+        teamIds: [] as string[]
     })
 
     // Alte fetchClients-Funktion durch mutate() ersetzen
@@ -95,7 +118,8 @@ export default function ClientsPage() {
             lastName: "",
             email: "",
             phone: "",
-            state: ""
+            state: "",
+            teamIds: []
         })
         setShowModal(true)
     }
@@ -107,14 +131,15 @@ export default function ClientsPage() {
             lastName: client.lastName,
             email: client.email || "",
             phone: client.phone || "",
-            state: client.state || ""
+            state: client.state || "",
+            teamIds: client.teams.map(t => t.id)
         })
         setShowModal(true)
     }
 
     const handleSave = async () => {
         if (!formData.firstName || !formData.lastName) {
-            alert("Vorname und Nachname sind erforderlich")
+            toast.error("Vorname und Nachname sind erforderlich")
             return
         }
 
@@ -129,11 +154,13 @@ export default function ClientsPage() {
                 })
 
                 if (res.ok) {
+                    toast.success("Klient aktualisiert")
                     setShowModal(false)
                     fetchClients()
+                    fetchTeams()
                 } else {
                     const err = await res.json()
-                    alert(`Fehler: ${err.error}`)
+                    toast.error(err.error)
                 }
             } else {
                 // Create
@@ -144,15 +171,16 @@ export default function ClientsPage() {
                 })
 
                 if (res.ok) {
+                    toast.success("Klient erstellt")
                     setShowModal(false)
                     fetchClients()
                 } else {
                     const err = await res.json()
-                    alert(`Fehler: ${err.error}`)
+                    toast.error(err.error)
                 }
             }
-        } catch (err) {
-            console.error(err)
+        } catch {
+            toast.error("Fehler beim Speichern")
         } finally {
             setLoading(false)
         }
@@ -170,13 +198,14 @@ export default function ClientsPage() {
             })
 
             if (res.ok) {
+                toast.success("Klient deaktiviert")
                 fetchClients()
             } else {
                 const err = await res.json()
-                alert(`Fehler: ${err.error}`)
+                toast.error(err.error)
             }
-        } catch (err) {
-            console.error(err)
+        } catch {
+            toast.error("Fehler beim Deaktivieren")
         } finally {
             setLoading(false)
         }
@@ -192,13 +221,14 @@ export default function ClientsPage() {
             })
 
             if (res.ok) {
+                toast.success("Klient reaktiviert")
                 fetchClients()
             } else {
                 const err = await res.json()
-                alert(`Fehler: ${err.error}`)
+                toast.error(err.error)
             }
-        } catch (err) {
-            console.error(err)
+        } catch {
+            toast.error("Fehler beim Reaktivieren")
         } finally {
             setLoading(false)
         }
@@ -308,6 +338,16 @@ export default function ClientsPage() {
                                             {client.email || "Keine E-Mail"}
                                         </p>
                                     </div>
+
+                                    {/* Teams Badge */}
+                                    {client.teams.length > 0 && (
+                                        <div className="hidden sm:flex items-center gap-1">
+                                            <Users className="w-3 h-3 text-purple-400" />
+                                            <span className="text-xs text-purple-400">
+                                                {client.teams.length} Team{client.teams.length > 1 ? 's' : ''}
+                                            </span>
+                                        </div>
+                                    )}
 
                                     {/* State Badge */}
                                     {client.state && (
@@ -443,6 +483,63 @@ export default function ClientsPage() {
                                         ))}
                                     </select>
                                 </div>
+
+                                {/* Teams zuweisen */}
+                                {editingClient && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-neutral-300 mb-2">
+                                            <Users className="inline-block w-4 h-4 mr-1" />
+                                            Zugewiesene Teams
+                                        </label>
+                                        <div className="space-y-2 max-h-40 overflow-y-auto p-2 bg-neutral-800 border border-neutral-700 rounded-lg">
+                                            {teams.length === 0 ? (
+                                                <p className="text-neutral-500 text-sm py-2">Keine Teams vorhanden</p>
+                                            ) : (
+                                                teams.map((team) => (
+                                                    <label
+                                                        key={team.id}
+                                                        className="flex items-center gap-3 p-2 rounded hover:bg-neutral-700/50 cursor-pointer"
+                                                    >
+                                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                                            formData.teamIds.includes(team.id)
+                                                                ? "bg-purple-600 border-purple-600"
+                                                                : "border-neutral-600"
+                                                        }`}>
+                                                            {formData.teamIds.includes(team.id) && (
+                                                                <Check className="w-3 h-3 text-white" />
+                                                            )}
+                                                        </div>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={formData.teamIds.includes(team.id)}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setFormData({
+                                                                        ...formData,
+                                                                        teamIds: [...formData.teamIds, team.id]
+                                                                    })
+                                                                } else {
+                                                                    setFormData({
+                                                                        ...formData,
+                                                                        teamIds: formData.teamIds.filter(id => id !== team.id)
+                                                                    })
+                                                                }
+                                                            }}
+                                                            className="sr-only"
+                                                        />
+                                                        <span className="text-white text-sm">{team.name}</span>
+                                                        {team.clientId && team.clientId !== editingClient.id && (
+                                                            <span className="text-xs text-amber-400">(bereits zugewiesen)</span>
+                                                        )}
+                                                    </label>
+                                                ))
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-neutral-500 mt-1">
+                                            Teams werden diesem Klienten für den Stundennachweis zugeordnet
+                                        </p>
+                                    </div>
+                                )}
 
                                 <div className="flex gap-3 pt-4">
                                     <button
