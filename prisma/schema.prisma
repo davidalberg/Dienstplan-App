@@ -68,7 +68,8 @@ model Client {
   updatedAt    DateTime  @updatedAt
 
   teams        Team[]
-  employees    User[]    // Many-to-many: Assistenzkräfte die für diesen Klienten arbeiten
+  employees    User[]           // Many-to-many: Assistenzkräfte die für diesen Klienten arbeiten
+  submissions  TeamSubmission[] // Stundennachweise für diesen Klienten
 }
 
 model Timesheet {
@@ -179,7 +180,8 @@ model TeamSubmission {
   month              Int
   year               Int
   sheetFileName      String              // z.B. "Dienstplan Finn Jonschker 2026"
-  dienstplanConfigId String
+  dienstplanConfigId String?             // Optional für Legacy-Daten
+  clientId           String?             // NEU: Direkte Klient-Zuordnung
 
   // Status: PENDING_EMPLOYEES → PENDING_RECIPIENT → COMPLETED
   status             String              @default("PENDING_EMPLOYEES")
@@ -195,22 +197,28 @@ model TeamSubmission {
 
   // Finale PDF
   pdfUrl             String?
+  googleDriveFileId  String?             // NEU: Google Drive Datei-ID
 
   // Admin manuelle Freigabe
   manuallyReleasedAt DateTime?
   manuallyReleasedBy String?
   releaseNote        String?
 
+  // E-Mail Tracking
+  lastReminderSentAt DateTime?           // NEU: Für 2-Tage Erinnerung
+
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
   // Relations
-  dienstplanConfig   DienstplanConfig    @relation(fields: [dienstplanConfigId], references: [id])
+  dienstplanConfig   DienstplanConfig?   @relation(fields: [dienstplanConfigId], references: [id])
+  client             Client?             @relation(fields: [clientId], references: [id])
   employeeSignatures EmployeeSignature[]
 
   @@unique([sheetFileName, month, year])
   @@index([signatureToken])
   @@index([status])
+  @@index([clientId, month, year])
 }
 
 // NEU: Einzelne Mitarbeiter-Unterschriften innerhalb einer Team-Einreichung

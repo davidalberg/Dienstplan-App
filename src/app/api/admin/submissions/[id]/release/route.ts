@@ -33,6 +33,7 @@ export async function POST(
             where: { id },
             include: {
                 dienstplanConfig: true,
+                client: true,
                 employeeSignatures: {
                     include: {
                         employee: {
@@ -73,11 +74,24 @@ export async function POST(
         const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
         const signatureUrl = `${baseUrl}/sign/${teamSubmission.signatureToken}`
 
+        // Get recipient email and name from dienstplanConfig or client
+        const recipientEmail = teamSubmission.dienstplanConfig?.assistantRecipientEmail || teamSubmission.client?.email
+        const recipientName = teamSubmission.dienstplanConfig?.assistantRecipientName ||
+            (teamSubmission.client ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}` : null)
+
+        if (!recipientEmail || !recipientName) {
+            return NextResponse.json({
+                success: true,
+                warning: "Freigabe erfolgt, aber keine E-Mail-Adresse für den Assistenznehmer hinterlegt.",
+                signatureUrl
+            })
+        }
+
         try {
             // Use existing email function but with modified employee name to indicate manual release
             await sendSignatureRequestEmail({
-                recipientEmail: teamSubmission.dienstplanConfig.assistantRecipientEmail,
-                recipientName: teamSubmission.dienstplanConfig.assistantRecipientName,
+                recipientEmail,
+                recipientName,
                 employeeName: `Team ${teamSubmission.sheetFileName} (Manuell freigegeben)`,
                 month: teamSubmission.month,
                 year: teamSubmission.year,

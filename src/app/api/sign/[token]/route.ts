@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma"
 import { generateTimesheetPdf } from "@/lib/pdf-generator"
 import { sendCompletionEmails } from "@/lib/email"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
+import { uploadTimesheetPdf } from "@/lib/google-drive"
 import { headers } from "next/headers"
 
 /**
@@ -22,6 +23,7 @@ export async function GET(
             where: { signatureToken: token },
             include: {
                 dienstplanConfig: true,
+                client: true,
                 employeeSignatures: {
                     include: {
                         employee: {
@@ -90,6 +92,10 @@ export async function GET(
             }
         })
 
+        // Get recipient name from dienstplanConfig or client
+        const recipientName = teamSubmission.dienstplanConfig?.assistantRecipientName ||
+            (teamSubmission.client ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}` : "Unbekannt")
+
         return NextResponse.json({
             submission: {
                 id: teamSubmission.id,
@@ -97,7 +103,7 @@ export async function GET(
                 year: teamSubmission.year,
                 status: teamSubmission.status,
                 sheetFileName: teamSubmission.sheetFileName,
-                recipientName: teamSubmission.dienstplanConfig.assistantRecipientName,
+                recipientName,
                 manuallyReleasedAt: teamSubmission.manuallyReleasedAt,
                 releaseNote: teamSubmission.releaseNote
             },
@@ -144,6 +150,7 @@ export async function POST(
             where: { signatureToken: token },
             include: {
                 dienstplanConfig: true,
+                client: true,
                 employeeSignatures: {
                     include: {
                         employee: {
@@ -339,8 +346,9 @@ export async function POST(
                     signature: sig.signature,
                     signedAt: sig.signedAt
                 })),
-                // Recipient signature
-                recipientName: teamSubmission.dienstplanConfig.assistantRecipientName,
+                // Recipient signature - use dienstplanConfig or client
+                recipientName: teamSubmission.dienstplanConfig?.assistantRecipientName ||
+                    (teamSubmission.client ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}` : "Unbekannt"),
                 recipientSignature: signature,
                 recipientSignedAt,
                 // Manual release info (if applicable)
@@ -349,8 +357,34 @@ export async function POST(
             }
         })
 
-        // PDF URL bleibt null - kein Google Drive Upload mehr
-        const pdfUrl = null
+        // Upload PDF to Google Drive
+        let pdfUrl: string | null = null
+        let googleDriveFileId: string | null = null
+
+        try {
+            // Get client and employee names for filename
+            const clientName = teamSubmission.dienstplanConfig?.assistantRecipientName ||
+                (teamSubmission.client ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}` : "Unbekannt")
+
+            // For multi-employee, use "Team" or first employee name
+            const employeeName = teamSubmission.employeeSignatures.length === 1
+                ? teamSubmission.employeeSignatures[0].employee.name || "Mitarbeiter"
+                : `Team_${teamSubmission.employeeSignatures.length}MA`
+
+            const uploadResult = await uploadTimesheetPdf({
+                pdfBuffer: Buffer.from(pdfBuffer),
+                clientName,
+                employeeName,
+                month: teamSubmission.month,
+                year: teamSubmission.year
+            })
+
+            pdfUrl = uploadResult.webViewLink
+            googleDriveFileId = uploadResult.fileId
+        } catch (uploadError: any) {
+            console.error("[RECIPIENT SIGN] Google Drive upload failed:", uploadError)
+            // Continue without Google Drive - PDF generation succeeded
+        }
 
         // Update TeamSubmission to COMPLETED (atomically with status check to prevent re-signing)
         const updateResult = await prisma.teamSubmission.updateMany({
@@ -363,7 +397,8 @@ export async function POST(
                 recipientSignedAt,
                 recipientIp: clientIp,
                 status: "COMPLETED",
-                pdfUrl
+                pdfUrl,
+                googleDriveFileId
             }
         })
 
@@ -397,25 +432,32 @@ export async function POST(
                 name: sig.employee.name || sig.employee.email
             }))
 
-            await sendCompletionEmails({
-                // Send to ALL employees
-                employeeEmails,
-                // Recipient
-                recipientEmail: teamSubmission.dienstplanConfig.assistantRecipientEmail,
-                recipientName: teamSubmission.dienstplanConfig.assistantRecipientName,
-                // Employer
-                employerEmail: process.env.EMPLOYER_EMAIL!,
-                month: teamSubmission.month,
-                year: teamSubmission.year,
-                pdfUrl: pdfUrl || "",
-                sheetFileName: teamSubmission.sheetFileName,
-                totalHours,
-                employeeSignatures: teamSubmission.employeeSignatures.map(sig => ({
-                    name: sig.employee.name || sig.employee.email,
-                    signedAt: sig.signedAt
-                })),
-                recipientSignedAt
-            })
+            // Get recipient info from dienstplanConfig or client
+            const completionRecipientEmail = teamSubmission.dienstplanConfig?.assistantRecipientEmail || teamSubmission.client?.email
+            const completionRecipientName = teamSubmission.dienstplanConfig?.assistantRecipientName ||
+                (teamSubmission.client ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}` : "Unbekannt")
+
+            if (completionRecipientEmail) {
+                await sendCompletionEmails({
+                    // Send to ALL employees
+                    employeeEmails,
+                    // Recipient
+                    recipientEmail: completionRecipientEmail,
+                    recipientName: completionRecipientName,
+                    // Employer
+                    employerEmail: process.env.EMPLOYER_EMAIL!,
+                    month: teamSubmission.month,
+                    year: teamSubmission.year,
+                    pdfUrl: pdfUrl || "",
+                    sheetFileName: teamSubmission.sheetFileName,
+                    totalHours,
+                    employeeSignatures: teamSubmission.employeeSignatures.map(sig => ({
+                        name: sig.employee.name || sig.employee.email,
+                        signedAt: sig.signedAt
+                    })),
+                    recipientSignedAt
+                })
+            }
         } catch (emailError: any) {
             emailSuccess = false
             emailErrorMessage = emailError.message || "Unbekannter Fehler"

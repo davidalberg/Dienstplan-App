@@ -343,3 +343,216 @@ Dienstplan App
 
     await Promise.all(emailPromises)
 }
+
+/**
+ * Send confirmation email to employee after they signed
+ * NEW: Part of the signature workflow
+ */
+interface SendEmployeeConfirmationParams {
+    employeeEmail: string
+    employeeName: string
+    clientName: string
+    month: number
+    year: number
+    signedAt: Date
+    totalSigned: number
+    totalRequired: number
+}
+
+export async function sendEmployeeConfirmationEmail(params: SendEmployeeConfirmationParams) {
+    const {
+        employeeEmail,
+        employeeName,
+        clientName,
+        month,
+        year,
+        signedAt,
+        totalSigned,
+        totalRequired
+    } = params
+
+    const resend = getResendClient()
+    const fromEmail = process.env.EMAIL_FROM || "Dienstplan App <onboarding@resend.dev>"
+
+    const monthName = MONTH_NAMES[month - 1]
+    const signedAtFormatted = signedAt.toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+    })
+
+    const allSigned = totalSigned === totalRequired
+    const statusMessage = allSigned
+        ? `Alle ${totalRequired} Assistenten haben unterschrieben. Der Assistenznehmer wird nun per E-Mail benachrichtigt.`
+        : `${totalSigned} von ${totalRequired} Assistenten haben unterschrieben. Sobald alle unterschrieben haben, wird der Assistenznehmer benachrichtigt.`
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">✓ Vielen Dank für deine Unterschrift</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">${monthName} ${year}</p>
+    </div>
+
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+        <p style="font-size: 16px; margin-bottom: 20px;">
+            Hallo ${employeeName},
+        </p>
+
+        <p style="font-size: 15px; color: #4b5563;">
+            Deine Unterschrift für den Stundennachweis <strong>${monthName} ${year}</strong> bei <strong>${clientName}</strong> wurde erfolgreich erfasst.
+        </p>
+
+        <div style="background: #f3f4f6; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <table style="width: 100%; font-size: 14px;">
+                <tr>
+                    <td style="padding: 5px 0; color: #6b7280;">Unterschrieben am:</td>
+                    <td style="padding: 5px 0; font-weight: 600;">${signedAtFormatted}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 5px 0; color: #6b7280;">Status:</td>
+                    <td style="padding: 5px 0;">${totalSigned} von ${totalRequired} unterschrieben</td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="background: ${allSigned ? "#d1fae5" : "#fef3c7"}; border: 1px solid ${allSigned ? "#10b981" : "#f59e0b"}; border-radius: 8px; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: ${allSigned ? "#065f46" : "#92400e"}; font-size: 14px;">
+                ${allSigned ? "🎉" : "⏳"} ${statusMessage}
+            </p>
+        </div>
+
+        <p style="font-size: 14px; color: #6b7280;">
+            Du erhältst eine weitere E-Mail mit dem finalen PDF, sobald auch der Assistenznehmer unterschrieben hat.
+        </p>
+    </div>
+
+    <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+        <p>Diese E-Mail wurde automatisch von der Dienstplan App versendet.</p>
+    </div>
+</body>
+</html>
+`
+
+    await resend.emails.send({
+        from: fromEmail,
+        to: employeeEmail,
+        subject: `✓ Unterschrift bestätigt - ${clientName} ${monthName} ${year}`,
+        html: htmlContent,
+    })
+}
+
+/**
+ * Send reminder email to recipient (Assistenznehmer) after 2 days
+ * NEW: Called by Vercel Cron job
+ */
+interface SendReminderEmailParams {
+    recipientEmail: string
+    recipientName: string
+    sheetFileName: string
+    month: number
+    year: number
+    signatureUrl: string
+    expiresAt: Date
+    employeeNames: string[]
+    daysPending: number
+}
+
+export async function sendReminderEmail(params: SendReminderEmailParams) {
+    const {
+        recipientEmail,
+        recipientName,
+        sheetFileName,
+        month,
+        year,
+        signatureUrl,
+        expiresAt,
+        employeeNames,
+        daysPending
+    } = params
+
+    const resend = getResendClient()
+    const fromEmail = process.env.EMAIL_FROM || "Dienstplan App <onboarding@resend.dev>"
+
+    const monthName = MONTH_NAMES[month - 1]
+    const expiresFormatted = expiresAt.toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric"
+    })
+
+    const employeeListHtml = employeeNames.map(name =>
+        `<li style="padding: 3px 0;">${name}</li>`
+    ).join("")
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">⏰ Erinnerung: Stundennachweis wartet auf Ihre Unterschrift</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">${sheetFileName} - ${monthName} ${year}</p>
+    </div>
+
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+        <p style="font-size: 16px; margin-bottom: 20px;">
+            Hallo ${recipientName || ""},
+        </p>
+
+        <p style="font-size: 15px; color: #4b5563;">
+            Der Stundennachweis für <strong>${monthName} ${year}</strong> wartet seit <strong>${daysPending} Tagen</strong> auf Ihre Unterschrift.
+        </p>
+
+        <p style="font-size: 15px; color: #4b5563;">
+            Folgende Mitarbeiter haben bereits unterschrieben:
+        </p>
+
+        <ul style="background: #f3f4f6; border-radius: 8px; padding: 15px 15px 15px 35px; margin: 20px 0; color: #374151;">
+            ${employeeListHtml}
+        </ul>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="${signatureUrl}" style="display: inline-block; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
+                Jetzt unterschreiben
+            </a>
+        </div>
+
+        <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #92400e; font-size: 14px;">
+                <strong>⚠️ Achtung:</strong> Dieser Link ist nur noch bis zum <strong>${expiresFormatted}</strong> gültig.
+            </p>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 25px 0;">
+
+        <p style="font-size: 13px; color: #6b7280;">
+            Falls der Button nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br>
+            <a href="${signatureUrl}" style="color: #f59e0b; word-break: break-all;">${signatureUrl}</a>
+        </p>
+    </div>
+
+    <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+        <p>Diese E-Mail wurde automatisch von der Dienstplan App versendet.</p>
+    </div>
+</body>
+</html>
+`
+
+    await resend.emails.send({
+        from: fromEmail,
+        to: recipientEmail,
+        subject: `⏰ Erinnerung: Stundennachweis wartet - ${sheetFileName} ${monthName} ${year}`,
+        html: htmlContent,
+    })
+}

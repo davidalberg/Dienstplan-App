@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
                 ],
                 include: {
                     dienstplanConfig: true,
+                    client: true,
                     employeeSignatures: {
                         include: {
                             employee: {
@@ -61,6 +62,11 @@ export async function GET(req: NextRequest) {
                     submission.year
                 )
 
+                // Get recipient info from dienstplanConfig or client
+                const recipientEmail = submission.dienstplanConfig?.assistantRecipientEmail || submission.client?.email || null
+                const recipientName = submission.dienstplanConfig?.assistantRecipientName ||
+                    (submission.client ? `${submission.client.firstName} ${submission.client.lastName}` : null)
+
                 return {
                     id: submission.id,
                     sheetFileName: submission.sheetFileName,
@@ -69,8 +75,8 @@ export async function GET(req: NextRequest) {
                     status: submission.status,
                     createdAt: submission.createdAt,
                     updatedAt: submission.updatedAt,
-                    recipientEmail: submission.dienstplanConfig.assistantRecipientEmail,
-                    recipientName: submission.dienstplanConfig.assistantRecipientName,
+                    recipientEmail,
+                    recipientName,
                     recipientSignedAt: submission.recipientSignedAt,
                     manuallyReleasedAt: submission.manuallyReleasedAt,
                     manuallyReleasedBy: submission.manuallyReleasedBy,

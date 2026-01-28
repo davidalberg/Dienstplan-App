@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
             where: { id: submissionId },
             include: {
                 dienstplanConfig: true,
+                client: true,
                 employeeSignatures: {
                     include: {
                         employee: {
@@ -162,10 +163,26 @@ export async function POST(req: NextRequest) {
             const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
             const signatureUrl = `${baseUrl}/sign/${teamSubmission.signatureToken}`
 
+            // Get recipient info from dienstplanConfig or client
+            const recipientEmail = teamSubmission.dienstplanConfig?.assistantRecipientEmail || teamSubmission.client?.email
+            const recipientName = teamSubmission.dienstplanConfig?.assistantRecipientName ||
+                (teamSubmission.client ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}` : null)
+
+            if (!recipientEmail || !recipientName) {
+                return NextResponse.json({
+                    message: `Unterschrift gespeichert. Alle ${result.totalEmployees} Teammitglieder haben unterschrieben, aber keine E-Mail-Adresse für den Assistenznehmer hinterlegt.`,
+                    warning: "Bitte informieren Sie den Assistenznehmer manuell.",
+                    signatureUrl,
+                    allSigned: true,
+                    totalCount: result.totalEmployees,
+                    signedCount: result.signedCount
+                }, { status: 207 })
+            }
+
             try {
                 await sendSignatureRequestEmail({
-                    recipientEmail: teamSubmission.dienstplanConfig.assistantRecipientEmail,
-                    recipientName: teamSubmission.dienstplanConfig.assistantRecipientName,
+                    recipientEmail,
+                    recipientName,
                     employeeName: `Team ${teamSubmission.sheetFileName}`,
                     month: teamSubmission.month,
                     year: teamSubmission.year,
