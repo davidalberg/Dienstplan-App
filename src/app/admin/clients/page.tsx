@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
 import { UserCircle, Edit2, Trash2, Plus, X, Save, Search, ArrowUpDown } from "lucide-react"
+import { useClients } from "@/hooks/use-admin-data"
 
 interface Client {
     id: string
@@ -57,8 +58,20 @@ function getAvatarColor(name: string): string {
 
 export default function ClientsPage() {
     const { data: session } = useSession()
+
+    // SWR für Daten-Caching
+    const { clients: swrClients, isLoading, mutate } = useClients()
+
+    // Lokaler State für optimistische Updates
     const [clients, setClients] = useState<Client[]>([])
     const [loading, setLoading] = useState(false)
+
+    // Sync SWR data to local state
+    useEffect(() => {
+        if (swrClients) setClients(swrClients)
+        setLoading(isLoading)
+    }, [swrClients, isLoading])
+
     const [showModal, setShowModal] = useState(false)
     const [editingClient, setEditingClient] = useState<Client | null>(null)
     const [activeTab, setActiveTab] = useState<"active" | "inactive">("active")
@@ -72,24 +85,8 @@ export default function ClientsPage() {
         state: ""
     })
 
-    useEffect(() => {
-        fetchClients()
-    }, [])
-
-    const fetchClients = async () => {
-        setLoading(true)
-        try {
-            const res = await fetch("/api/clients")
-            if (res.ok) {
-                const data = await res.json()
-                setClients(data.clients || [])
-            }
-        } catch (err) {
-            console.error(err)
-        } finally {
-            setLoading(false)
-        }
-    }
+    // Alte fetchClients-Funktion durch mutate() ersetzen
+    const fetchClients = () => mutate()
 
     const handleCreate = () => {
         setEditingClient(null)

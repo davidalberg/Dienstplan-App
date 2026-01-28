@@ -58,25 +58,30 @@ export async function GET(req: NextRequest) {
             where.teamId = teamId
         }
 
-        // Auch alle Mitarbeiter für Dropdown laden (zuerst, damit wir Namen zuordnen können)
-        const employees = await prisma.user.findMany({
-            where: { role: "EMPLOYEE" },
-            select: { id: true, name: true, email: true, teamId: true },
-            orderBy: { name: "asc" }
-        })
+        // Parallele Abfragen für bessere Performance
+        const [employees, rawShifts, teams] = await Promise.all([
+            prisma.user.findMany({
+                where: { role: "EMPLOYEE" },
+                select: { id: true, name: true, email: true, teamId: true },
+                orderBy: { name: "asc" }
+            }),
+            prisma.timesheet.findMany({
+                where,
+                include: {
+                    employee: {
+                        select: { id: true, name: true, email: true }
+                    }
+                },
+                orderBy: [{ date: "asc" }, { plannedStart: "asc" }]
+            }),
+            prisma.team.findMany({
+                select: { id: true, name: true },
+                orderBy: { name: "asc" }
+            })
+        ])
 
         // Map für schnelle Mitarbeiter-Lookup
         const employeeMap = new Map(employees.map(e => [e.id, e]))
-
-        const rawShifts = await prisma.timesheet.findMany({
-            where,
-            include: {
-                employee: {
-                    select: { id: true, name: true, email: true }
-                }
-            },
-            orderBy: [{ date: "asc" }, { plannedStart: "asc" }]
-        })
 
         // Backup-Employee-Namen hinzufügen
         const shifts = rawShifts.map(shift => ({
@@ -85,12 +90,6 @@ export async function GET(req: NextRequest) {
                 ? employeeMap.get(shift.backupEmployeeId) || null
                 : null
         }))
-
-        // Alle Teams laden
-        const teams = await prisma.team.findMany({
-            select: { id: true, name: true },
-            orderBy: { name: "asc" }
-        })
 
         return NextResponse.json({ shifts, employees, teams })
     } catch (error: any) {

@@ -2,7 +2,6 @@
 
 import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from "date-fns"
 import { de } from "date-fns/locale"
 import {
@@ -18,6 +17,7 @@ import {
 } from "lucide-react"
 import { showToast } from "@/lib/toast-utils"
 import { formatTimeRange } from "@/lib/time-utils"
+import { useAdminSchedule } from "@/hooks/use-admin-data"
 
 interface Shift {
     id: string
@@ -44,15 +44,37 @@ interface Team {
 
 export default function SchedulePage() {
     const { data: session } = useSession()
-    const [shifts, setShifts] = useState<Shift[]>([])
-    const [employees, setEmployees] = useState<Employee[]>([])
-    const [teams, setTeams] = useState<Team[]>([])
-    const [loading, setLoading] = useState(true)
     const [viewMode, setViewMode] = useState<"list" | "calendar">("list")
 
     // Filter
     const [currentDate, setCurrentDate] = useState(new Date())
     const [selectedTeam, setSelectedTeam] = useState<string>("")
+
+    const month = currentDate.getMonth() + 1
+    const year = currentDate.getFullYear()
+
+    // SWR für Daten-Caching
+    const {
+        shifts: swrShifts,
+        employees: swrEmployees,
+        teams: swrTeams,
+        isLoading,
+        mutate
+    } = useAdminSchedule(month, year, selectedTeam || undefined)
+
+    // Lokaler State für optimistische Updates
+    const [shifts, setShifts] = useState<Shift[]>([])
+    const [employees, setEmployees] = useState<Employee[]>([])
+    const [teams, setTeams] = useState<Team[]>([])
+    const [loading, setLoading] = useState(true)
+
+    // Sync SWR data to local state
+    useEffect(() => {
+        if (swrShifts) setShifts(swrShifts)
+        if (swrEmployees) setEmployees(swrEmployees)
+        if (swrTeams) setTeams(swrTeams)
+        setLoading(isLoading)
+    }, [swrShifts, swrEmployees, swrTeams, isLoading])
 
     // Modal State
     const [showModal, setShowModal] = useState(false)
@@ -70,31 +92,8 @@ export default function SchedulePage() {
         repeatDays: [1, 2, 3, 4, 5] as number[] // Mo-Fr default
     })
 
-    const month = currentDate.getMonth() + 1
-    const year = currentDate.getFullYear()
-
-    const fetchData = async () => {
-        setLoading(true)
-        try {
-            const url = `/api/admin/schedule?month=${month}&year=${year}${selectedTeam ? `&teamId=${selectedTeam}` : ""}`
-            const res = await fetch(url)
-            if (res.ok) {
-                const data = await res.json()
-                setShifts(data.shifts || [])
-                setEmployees(data.employees || [])
-                setTeams(data.teams || [])
-            }
-        } catch (err) {
-            console.error(err)
-            showToast("error", "Fehler beim Laden der Daten")
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        if (session) fetchData()
-    }, [session, month, year, selectedTeam])
+    // Alte fetchData-Funktion durch mutate() ersetzen
+    const fetchData = () => mutate()
 
     const handleCreateOrUpdate = async () => {
         if (!formData.employeeId || !formData.date) {

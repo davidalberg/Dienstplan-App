@@ -19,28 +19,38 @@ export async function GET(req: NextRequest) {
         const filterMonth = searchParams.get("month") ? parseInt(searchParams.get("month")!) : null
         const filterYear = searchParams.get("year") ? parseInt(searchParams.get("year")!) : null
 
-        // Get all TeamSubmissions (ordered by most recent first)
-        const teamSubmissions = await prisma.teamSubmission.findMany({
-            orderBy: [
-                { year: "desc" },
-                { month: "desc" },
-                { createdAt: "desc" }
-            ],
-            include: {
-                dienstplanConfig: true,
-                employeeSignatures: {
-                    include: {
-                        employee: {
-                            select: {
-                                id: true,
-                                name: true,
-                                email: true
+        // Parallele Abfragen für bessere Performance
+        const [teamSubmissions, allConfigs] = await Promise.all([
+            prisma.teamSubmission.findMany({
+                orderBy: [
+                    { year: "desc" },
+                    { month: "desc" },
+                    { createdAt: "desc" }
+                ],
+                include: {
+                    dienstplanConfig: true,
+                    employeeSignatures: {
+                        include: {
+                            employee: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    email: true
+                                }
                             }
                         }
                     }
                 }
-            }
-        })
+            }),
+            prisma.dienstplanConfig.findMany({
+                orderBy: { sheetFileName: "asc" }
+            })
+        ])
+
+        // NEW: Get all configured Dienstpläne that don't have a submission for the current/selected month
+        const currentDate = new Date()
+        const targetMonth = filterMonth || currentDate.getMonth() + 1
+        const targetYear = filterYear || currentDate.getFullYear()
 
         // For each submission, get total employee count
         const submissionsWithProgress = await Promise.all(
@@ -77,16 +87,6 @@ export async function GET(req: NextRequest) {
                 }
             })
         )
-
-        // NEW: Get all configured Dienstpläne that don't have a submission for the current/selected month
-        const currentDate = new Date()
-        const targetMonth = filterMonth || currentDate.getMonth() + 1
-        const targetYear = filterYear || currentDate.getFullYear()
-
-        // Get all DienstplanConfigs
-        const allConfigs = await prisma.dienstplanConfig.findMany({
-            orderBy: { sheetFileName: "asc" }
-        })
 
         // Find configs that don't have a TeamSubmission for the target month/year
         const submittedSheetFileNames = new Set(

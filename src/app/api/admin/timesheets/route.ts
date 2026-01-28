@@ -21,27 +21,28 @@ export async function GET(req: NextRequest) {
     if (teamId) where.teamId = teamId
 
     try {
-        const timesheets = await prisma.timesheet.findMany({
-            where,
-            include: {
-                employee: {
-                    select: { name: true, email: true }
+        // Parallele Abfragen für bessere Performance
+        const [timesheets, teams, employees] = await Promise.all([
+            prisma.timesheet.findMany({
+                where,
+                include: {
+                    employee: {
+                        select: { name: true, email: true }
+                    },
+                    team: {
+                        select: { name: true }
+                    }
                 },
-                team: {
-                    select: { name: true }
-                }
-            },
-            orderBy: [{ date: "asc" }, { plannedStart: "asc" }]
-        })
-
-        // Fetch teams and employees for the filter menu
-        const teams = await prisma.team.findMany({
-            select: { id: true, name: true }
-        })
-        const employees = await prisma.user.findMany({
-            where: { role: "EMPLOYEE" },
-            select: { id: true, name: true }
-        })
+                orderBy: [{ date: "asc" }, { plannedStart: "asc" }]
+            }),
+            prisma.team.findMany({
+                select: { id: true, name: true }
+            }),
+            prisma.user.findMany({
+                where: { role: "EMPLOYEE" },
+                select: { id: true, name: true }
+            })
+        ])
 
         return NextResponse.json({
             timesheets,

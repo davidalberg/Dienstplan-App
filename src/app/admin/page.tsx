@@ -6,13 +6,10 @@ import { format } from "date-fns"
 import { Database, Trash2, Edit2, Users, ChevronDown, ChevronUp, X } from "lucide-react"
 import { showToast } from '@/lib/toast-utils'
 import { formatTimeRange } from '@/lib/time-utils'
+import { useAdminTimesheets } from '@/hooks/use-admin-data'
 
 export default function AdminPage() {
     const { data: session } = useSession()
-    const [loading, setLoading] = useState(true)
-    const [timesheets, setTimesheets] = useState<any[]>([])
-    const [teams, setTeams] = useState<any[]>([])
-    const [employees, setEmployees] = useState<any[]>([])
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
     const [filters, setFilters] = useState({
         month: new Date().getMonth() + 1,
@@ -20,6 +17,30 @@ export default function AdminPage() {
         employeeId: "",
         teamId: ""
     })
+
+    // SWR für Daten-Caching und schnellere Navigation
+    const {
+        timesheets: swrTimesheets,
+        teams: swrTeams,
+        employees: swrEmployees,
+        isLoading,
+        mutate
+    } = useAdminTimesheets(filters.month, filters.year, filters.employeeId || undefined, filters.teamId || undefined)
+
+    // Lokaler State für optimistische Updates
+    const [timesheets, setTimesheets] = useState<any[]>([])
+    const [teams, setTeams] = useState<any[]>([])
+    const [employees, setEmployees] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+
+    // Sync SWR data to local state
+    useEffect(() => {
+        if (swrTimesheets) setTimesheets(swrTimesheets)
+        if (swrTeams) setTeams(swrTeams)
+        if (swrEmployees) setEmployees(swrEmployees)
+        setLoading(isLoading)
+    }, [swrTimesheets, swrTeams, swrEmployees, isLoading])
+
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
     const [editingShift, setEditingShift] = useState<any | null>(null)
     const [editData, setEditData] = useState({
@@ -34,32 +55,18 @@ export default function AdminPage() {
     const [selectedShifts, setSelectedShifts] = useState<Set<string>>(new Set())
     const [selectAll, setSelectAll] = useState(false)
 
-    const fetchAdminData = async () => {
-        setLoading(true)
-        try {
-            const tsRes = await fetch(`/api/admin/timesheets?month=${filters.month}&year=${filters.year}&employeeId=${filters.employeeId}&teamId=${filters.teamId}`)
-
-            if (tsRes.ok) {
-                const data = await tsRes.json()
-                setTimesheets(data.timesheets || [])
-                setTeams(data.teams || [])
-                setEmployees(data.employees || [])
-
-                // Initialize expanded groups for teams (default to collapsed/false)
-                setExpandedGroups(prev => {
-                    const newGroups = { ...prev }
-                    ;(data.teams || []).forEach((t: any) => {
-                        if (newGroups[t.id] === undefined) newGroups[t.id] = false
-                    })
-                    return newGroups
+    // Initialize expanded groups when teams change
+    useEffect(() => {
+        if (teams.length > 0) {
+            setExpandedGroups(prev => {
+                const newGroups = { ...prev }
+                teams.forEach((t: any) => {
+                    if (newGroups[t.id] === undefined) newGroups[t.id] = false
                 })
-            }
-        } catch (err) {
-            console.error(err)
-        } finally {
-            setLoading(false)
+                return newGroups
+            })
         }
-    }
+    }, [teams])
 
     const handleDelete = async (id: string) => {
         if (!confirm("Dies löscht den Schichteintrag dauerhaft. Fortfahren?")) return
@@ -74,8 +81,9 @@ export default function AdminPage() {
 
             if (res.ok) {
                 showToast("success", "Eintrag erfolgreich gelöscht")
+                mutate() // Sync mit Server
             } else {
-                // Rollback bei Fehler: Eintrag wieder hinzufügen
+                // Rollback bei Fehler
                 if (deletedItem) {
                     setTimesheets(prev => [...prev, deletedItem].sort((a, b) =>
                         new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -232,9 +240,6 @@ export default function AdminPage() {
         })
     }
 
-    useEffect(() => {
-        if (session) fetchAdminData()
-    }, [session, filters])
 
     // Helper to group timesheets by team
     const groupedTimesheets = timesheets.reduce((acc: any, ts: any) => {
