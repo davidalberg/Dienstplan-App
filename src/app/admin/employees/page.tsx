@@ -249,29 +249,21 @@ export default function EmployeesPage() {
 
     if (loading && employees.length === 0) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-                <div className="text-xl text-gray-600">Lädt...</div>
+            <div className="admin-dark min-h-screen bg-neutral-950 flex items-center justify-center">
+                <div className="text-xl text-neutral-400">Lädt...</div>
             </div>
         )
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="admin-dark min-h-screen bg-neutral-950 p-6">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                        <Link
-                            href="/admin"
-                            className="text-gray-600 hover:text-gray-900 transition"
-                        >
-                            ← Zurück
-                        </Link>
-                        <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-                            <Users className="text-blue-600" size={32} />
-                            Mitarbeiter-Verwaltung
-                        </h1>
-                    </div>
+                    <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+                        <Users className="text-blue-400" size={28} />
+                        Mitarbeiter-Verwaltung
+                    </h1>
                     <button
                         onClick={handleCreate}
                         className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2"

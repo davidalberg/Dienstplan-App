@@ -258,27 +258,22 @@ export default function SchedulePage() {
     if (!session) return null
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className="admin-dark min-h-screen bg-neutral-950 p-6">
             <div className="mx-auto max-w-7xl">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-4">
-                        <Link href="/admin" className="text-gray-600 hover:text-gray-900">
-                            ← Zurück
-                        </Link>
-                        <h1 className="text-3xl font-black text-black flex items-center gap-3">
-                            <Calendar className="text-blue-600" size={32} />
-                            Dienstplan-Editor
-                        </h1>
-                    </div>
+                    <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+                        <Calendar className="text-blue-400" size={28} />
+                        Dienstplan-Editor
+                    </h1>
 
                     <div className="flex items-center gap-3">
                         {/* View Toggle */}
-                        <div className="flex bg-gray-200 rounded-lg p-1">
+                        <div className="flex bg-neutral-800 rounded-lg p-1">
                             <button
                                 onClick={() => setViewMode("list")}
                                 className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                                    viewMode === "list" ? "bg-white shadow text-black" : "text-gray-600"
+                                    viewMode === "list" ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-white"
                                 }`}
                             >
                                 <List size={16} className="inline mr-2" />
@@ -287,7 +282,7 @@ export default function SchedulePage() {
                             <button
                                 onClick={() => setViewMode("calendar")}
                                 className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                                    viewMode === "calendar" ? "bg-white shadow text-black" : "text-gray-600"
+                                    viewMode === "calendar" ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-white"
                                 }`}
                             >
                                 <Calendar size={16} className="inline mr-2" />

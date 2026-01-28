@@ -470,24 +470,16 @@ export default function AdminSubmissionsPage() {
     )
 
     return (
-        <div className="min-h-screen bg-gray-50 p-8">
+        <div className="admin-dark min-h-screen bg-neutral-950 p-6">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">
-                            Einreichungen verwalten
-                        </h1>
-                        <p className="text-gray-600 mt-2">
-                            Übersicht aller Team-Einreichungen
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => router.push("/admin")}
-                        className="px-4 py-2 text-gray-600 hover:text-gray-900"
-                    >
-                        ← Zurück zum Dashboard
-                    </button>
+                <div className="mb-8">
+                    <h1 className="text-2xl font-bold text-white">
+                        Einreichungen
+                    </h1>
+                    <p className="text-neutral-400 mt-1">
+                        Übersicht aller Team-Einreichungen
+                    </p>
                 </div>
 
                 {/* Month/Year Filter */}

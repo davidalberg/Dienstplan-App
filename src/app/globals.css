@@ -39,31 +39,71 @@ input:-webkit-autofill:active {
   }
 }
 
-/* Stelle sicher, dass Input-Felder immer gut lesbar sind */
+/* Admin Dark Theme - Inputs und Selects */
+.admin-dark input[type="text"],
+.admin-dark input[type="email"],
+.admin-dark input[type="password"],
+.admin-dark input[type="number"],
+.admin-dark input[type="date"],
+.admin-dark input[type="time"],
+.admin-dark textarea,
+.admin-dark select {
+  color: #ffffff !important;
+  background-color: #262626 !important;
+  border-color: #404040 !important;
+}
+
+.admin-dark select option {
+  color: #ffffff !important;
+  background-color: #262626 !important;
+}
+
+.admin-dark input:-webkit-autofill,
+.admin-dark input:-webkit-autofill:hover,
+.admin-dark input:-webkit-autofill:focus,
+.admin-dark input:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0 30px #262626 inset !important;
+}
+
+/* Standard (non-admin) Light Theme - behalte alte Styles */
 input[type="text"],
 input[type="email"],
 input[type="password"],
 input[type="number"],
 input[type="date"],
 textarea {
-  color: #111827 !important;
+  color: #111827;
 }
 
-/* Stelle sicher, dass Select-Dropdowns IMMER schwarzen Text haben (auch in Dark Mode) */
 select,
 select option {
-  color: #000000 !important;
-  background-color: #ffffff !important;
-}
-
-/* Forciere schwarzen Text für alle Browser */
-select::-ms-value {
-  color: #000000 !important;
+  color: #000000;
+  background-color: #ffffff;
 }
 
 /* Firefox */
 select option:checked,
 select option:hover {
-  color: #000000 !important;
-  background-color: #f3f4f6 !important;
+  color: #000000;
+  background-color: #f3f4f6;
+}
+
+/* Scrollbar Styling für Dark Theme */
+.admin-dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.admin-dark ::-webkit-scrollbar-track {
+  background: #171717;
+}
+
+.admin-dark ::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 4px;
+}
+
+.admin-dark ::-webkit-scrollbar-thumb:hover {
+  background: #525252;
 }
