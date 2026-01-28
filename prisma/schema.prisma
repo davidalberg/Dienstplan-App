@@ -45,9 +45,25 @@ model Team {
   name                    String              @unique
   assistantRecipientEmail String?             // E-Mail des Assistenznehmers für Signatur
   assistantRecipientName  String?             // Name des Assistenznehmers für PDF
+  clientId                String?
   timesheets              Timesheet[]
   members                 User[]
   submissions             MonthlySubmission[]
+  client                  Client?             @relation(fields: [clientId], references: [id])
+}
+
+model Client {
+  id           String    @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String?
+  phone        String?
+  state        String?   // Bundesland
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  teams        Team[]
 }
 
 model Timesheet {

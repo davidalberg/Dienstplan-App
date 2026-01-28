@@ -9,6 +9,8 @@ import {
     Calendar,
     FileText,
     Users,
+    UserCircle,
+    UserCog,
     Download,
     Settings,
     ChevronLeft,
@@ -39,7 +41,9 @@ export function Sidebar({ onExportClick }: SidebarProps) {
         { icon: LayoutDashboard, label: "Dashboard", href: "/admin" },
         { icon: Calendar, label: "Dienstplan", href: "/admin/schedule" },
         { icon: FileText, label: "Einreichungen", href: "/admin/submissions" },
-        { icon: Users, label: "Mitarbeiter", href: "/admin/employees" },
+        { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
+        { icon: Users, label: "Assistenten", href: "/admin/assistants" },
+        { icon: UserCog, label: "Mitarbeiter", href: "/admin/employees" },
     ]
 
     const secondaryNavItems: NavItem[] = [
