@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { sendEmployeeConfirmationEmail } from "@/lib/email"
+// sendEmployeeConfirmationEmail import entfernt - Mitarbeiter sieht Status im Dashboard
 import { headers } from "next/headers"
 
 /**
@@ -211,22 +211,9 @@ export async function POST(
             })
         }
 
-        // Send confirmation email to employee
-        try {
-            await sendEmployeeConfirmationEmail({
-                employeeEmail: employeeSignature.employee.email,
-                employeeName: employeeSignature.employee.name || employeeSignature.employee.email,
-                clientName,
-                month: teamSubmission.month,
-                year: teamSubmission.year,
-                signedAt,
-                totalSigned: signedCount,
-                totalRequired: totalCount
-            })
-        } catch (emailError: any) {
-            console.error("[POST /api/sign/employee/[token]] Email error:", emailError)
-            // Continue even if email fails
-        }
+        // Mitarbeiter-Confirmation-E-Mail deaktiviert
+        // (Mitarbeiter sieht Status direkt im Dashboard)
+        // Die sendEmployeeConfirmationEmail Funktion wird nicht mehr aufgerufen.
 
         return NextResponse.json({
             success: true,

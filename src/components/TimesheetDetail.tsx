@@ -87,7 +87,7 @@ export default function TimesheetDetail({
     onClose,
     onDelete
 }: TimesheetDetailProps) {
-    const [signaturesEnabled, setSignaturesEnabled] = useState(false)
+    const signaturesEnabled = true // Immer aktiviert - kein Toggle mehr
     const [sendingEmail, setSendingEmail] = useState<string | null>(null)
     const [showDownloadMenu, setShowDownloadMenu] = useState(false)
     const [deleting, setDeleting] = useState(false)
@@ -98,12 +98,6 @@ export default function TimesheetDetail({
         fetcher
     )
 
-    // Signaturen aktivieren wenn Submission existiert
-    useEffect(() => {
-        if (data?.submission) {
-            setSignaturesEnabled(true)
-        }
-    }, [data])
 
     const monthName = format(new Date(year, month - 1), "MMMM yyyy", { locale: de })
 
@@ -162,6 +156,44 @@ export default function TimesheetDetail({
             showToast("error", err.message || "E-Mail konnte nicht gesendet werden")
         } finally {
             setSendingEmail(null)
+        }
+    }
+
+    const handleSkipSignature = async (employeeId: string) => {
+        // Guard: Pruefe ob data und submission vorhanden sind
+        if (!data?.submission?.id) {
+            showToast("error", "Keine aktive Einreichung vorhanden")
+            return
+        }
+
+        const confirmed = confirm(
+            "Möchten Sie diese Unterschrift wirklich überspringen?\n\n" +
+            "Der Mitarbeiter wird als 'unterschrieben' markiert ohne tatsächliche Signatur."
+        )
+
+        if (!confirmed) return
+
+        try {
+            const res = await fetch("/api/admin/submissions/skip-signature", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    submissionId: data.submission.id,
+                    employeeId
+                })
+            })
+
+            const result = await res.json()
+
+            if (!res.ok) {
+                throw new Error(result.error || "Fehler beim Überspringen")
+            }
+
+            showToast("success", "Unterschrift erfolgreich übersprungen")
+            mutate() // SWR Revalidation
+        } catch (error: any) {
+            console.error("Skip signature error:", error)
+            showToast("error", error.message || "Fehler beim Überspringen der Unterschrift")
         }
     }
 
@@ -431,64 +463,42 @@ export default function TimesheetDetail({
                                     <h3 className="text-sm font-medium text-neutral-400">Unterschriften</h3>
                                 </div>
                                 <div className="p-4 space-y-4">
-                                    {/* Toggle */}
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-white font-medium">Unterschriften aktivieren</p>
-                                            <p className="text-xs text-neutral-500">
-                                                Unterschriften für diesen Stundennachweis aktivieren
-                                            </p>
+                                    {/* Mitarbeiter */}
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="text-sm font-medium text-white">
+                                                {data.employee.name}
+                                            </h4>
+                                            <span className={`text-xs px-2 py-1 rounded ${
+                                                data.signatures.employee.signed
+                                                    ? "bg-emerald-900/50 text-emerald-400 border border-emerald-700"
+                                                    : "bg-neutral-800 text-neutral-400 border border-neutral-700"
+                                            }`}>
+                                                {data.signatures.employee.signed ? "✓ Unterschrieben" : "⏳ Wartet auf Unterschrift"}
+                                            </span>
                                         </div>
-                                        <button
-                                            onClick={() => setSignaturesEnabled(!signaturesEnabled)}
-                                            className={`relative w-12 h-6 rounded-full transition-colors ${
-                                                signaturesEnabled ? "bg-emerald-600" : "bg-neutral-700"
-                                            }`}
-                                        >
-                                            <span
-                                                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                                                    signaturesEnabled ? "left-7" : "left-1"
-                                                }`}
-                                            />
-                                        </button>
+                                        {data.signatures.employee.signed && data.signatures.employee.signedAt && (
+                                            <p className="text-xs text-neutral-500">
+                                                Unterschrieben am {new Date(data.signatures.employee.signedAt).toLocaleString('de-DE')}
+                                            </p>
+                                        )}
                                     </div>
 
-                                    {signaturesEnabled && (
-                                        <>
-                                            {/* Mitarbeiter */}
-                                            <div className="pt-4 border-t border-neutral-700">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div>
-                                                        <p className="text-white font-medium">{data.employee.name}</p>
-                                                        <p className="text-xs text-neutral-500">{data.employee.email}</p>
-                                                    </div>
-                                                    {data.signatures.employee.signed ? (
-                                                        <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-900/50 text-emerald-400 text-xs font-medium">
-                                                            <Check size={14} />
-                                                            Unterschrieben
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-neutral-500 text-xs">E-Mail nicht gesendet</span>
-                                                    )}
-                                                </div>
-                                                {!data.signatures.employee.signed && (
-                                                    <button
-                                                        onClick={() => handleSendEmail("employee")}
-                                                        disabled={sendingEmail === "employee"}
-                                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-neutral-700 border border-neutral-600 text-white font-medium hover:bg-neutral-600 transition-colors disabled:opacity-50"
-                                                    >
-                                                        {sendingEmail === "employee" ? (
-                                                            <Loader2 size={16} className="animate-spin" />
-                                                        ) : (
-                                                            <Mail size={16} />
-                                                        )}
-                                                        E-Mail anfordern
-                                                    </button>
-                                                )}
-                                            </div>
+                                    {/* Skip Button */}
+                                    {!data.signatures.employee.signed && (
+                                        <button
+                                            onClick={() => handleSkipSignature(data.employee.id)}
+                                            className="text-sm text-orange-400 hover:text-orange-300 transition-colors flex items-center gap-1"
+                                        >
+                                            <span>Unterschrift überspringen</span>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                                            </svg>
+                                        </button>
+                                    )}
 
-                                            {/* Klient */}
-                                            <div className="pt-4 border-t border-neutral-700">
+                                    {/* Klient */}
+                                    <div className="pt-4 border-t border-neutral-700">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div>
                                                         <p className="text-white font-medium">{data.client.fullName}</p>
@@ -525,8 +535,6 @@ export default function TimesheetDetail({
                                                     </p>
                                                 )}
                                             </div>
-                                        </>
-                                    )}
                                 </div>
                             </div>
                         </div>

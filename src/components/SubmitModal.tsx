@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { X, FileText, CheckCircle, AlertCircle, Loader2, Send, Users } from "lucide-react"
 import SignaturePad from "./SignaturePad"
 import { showToast } from "@/lib/toast-utils"
@@ -36,16 +37,80 @@ const MONTH_NAMES = [
 ]
 
 export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }: SubmitModalProps) {
-    const [step, setStep] = useState<"info" | "signature" | "loading" | "success" | "error">("info")
+    const { data: session } = useSession()
+    const [step, setStep] = useState<"info" | "preview" | "signature" | "loading" | "success" | "error">("info")
     const [signature, setSignature] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [submissionId, setSubmissionId] = useState<string | null>(null)
     const [submissionData, setSubmissionData] = useState<SubmissionData | null>(null)
     const [signResponse, setSignResponse] = useState<any>(null)
+    const [timesheets, setTimesheets] = useState<any[]>([])
+    const [totalHours, setTotalHours] = useState(0)
+    const [clientName, setClientName] = useState<string>("Klient")
 
     if (!isOpen) return null
 
-    const handleStartSignature = async () => {
+    // Helper-Funktion: Berechne Stunden aus Timesheet
+    const calculateHours = (ts: any): number => {
+        const start = ts.actualStart || ts.plannedStart
+        const end = ts.actualEnd || ts.plannedEnd
+
+        if (!start || !end) return 0
+
+        const [startH, startM] = start.split(':').map(Number)
+        const [endH, endM] = end.split(':').map(Number)
+
+        const startMinutes = startH * 60 + startM
+        let endMinutes = endH * 60 + endM
+
+        // Handle overnight shifts
+        if (endMinutes < startMinutes) {
+            endMinutes += 24 * 60
+        }
+
+        return (endMinutes - startMinutes) / 60
+    }
+
+    // Lade Timesheets beim Öffnen des Modals
+    useEffect(() => {
+        if (isOpen && month && year) {
+            fetchTimesheetsForPreview()
+        }
+    }, [isOpen, month, year])
+
+    const fetchTimesheetsForPreview = async () => {
+        try {
+            const res = await fetch(`/api/timesheets?month=${month}&year=${year}`)
+            if (!res.ok) throw new Error("Fehler beim Laden")
+
+            const data = await res.json()
+            const sheets = data.timesheets || []
+            setTimesheets(sheets)
+
+            // Berechne Gesamtstunden
+            const total = sheets.reduce((sum: number, ts: any) => {
+                const hours = calculateHours(ts)
+                return sum + hours
+            }, 0)
+            setTotalHours(total)
+
+            // Extrahiere Client-Name aus erstem Timesheet
+            if (sheets.length > 0 && sheets[0].client?.name) {
+                setClientName(sheets[0].client.name)
+            }
+        } catch (error) {
+            console.error("Fetch timesheets error:", error)
+            setTimesheets([])
+            setTotalHours(0)
+        }
+    }
+
+    const handleStartSignature = () => {
+        // Gehe direkt zur Preview (ohne API-Call)
+        setStep("preview")
+    }
+
+    const handleProceedToSignature = async () => {
         setStep("loading")
         setError(null)
 
@@ -125,6 +190,9 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
         setSubmissionId(null)
         setSubmissionData(null)
         setSignResponse(null)
+        setTimesheets([])
+        setTotalHours(0)
+        setClientName("Klient")
         onClose()
     }
 
@@ -158,15 +226,15 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
                                 <ol className="space-y-2 text-sm text-blue-800">
                                     <li className="flex gap-2">
                                         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-200 text-xs font-bold">1</span>
-                                        <span>Sie unterschreiben digital</span>
+                                        <span>Sie prüfen Ihren Stundennachweis</span>
                                     </li>
                                     <li className="flex gap-2">
                                         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-200 text-xs font-bold">2</span>
-                                        <span>Ihr Assistenznehmer erhält eine E-Mail</span>
+                                        <span>Sie unterschreiben digital</span>
                                     </li>
                                     <li className="flex gap-2">
                                         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-200 text-xs font-bold">3</span>
-                                        <span>Nach der Gegenzeichnung erhalten beide ein PDF</span>
+                                        <span>Ihr Assistenznehmer erhält eine E-Mail zur Gegenzeichnung</span>
                                     </li>
                                 </ol>
                             </div>
@@ -185,9 +253,127 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
                                 onClick={handleStartSignature}
                                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-bold text-white hover:bg-blue-700 transition-colors"
                             >
-                                <Send size={18} />
-                                Weiter zur Unterschrift
+                                <FileText size={18} />
+                                Stundennachweis anzeigen
                             </button>
+                        </div>
+                    )}
+
+                    {step === "preview" && (
+                        <div className="space-y-6">
+                            {/* Header */}
+                            <div className="text-center">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    Stundennachweis-Vorschau
+                                </h3>
+                                <p className="text-sm text-gray-600">
+                                    So wird Ihr Stundennachweis aussehen
+                                </p>
+                            </div>
+
+                            {/* PDF-ähnliche Vorschau */}
+                            <div className="bg-white text-black p-6 rounded-lg max-h-[500px] overflow-y-auto border border-gray-200 shadow-sm">
+                                {/* Header-Section */}
+                                <div className="flex justify-between mb-6">
+                                    <div>
+                                        <h2 className="text-2xl font-bold mb-1">Stundennachweis</h2>
+                                        <p className="text-blue-600 font-medium">
+                                            {session?.user?.name || "Mitarbeiter"}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-lg font-medium mb-1">
+                                            {new Date(year, month - 1).toLocaleDateString('de-DE', {
+                                                month: 'long',
+                                                year: 'numeric'
+                                            })}
+                                        </p>
+                                        <p className="text-orange-600 font-medium">
+                                            {clientName}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Tabelle */}
+                                {timesheets.length > 0 ? (
+                                    <>
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b-2 border-gray-300">
+                                                    <th className="text-left py-2 font-semibold">Datum</th>
+                                                    <th className="text-left font-semibold">Beginn</th>
+                                                    <th className="text-left font-semibold">Ende</th>
+                                                    <th className="text-left font-semibold">Stunden</th>
+                                                    <th className="text-left font-semibold">Typ</th>
+                                                    <th className="text-left font-semibold">Bemerkung</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {timesheets.map((ts, index) => (
+                                                    <tr key={ts.id || index} className="border-b border-gray-200">
+                                                        <td className="py-2">
+                                                            {new Date(ts.date).toLocaleDateString('de-DE', {
+                                                                day: '2-digit',
+                                                                month: '2-digit',
+                                                                weekday: 'short'
+                                                            }).replace(',', '.')}
+                                                        </td>
+                                                        <td className="text-red-600 font-medium">
+                                                            {ts.actualStart || ts.plannedStart || '-'}
+                                                        </td>
+                                                        <td className="text-red-600 font-medium">
+                                                            {ts.actualEnd || ts.plannedEnd || '-'}
+                                                        </td>
+                                                        <td>{calculateHours(ts).toFixed(1)}</td>
+                                                        <td>{ts.shiftType || ''}</td>
+                                                        <td className="text-xs text-gray-600 max-w-[150px] truncate">
+                                                            {ts.notes || ''}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                                {/* Gesamtstunden-Zeile */}
+                                                <tr className="font-bold border-t-2 border-gray-300">
+                                                    <td className="py-2">Gesamtstunden</td>
+                                                    <td></td>
+                                                    <td></td>
+                                                    <td>{totalHours.toFixed(1)}</td>
+                                                    <td></td>
+                                                    <td></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+
+                                        {/* Legende */}
+                                        <p className="text-xs text-gray-500 mt-4">
+                                            (Diensttypen: G = Geplant, F = Feiertag, FZ = Fahrtzeit, BD = Bereitschaftsdienst, B = Büro, K = Krank, U = Urlaub)
+                                        </p>
+                                    </>
+                                ) : (
+                                    <div className="text-center py-8 text-gray-500">
+                                        Keine Schichten für diesen Monat gefunden
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Buttons */}
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setStep("info")}
+                                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold"
+                                >
+                                    Zurück
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleProceedToSignature}
+                                    disabled={timesheets.length === 0}
+                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    <Send size={18} />
+                                    Weiter zur Unterschrift
+                                </button>
+                            </div>
                         </div>
                     )}
 
