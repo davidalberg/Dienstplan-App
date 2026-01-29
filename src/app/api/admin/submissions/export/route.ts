@@ -198,9 +198,9 @@ export async function GET(req: NextRequest) {
                 stats: {
                     totalHours,
                     plannedHours: totalHours,
-                    sickDays: rows.filter(r => r.type === "K").length,
+                    sickDays: timesheets.filter(ts => ts.absenceType === "SICK").length,
                     sickHours: 0,
-                    vacationDays: rows.filter(r => r.type === "U").length,
+                    vacationDays: timesheets.filter(ts => ts.absenceType === "VACATION").length,
                     vacationHours: 0,
                     nightHours: 0,
                     sundayHours: 0,
