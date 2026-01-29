@@ -17,11 +17,13 @@ import {
     ChevronUp,
     X,
     Save,
-    ExternalLink
+    ExternalLink,
+    Eye
 } from "lucide-react"
 import { showToast } from "@/lib/toast-utils"
 import { formatTimeRange } from "@/lib/time-utils"
 import { useAdminSchedule } from "@/hooks/use-admin-data"
+import TimesheetDetail from "@/components/TimesheetDetail"
 
 interface Shift {
     id: string
@@ -197,6 +199,13 @@ export default function SchedulePage() {
         repeatEndDate: "",
         repeatDays: [1, 2, 3, 4, 5] as number[] // Mo-Fr default
     })
+
+    // TimesheetDetail Modal State
+    const [showTimesheetDetail, setShowTimesheetDetail] = useState(false)
+    const [selectedTimesheetData, setSelectedTimesheetData] = useState<{
+        employeeId: string
+        clientId: string
+    } | null>(null)
 
     // Alte fetchData-Funktion durch mutate() ersetzen
     const fetchData = () => mutate()
@@ -431,6 +440,32 @@ export default function SchedulePage() {
             repeatDays: [1, 2, 3, 4, 5]
         })
         setShowModal(true)
+    }
+
+    const openTimesheetPreview = (shift: Shift) => {
+        // Validierung: clientId ist REQUIRED für TimesheetDetail
+        const clientId = shift.employee?.team?.client?.id
+
+        if (!shift.employee?.id) {
+            showToast("Mitarbeiter-Daten nicht verfügbar", "error")
+            return
+        }
+
+        if (!clientId) {
+            showToast("Klient-Zuordnung fehlt für diesen Mitarbeiter", "error")
+            return
+        }
+
+        setSelectedTimesheetData({
+            employeeId: shift.employee.id,
+            clientId: clientId
+        })
+        setShowTimesheetDetail(true)
+    }
+
+    const closeTimesheetPreview = () => {
+        setShowTimesheetDetail(false)
+        setSelectedTimesheetData(null)
     }
 
     const navigateMonth = (delta: number) => {
@@ -687,6 +722,16 @@ export default function SchedulePage() {
                                                                 </td>
                                                                 <td className="px-3 py-2 text-right">
                                                                     <div className="flex gap-1 justify-end">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                openTimesheetPreview(shift)
+                                                                            }}
+                                                                            className="p-1.5 text-neutral-500 hover:text-violet-400 hover:bg-violet-900/30 rounded transition"
+                                                                            title="Stundennachweis anzeigen"
+                                                                        >
+                                                                            <Eye size={14} />
+                                                                        </button>
                                                                         <button
                                                                             onClick={() => openEditModal(shift)}
                                                                             className="p-1.5 text-neutral-500 hover:text-blue-400 hover:bg-blue-900/30 rounded transition"
@@ -1047,6 +1092,17 @@ export default function SchedulePage() {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* Timesheet Detail Modal */}
+                {showTimesheetDetail && selectedTimesheetData && (
+                    <TimesheetDetail
+                        employeeId={selectedTimesheetData.employeeId}
+                        clientId={selectedTimesheetData.clientId}
+                        month={month}
+                        year={year}
+                        onClose={closeTimesheetPreview}
+                    />
                 )}
             </div>
         </div>
