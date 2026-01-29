@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, DragEvent } from "react"
+import { useSearchParams } from "next/navigation"
 import {
     Users, Edit2, Trash2, X, Save, Search,
     GripVertical, UserPlus, ChevronDown, ChevronRight
@@ -51,6 +52,9 @@ function getAvatarColor(name: string): string {
 }
 
 export default function AssistantsPage() {
+    // URL-Parameter für direktes Öffnen des Edit-Modals
+    const searchParams = useSearchParams()
+
     // SWR Hooks für automatisches Caching
     const { clients: swrClients, isLoading: clientsLoading, mutate: mutateClients } = useClients()
     const { employees: swrEmployees, isLoading: employeesLoading, mutate: mutateEmployees } = useAdminEmployees()
@@ -113,6 +117,17 @@ export default function AssistantsPage() {
             setExpandedClients(new Set(["unassigned", ...clients.map(c => c.id)]))
         }
     }, [clients.length])
+
+    // Auto-open edit modal if employeeId in URL params
+    useEffect(() => {
+        const employeeId = searchParams.get("employeeId")
+        if (employeeId && allEmployees.length > 0 && !showEditEmployee) {
+            const employee = allEmployees.find(e => e.id === employeeId)
+            if (employee) {
+                openEditEmployee(employee)
+            }
+        }
+    }, [searchParams, allEmployees])
 
     // Active search with highlight and auto-expand
     useEffect(() => {
@@ -768,7 +783,7 @@ export default function AssistantsPage() {
                                                 type="date"
                                                 value={employeeForm.entryDate}
                                                 onChange={(e) => setEmployeeForm({ ...employeeForm, entryDate: e.target.value })}
-                                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:dark]"
                                             />
                                         </div>
                                         <div>
@@ -777,7 +792,7 @@ export default function AssistantsPage() {
                                                 type="date"
                                                 value={employeeForm.exitDate}
                                                 onChange={(e) => setEmployeeForm({ ...employeeForm, exitDate: e.target.value })}
-                                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:dark]"
                                             />
                                         </div>
                                         <div>

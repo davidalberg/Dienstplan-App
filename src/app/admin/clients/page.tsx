@@ -98,6 +98,7 @@ export default function ClientsPage() {
     const [editingClient, setEditingClient] = useState<Client | null>(null)
     const [activeTab, setActiveTab] = useState<"active" | "inactive">("active")
     const [searchQuery, setSearchQuery] = useState("")
+    const [employeeSearchQuery, setEmployeeSearchQuery] = useState("")
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
     const [formData, setFormData] = useState({
         firstName: "",
@@ -113,6 +114,7 @@ export default function ClientsPage() {
 
     const handleCreate = () => {
         setEditingClient(null)
+        setEmployeeSearchQuery("")
         setFormData({
             firstName: "",
             lastName: "",
@@ -126,6 +128,7 @@ export default function ClientsPage() {
 
     const handleEdit = (client: Client) => {
         setEditingClient(client)
+        setEmployeeSearchQuery("")
         setFormData({
             firstName: client.firstName,
             lastName: client.lastName,
@@ -490,45 +493,75 @@ export default function ClientsPage() {
                                             <Users className="inline-block w-4 h-4 mr-1" />
                                             Zugewiesene Assistenzkräfte
                                         </label>
+
+                                        {/* Such-Input */}
+                                        <div className="mb-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={16} />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Assistenzkraft suchen..."
+                                                    value={employeeSearchQuery}
+                                                    onChange={(e) => setEmployeeSearchQuery(e.target.value)}
+                                                    className="w-full pl-9 pr-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm placeholder-neutral-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+
                                         <div className="space-y-2 max-h-48 overflow-y-auto p-2 bg-neutral-800 border border-neutral-700 rounded-lg">
                                             {allEmployees.length === 0 ? (
                                                 <p className="text-neutral-500 text-sm py-2">Keine Assistenzkräfte vorhanden</p>
                                             ) : (
-                                                allEmployees.map((emp) => (
-                                                    <label
-                                                        key={emp.id}
-                                                        className="flex items-center gap-3 p-2 rounded hover:bg-neutral-700/50 cursor-pointer"
-                                                    >
-                                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                                            formData.employeeIds.includes(emp.id)
-                                                                ? "bg-purple-600 border-purple-600"
-                                                                : "border-neutral-600"
-                                                        }`}>
-                                                            {formData.employeeIds.includes(emp.id) && (
-                                                                <Check className="w-3 h-3 text-white" />
-                                                            )}
-                                                        </div>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={formData.employeeIds.includes(emp.id)}
-                                                            onChange={(e) => {
-                                                                if (e.target.checked) {
-                                                                    setFormData({
-                                                                        ...formData,
-                                                                        employeeIds: [...formData.employeeIds, emp.id]
-                                                                    })
-                                                                } else {
-                                                                    setFormData({
-                                                                        ...formData,
-                                                                        employeeIds: formData.employeeIds.filter(id => id !== emp.id)
-                                                                    })
-                                                                }
-                                                            }}
-                                                            className="sr-only"
-                                                        />
-                                                        <span className="text-white text-sm">{emp.name || emp.email}</span>
-                                                    </label>
-                                                ))
+                                                (() => {
+                                                    const filteredEmployees = allEmployees.filter(emp => {
+                                                        if (!employeeSearchQuery) return true
+                                                        const query = employeeSearchQuery.toLowerCase()
+                                                        return emp.name?.toLowerCase().includes(query) ||
+                                                               emp.email?.toLowerCase().includes(query)
+                                                    })
+
+                                                    if (filteredEmployees.length === 0) {
+                                                        return (
+                                                            <p className="text-neutral-500 text-sm py-2 text-center">Keine Treffer</p>
+                                                        )
+                                                    }
+
+                                                    return filteredEmployees.map((emp) => (
+                                                        <label
+                                                            key={emp.id}
+                                                            className="flex items-center gap-3 p-2 rounded hover:bg-neutral-700/50 cursor-pointer"
+                                                        >
+                                                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                                                formData.employeeIds.includes(emp.id)
+                                                                    ? "bg-purple-600 border-purple-600"
+                                                                    : "border-neutral-600"
+                                                            }`}>
+                                                                {formData.employeeIds.includes(emp.id) && (
+                                                                    <Check className="w-3 h-3 text-white" />
+                                                                )}
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={formData.employeeIds.includes(emp.id)}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) {
+                                                                        setFormData({
+                                                                            ...formData,
+                                                                            employeeIds: [...formData.employeeIds, emp.id]
+                                                                        })
+                                                                    } else {
+                                                                        setFormData({
+                                                                            ...formData,
+                                                                            employeeIds: formData.employeeIds.filter(id => id !== emp.id)
+                                                                        })
+                                                                    }
+                                                                }}
+                                                                className="sr-only"
+                                                            />
+                                                            <span className="text-white text-sm">{emp.name || emp.email}</span>
+                                                        </label>
+                                                    ))
+                                                })()
                                             )}
                                         </div>
                                         <p className="text-xs text-neutral-500 mt-1">

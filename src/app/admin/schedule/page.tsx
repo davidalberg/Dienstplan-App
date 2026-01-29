@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from "date-fns"
 import { de } from "date-fns/locale"
+import { useRouter } from "next/navigation"
 import {
     Calendar,
     List,
@@ -66,6 +67,7 @@ interface Client {
 
 export default function SchedulePage() {
     const { data: session } = useSession()
+    const router = useRouter()
     const [viewMode, setViewMode] = useState<"list" | "calendar">("list")
 
     // Filter
@@ -544,7 +546,15 @@ export default function SchedulePage() {
                                                             <td className="px-3 py-2 font-medium text-white text-sm">
                                                                 {format(new Date(shift.date), "EEE, dd.MM.", { locale: de })}
                                                             </td>
-                                                            <td className="px-3 py-2 text-neutral-300 text-sm">{shift.employee.name}</td>
+                                                            <td className="px-3 py-2 text-sm">
+                                                                <button
+                                                                    onClick={() => router.push(`/admin/assistants?employeeId=${shift.employee.id}`)}
+                                                                    className="text-violet-400 hover:text-violet-300 transition-colors duration-150 cursor-pointer"
+                                                                    title="Assistent bearbeiten"
+                                                                >
+                                                                    {shift.employee.name}
+                                                                </button>
+                                                            </td>
                                                             <td className="px-3 py-2">
                                                                 <span className="bg-neutral-800 px-2 py-0.5 rounded text-xs font-medium text-neutral-300">
                                                                     {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
