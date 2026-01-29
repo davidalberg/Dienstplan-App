@@ -36,6 +36,27 @@ const MONTH_NAMES = [
     "Juli", "August", "September", "Oktober", "November", "Dezember"
 ]
 
+// Helper-Funktion ausserhalb der Komponente (keine State-Abhängigkeiten)
+const calculateHours = (ts: { actualStart?: string | null; plannedStart?: string | null; actualEnd?: string | null; plannedEnd?: string | null }): number => {
+    const start = ts.actualStart || ts.plannedStart
+    const end = ts.actualEnd || ts.plannedEnd
+
+    if (!start || !end) return 0
+
+    const [startH, startM] = start.split(':').map(Number)
+    const [endH, endM] = end.split(':').map(Number)
+
+    const startMinutes = startH * 60 + startM
+    let endMinutes = endH * 60 + endM
+
+    // Handle overnight shifts
+    if (endMinutes < startMinutes) {
+        endMinutes += 24 * 60
+    }
+
+    return (endMinutes - startMinutes) / 60
+}
+
 export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }: SubmitModalProps) {
     const { data: session } = useSession()
     const [step, setStep] = useState<"info" | "preview" | "signature" | "loading" | "success" | "error">("info")
@@ -48,65 +69,49 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
     const [totalHours, setTotalHours] = useState(0)
     const [clientName, setClientName] = useState<string>("Klient")
 
-    if (!isOpen) return null
+    // Lade Timesheets beim Öffnen des Modals
+    // WICHTIG: useEffect muss VOR dem early return stehen (React Hook Rules)
+    useEffect(() => {
+        const fetchTimesheetsForPreview = async () => {
+            try {
+                console.log("[SubmitModal] Fetching timesheets for preview...", { month, year })
+                const res = await fetch(`/api/timesheets?month=${month}&year=${year}`)
+                if (!res.ok) throw new Error("Fehler beim Laden")
 
-    // Helper-Funktion: Berechne Stunden aus Timesheet
-    const calculateHours = (ts: any): number => {
-        const start = ts.actualStart || ts.plannedStart
-        const end = ts.actualEnd || ts.plannedEnd
+                const data = await res.json()
+                console.log("[SubmitModal] API Response:", data)
+                const sheets = data.timesheets || []
+                setTimesheets(sheets)
 
-        if (!start || !end) return 0
+                // Berechne Gesamtstunden
+                const total = sheets.reduce((sum: number, ts: any) => {
+                    const hours = calculateHours(ts)
+                    return sum + hours
+                }, 0)
+                setTotalHours(total)
 
-        const [startH, startM] = start.split(':').map(Number)
-        const [endH, endM] = end.split(':').map(Number)
-
-        const startMinutes = startH * 60 + startM
-        let endMinutes = endH * 60 + endM
-
-        // Handle overnight shifts
-        if (endMinutes < startMinutes) {
-            endMinutes += 24 * 60
+                // Extrahiere Client-Name aus erstem Timesheet via team.client
+                if (sheets.length > 0) {
+                    const client = sheets[0].team?.client
+                    if (client && client.firstName && client.lastName) {
+                        setClientName(`${client.firstName} ${client.lastName}`)
+                    }
+                }
+                console.log("[SubmitModal] Timesheets loaded:", sheets.length, "Total hours:", total)
+            } catch (error) {
+                console.error("Fetch timesheets error:", error)
+                setTimesheets([])
+                setTotalHours(0)
+            }
         }
 
-        return (endMinutes - startMinutes) / 60
-    }
-
-    // Lade Timesheets beim Öffnen des Modals
-    useEffect(() => {
         if (isOpen && month && year) {
             fetchTimesheetsForPreview()
         }
     }, [isOpen, month, year])
 
-    const fetchTimesheetsForPreview = async () => {
-        try {
-            const res = await fetch(`/api/timesheets?month=${month}&year=${year}`)
-            if (!res.ok) throw new Error("Fehler beim Laden")
-
-            const data = await res.json()
-            const sheets = data.timesheets || []
-            setTimesheets(sheets)
-
-            // Berechne Gesamtstunden
-            const total = sheets.reduce((sum: number, ts: any) => {
-                const hours = calculateHours(ts)
-                return sum + hours
-            }, 0)
-            setTotalHours(total)
-
-            // Extrahiere Client-Name aus erstem Timesheet via team.client
-            if (sheets.length > 0) {
-                const client = sheets[0].team?.client
-                if (client && client.firstName && client.lastName) {
-                    setClientName(`${client.firstName} ${client.lastName}`)
-                }
-            }
-        } catch (error) {
-            console.error("Fetch timesheets error:", error)
-            setTimesheets([])
-            setTotalHours(0)
-        }
-    }
+    // Early return NACH allen Hooks (React Hook Rules)
+    if (!isOpen) return null
 
     const handleStartSignature = () => {
         // Gehe direkt zur Preview (ohne API-Call)

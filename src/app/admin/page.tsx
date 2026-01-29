@@ -158,24 +158,20 @@ function AdminPageContent() {
             const expanded: Record<string, boolean> = {}
 
             clients.forEach(c => {
-                if (expandedClients[c.id] === undefined) {
-                    // Wenn clientId in URL, nur diesen expandieren, sonst alle
-                    expanded[c.id] = urlClientId ? c.id === urlClientId : true
-                }
+                // Wenn clientId in URL, nur diesen expandieren, sonst alle
+                expanded[c.id] = urlClientId ? c.id === urlClientId : true
             })
 
-            if (Object.keys(expanded).length > 0) {
-                setExpandedClients(prev => ({ ...prev, ...expanded }))
+            setExpandedClients(expanded)
 
-                // Optional: Scroll zum spezifischen Client
-                if (urlClientId) {
-                    setTimeout(() => {
-                        const element = document.getElementById(`client-${urlClientId}`)
-                        if (element) {
-                            element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                        }
-                    }, 100)
-                }
+            // Optional: Scroll zum spezifischen Client
+            if (urlClientId) {
+                setTimeout(() => {
+                    const element = document.getElementById(`client-${urlClientId}`)
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    }
+                }, 100)
             }
         }
     }, [clients, searchParams])
