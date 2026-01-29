@@ -6,6 +6,7 @@ import {
     GripVertical, UserPlus, ChevronDown, ChevronRight
 } from "lucide-react"
 import { toast } from "sonner"
+import { useClients, useAdminEmployees } from "@/hooks/use-admin-data"
 
 interface Employee {
     id: string
@@ -16,6 +17,14 @@ interface Employee {
     vacationDays: number
     sickDays: number
     entryDate: string | null
+    exitDate: string | null
+    travelCostType: string
+    nightPremiumEnabled: boolean
+    nightPremiumPercent: number
+    sundayPremiumEnabled: boolean
+    sundayPremiumPercent: number
+    holidayPremiumEnabled: boolean
+    holidayPremiumPercent: number
     clients: Array<{ id: string; firstName: string; lastName: string }>
 }
 
@@ -24,6 +33,7 @@ interface Client {
     firstName: string
     lastName: string
     displayOrder: number
+    isActive: boolean
     employees: Array<{ id: string; name: string | null; email: string }>
 }
 
@@ -41,9 +51,16 @@ function getAvatarColor(name: string): string {
 }
 
 export default function AssistantsPage() {
+    // SWR Hooks für automatisches Caching
+    const { clients: swrClients, isLoading: clientsLoading, mutate: mutateClients } = useClients()
+    const { employees: swrEmployees, isLoading: employeesLoading, mutate: mutateEmployees } = useAdminEmployees()
+
+    // Lokaler State für optimistische Updates
     const [clients, setClients] = useState<Client[]>([])
     const [allEmployees, setAllEmployees] = useState<Employee[]>([])
-    const [loading, setLoading] = useState(true)
+
+    // Loading State abgeleitet von SWR
+    const loading = clientsLoading || employeesLoading
     const [searchQuery, setSearchQuery] = useState("")
     const [draggedEmployee, setDraggedEmployee] = useState<{ employee: Employee; fromClientId: string | null } | null>(null)
     const [draggedClient, setDraggedClient] = useState<Client | null>(null)
@@ -75,9 +92,20 @@ export default function AssistantsPage() {
         holidayPremiumPercent: 125
     })
 
+
+    // Sync SWR data to local state
     useEffect(() => {
-        fetchData()
-    }, [])
+        if (swrClients) {
+            // Filter nur aktive Klienten
+            setClients(swrClients.filter((c: Client) => c.isActive))
+        }
+    }, [swrClients])
+
+    useEffect(() => {
+        if (swrEmployees) {
+            setAllEmployees(swrEmployees)
+        }
+    }, [swrEmployees])
 
     // Expand all clients by default after loading
     useEffect(() => {
@@ -117,31 +145,6 @@ export default function AssistantsPage() {
         setHighlightedEmployees(matchingEmployees)
         setExpandedClients(clientsToExpand)
     }, [searchQuery, allEmployees])
-
-    const fetchData = async () => {
-        setLoading(true)
-        try {
-            const [clientsRes, employeesRes] = await Promise.all([
-                fetch("/api/clients?isActive=true"),
-                fetch("/api/admin/employees")
-            ])
-
-            if (clientsRes.ok) {
-                const data = await clientsRes.json()
-                setClients(data.clients || [])
-            }
-
-            if (employeesRes.ok) {
-                const data = await employeesRes.json()
-                setAllEmployees(data.employees || [])
-            }
-        } catch (err) {
-            console.error(err)
-            toast.error("Fehler beim Laden")
-        } finally {
-            setLoading(false)
-        }
-    }
 
     // Get unassigned employees (those not assigned to any client)
     const unassignedEmployees = allEmployees.filter(e => !e.clients || e.clients.length === 0)
@@ -232,7 +235,7 @@ export default function AssistantsPage() {
             toast.success(`${employee.name || employee.email} → ${targetName}`)
         } catch {
             // Rollback on error
-            fetchData()
+            mutateEmployees()
             toast.error("Fehler beim Verschieben")
         }
     }
@@ -297,7 +300,7 @@ export default function AssistantsPage() {
             toast.success("Reihenfolge gespeichert")
         } catch {
             // Rollback on error
-            fetchData()
+            mutateClients()
             toast.error("Fehler beim Speichern der Reihenfolge")
         }
     }
@@ -323,7 +326,7 @@ export default function AssistantsPage() {
                 toast.success("Assistent erstellt")
                 setShowCreateEmployee(false)
                 resetEmployeeForm()
-                fetchData()
+                mutateEmployees()
             } else {
                 const err = await res.json()
                 toast.error(err.error)
@@ -350,7 +353,7 @@ export default function AssistantsPage() {
                 toast.success("Assistent aktualisiert")
                 setShowEditEmployee(null)
                 resetEmployeeForm()
-                fetchData()
+                mutateEmployees()
             } else {
                 const err = await res.json()
                 toast.error(err.error)
@@ -370,7 +373,7 @@ export default function AssistantsPage() {
 
             if (res.ok) {
                 toast.success("Assistent gelöscht")
-                fetchData()
+                mutateEmployees()
             } else {
                 const err = await res.json()
                 toast.error(err.error)
@@ -380,36 +383,37 @@ export default function AssistantsPage() {
         }
     }
 
-    const openEditEmployee = async (employee: Employee) => {
-        try {
-            const res = await fetch("/api/admin/employees")
-            if (res.ok) {
-                const data = await res.json()
-                const fullEmployee = data.employees.find((e: any) => e.id === employee.id)
-                if (fullEmployee) {
-                    setEmployeeForm({
-                        id: fullEmployee.id,
-                        email: fullEmployee.email,
-                        password: "",
-                        name: fullEmployee.name || "",
-                        employeeId: fullEmployee.employeeId || "",
-                        entryDate: fullEmployee.entryDate ? new Date(fullEmployee.entryDate).toISOString().split('T')[0] : "",
-                        exitDate: fullEmployee.exitDate ? new Date(fullEmployee.exitDate).toISOString().split('T')[0] : "",
-                        hourlyWage: fullEmployee.hourlyWage || 0,
-                        travelCostType: fullEmployee.travelCostType || "NONE",
-                        nightPremiumEnabled: fullEmployee.nightPremiumEnabled,
-                        nightPremiumPercent: fullEmployee.nightPremiumPercent || 25,
-                        sundayPremiumEnabled: fullEmployee.sundayPremiumEnabled,
-                        sundayPremiumPercent: fullEmployee.sundayPremiumPercent || 30,
-                        holidayPremiumEnabled: fullEmployee.holidayPremiumEnabled,
-                        holidayPremiumPercent: fullEmployee.holidayPremiumPercent || 125
-                    })
-                    setShowEditEmployee(employee)
-                }
-            }
-        } catch {
-            toast.error("Fehler beim Laden")
+    const openEditEmployee = (employee: Employee) => {
+        // Daten aus lokalem State holen (bereits von SWR geladen)
+        const fullEmployee = allEmployees.find(e => e.id === employee.id)
+
+        if (!fullEmployee) {
+            toast.error("Mitarbeiter nicht gefunden")
+            return
         }
+
+        setEmployeeForm({
+            id: fullEmployee.id,
+            email: fullEmployee.email,
+            password: "",
+            name: fullEmployee.name || "",
+            employeeId: fullEmployee.employeeId || "",
+            entryDate: fullEmployee.entryDate
+                ? new Date(fullEmployee.entryDate).toISOString().split('T')[0]
+                : "",
+            exitDate: fullEmployee.exitDate
+                ? new Date(fullEmployee.exitDate).toISOString().split('T')[0]
+                : "",
+            hourlyWage: fullEmployee.hourlyWage || 0,
+            travelCostType: fullEmployee.travelCostType || "NONE",
+            nightPremiumEnabled: fullEmployee.nightPremiumEnabled,
+            nightPremiumPercent: fullEmployee.nightPremiumPercent || 25,
+            sundayPremiumEnabled: fullEmployee.sundayPremiumEnabled,
+            sundayPremiumPercent: fullEmployee.sundayPremiumPercent || 30,
+            holidayPremiumEnabled: fullEmployee.holidayPremiumEnabled,
+            holidayPremiumPercent: fullEmployee.holidayPremiumPercent || 125
+        })
+        setShowEditEmployee(employee)
     }
 
     const resetEmployeeForm = () => {
