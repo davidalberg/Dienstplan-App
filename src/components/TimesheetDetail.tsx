@@ -326,11 +326,6 @@ export default function TimesheetDetail({
                                         </tbody>
                                     </table>
 
-                                    {/* Legende */}
-                                    <p className="text-[10px] text-gray-500 mb-6">
-                                        (Diensttypen: G = Geplant, F = Feiertag, FZ = Fahrtzeit, BD = Bereitschaftsdienst, B = Büro, K = Krank, U = Urlaub)
-                                    </p>
-
                                     {/* Unterschriften */}
                                     <div className="flex justify-between mt-8">
                                         <div className="w-[45%]">

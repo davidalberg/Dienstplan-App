@@ -61,7 +61,11 @@
       "Bash(del \"c:\\\\Users\\\\david\\\\Desktop\\\\Stundennachweis_App\\\\Dienstplan-App\\\\scripts\\\\debug-overview.ts\")",
       "Bash(cmd /c \"del c:\\\\Users\\\\david\\\\Desktop\\\\Stundennachweis_App\\\\Dienstplan-App\\\\scripts\\\\debug-overview.ts\")",
       "Bash(npx prisma db push:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(npm run test:db:reset:*)",
+      "Bash(npx prisma db execute:*)",
+      "Bash(node:*)",
+      "Bash(npx rg:*)"
     ]
   }
 }

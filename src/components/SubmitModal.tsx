@@ -394,11 +394,6 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
                                                 </tr>
                                             </tbody>
                                         </table>
-
-                                        {/* Legende */}
-                                        <p className="text-xs text-gray-500 mt-4">
-                                            (Diensttypen: G = Geplant, F = Feiertag, FZ = Fahrtzeit, BD = Bereitschaftsdienst, B = Büro, K = Krank, U = Urlaub)
-                                        </p>
                                     </>
                                 ) : (
                                     <div className="text-center py-8 text-gray-500">

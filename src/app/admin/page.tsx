@@ -5,7 +5,7 @@ import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { format, addMonths, subMonths } from "date-fns"
 import { de } from "date-fns/locale"
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, ExternalLink, Check } from "lucide-react"
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, Check } from "lucide-react"
 import useSWR from "swr"
 import TimesheetDetail from "@/components/TimesheetDetail"
 
@@ -279,15 +279,6 @@ function AdminPageContent() {
                                                 {client.totalEmployees} Assistent{client.totalEmployees !== 1 ? "en" : ""}
                                             </p>
                                         </div>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                // TODO: Link zur Detail-Übersicht des Klienten
-                                            }}
-                                            className="p-2 rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors"
-                                        >
-                                            <ExternalLink size={18} />
-                                        </button>
                                         {expandedClients[client.id] ? (
                                             <ChevronUp size={20} className="text-neutral-400" />
                                         ) : (

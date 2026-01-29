@@ -92,15 +92,6 @@ export async function GET(req: NextRequest) {
                 }
             }
 
-            // Typ bestimmen
-            let type = ""
-            if (ts.absenceType === "SICK") type = "K"
-            else if (ts.absenceType === "VACATION") type = "U"
-            else if (ts.note?.includes("Feiertag")) type = "F"
-            else if (ts.note?.includes("Fahrt")) type = "FZ"
-            else if (ts.note?.includes("Bereitschaft")) type = "BD"
-            else if (ts.note?.includes("Büro")) type = "B"
-
             const date = new Date(ts.date)
             const weekday = format(date, "EEEE", { locale: de })
             const formattedDate = format(date, "dd.MM.yyyy", { locale: de })
@@ -112,7 +103,6 @@ export async function GET(req: NextRequest) {
                 start: start || "-",
                 end: end || "-",
                 hours: ts.absenceType ? 0 : hours,
-                type,
                 note: ts.absenceType === "SICK" ? "Krank" :
                     ts.absenceType === "VACATION" ? "Urlaub" :
                         ts.note || ""
@@ -128,11 +118,11 @@ export async function GET(req: NextRequest) {
         // Export je nach Format
         if (exportFormat === "csv") {
             // CSV Export
-            const csvHeader = "Datum,Wochentag,Beginn,Ende,Stunden,Typ,Bemerkung\n"
+            const csvHeader = "Datum,Wochentag,Beginn,Ende,Stunden,Bemerkung\n"
             const csvRows = rows.map(r =>
-                `${r.formattedDate},${r.weekday},${r.start},${r.end},${r.hours},${r.type},"${r.note.replace(/"/g, '""')}"`
+                `${r.formattedDate},${r.weekday},${r.start},${r.end},${r.hours},"${r.note.replace(/"/g, '""')}"`
             ).join("\n")
-            const csvFooter = `\nGesamtstunden,,,,,${totalHours},`
+            const csvFooter = `\nGesamtstunden,,,,${totalHours},`
             const csvContent = csvHeader + csvRows + csvFooter
 
             return new NextResponse(csvContent, {
@@ -149,7 +139,6 @@ export async function GET(req: NextRequest) {
                 "Beginn": r.start,
                 "Ende": r.end,
                 "Stunden": r.hours,
-                "Typ": r.type,
                 "Bemerkung": r.note
             }))
 
@@ -160,7 +149,6 @@ export async function GET(req: NextRequest) {
                 "Beginn": "",
                 "Ende": "",
                 "Stunden": totalHours,
-                "Typ": "",
                 "Bemerkung": ""
             })
 
@@ -174,7 +162,6 @@ export async function GET(req: NextRequest) {
                 { wch: 8 },  // Beginn
                 { wch: 8 },  // Ende
                 { wch: 8 },  // Stunden
-                { wch: 6 },  // Typ
                 { wch: 30 }  // Bemerkung
             ]
 
