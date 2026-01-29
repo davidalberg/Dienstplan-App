@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Send, Clock, CheckCircle, X, AlertCircle, FileSignature, Undo2, Lock } from "lucide-react"
 import { calculateTotalHoursFromTimesheets } from "@/lib/time-utils"
 import SubmitModal from "./SubmitModal"
@@ -37,14 +37,7 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
     const currentMonth = timesheets.length > 0 ? timesheets[0].month : month
     const currentYear = timesheets.length > 0 ? timesheets[0].year : year
 
-    // Fetch submission status when month/year changes
-    useEffect(() => {
-        if (currentMonth && currentYear) {
-            fetchSubmissionStatus()
-        }
-    }, [currentMonth, currentYear])
-
-    const fetchSubmissionStatus = async () => {
+    const fetchSubmissionStatus = useCallback(async () => {
         if (!currentMonth || !currentYear) return
 
         setStatusLoading(true)
@@ -66,7 +59,14 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
         } finally {
             setStatusLoading(false)
         }
-    }
+    }, [currentMonth, currentYear])
+
+    // Fetch submission status when month/year changes
+    useEffect(() => {
+        if (currentMonth && currentYear) {
+            fetchSubmissionStatus()
+        }
+    }, [currentMonth, currentYear, fetchSubmissionStatus])
 
     const calculateTotalHours = () => {
         return calculateTotalHoursFromTimesheets(timesheets)
