@@ -447,12 +447,12 @@ export default function SchedulePage() {
         const clientId = shift.employee?.team?.client?.id
 
         if (!shift.employee?.id) {
-            showToast("Mitarbeiter-Daten nicht verfügbar", "error")
+            showToast("error", "Mitarbeiter-Daten nicht verfügbar")
             return
         }
 
         if (!clientId) {
-            showToast("Klient-Zuordnung fehlt für diesen Mitarbeiter", "error")
+            showToast("error", "Klient-Zuordnung fehlt für diesen Mitarbeiter")
             return
         }
 
