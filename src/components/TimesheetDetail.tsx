@@ -458,42 +458,8 @@ export default function TimesheetDetail({
                                     <h3 className="text-sm font-medium text-neutral-400">Unterschriften</h3>
                                 </div>
                                 <div className="p-4 space-y-4">
-                                    {/* Mitarbeiter */}
-                                    <div>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="text-sm font-medium text-white">
-                                                {data.employee.name}
-                                            </h4>
-                                            <span className={`text-xs px-2 py-1 rounded ${
-                                                data.signatures.employee.signed
-                                                    ? "bg-emerald-900/50 text-emerald-400 border border-emerald-700"
-                                                    : "bg-neutral-800 text-neutral-400 border border-neutral-700"
-                                            }`}>
-                                                {data.signatures.employee.signed ? "✓ Unterschrieben" : "⏳ Wartet auf Unterschrift"}
-                                            </span>
-                                        </div>
-                                        {data.signatures.employee.signed && data.signatures.employee.signedAt && (
-                                            <p className="text-xs text-neutral-500">
-                                                Unterschrieben am {new Date(data.signatures.employee.signedAt).toLocaleString('de-DE')}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    {/* Skip Button */}
-                                    {!data.signatures.employee.signed && (
-                                        <button
-                                            onClick={() => handleSkipSignature(data.employee.id)}
-                                            className="text-sm text-orange-400 hover:text-orange-300 transition-colors flex items-center gap-1"
-                                        >
-                                            <span>Unterschrift überspringen</span>
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M5 12h14M12 5l7 7-7 7"/>
-                                            </svg>
-                                        </button>
-                                    )}
-
                                     {/* Klient */}
-                                    <div className="pt-4 border-t border-neutral-700">
+                                    <div>
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div>
                                                         <p className="text-white font-medium">{data.client.fullName}</p>
