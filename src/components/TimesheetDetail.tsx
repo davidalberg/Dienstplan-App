@@ -285,7 +285,6 @@ export default function TimesheetDetail({
                                                 <th className="border border-gray-300 px-2 py-1 text-left">Beginn</th>
                                                 <th className="border border-gray-300 px-2 py-1 text-left">Ende</th>
                                                 <th className="border border-gray-300 px-2 py-1 text-center">Stunden</th>
-                                                <th className="border border-gray-300 px-2 py-1 text-center">Typ</th>
                                                 <th className="border border-gray-300 px-2 py-1 text-left">Bemerkung</th>
                                             </tr>
                                         </thead>
@@ -304,9 +303,6 @@ export default function TimesheetDetail({
                                                     <td className="border border-gray-300 px-2 py-1 text-center">
                                                         {ts.absenceType ? "-" : ts.hours}
                                                     </td>
-                                                    <td className="border border-gray-300 px-2 py-1 text-center">
-                                                        {ts.type}
-                                                    </td>
                                                     <td className="border border-gray-300 px-2 py-1 text-gray-600">
                                                         {ts.absenceType === "SICK" ? "Krank" :
                                                             ts.absenceType === "VACATION" ? "Urlaub" :
@@ -321,7 +317,7 @@ export default function TimesheetDetail({
                                                 <td className="border border-gray-300 px-2 py-1 text-center">
                                                     {data.stats.totalHours}
                                                 </td>
-                                                <td colSpan={2} className="border border-gray-300 px-2 py-1"></td>
+                                                <td className="border border-gray-300 px-2 py-1"></td>
                                             </tr>
                                         </tbody>
                                     </table>

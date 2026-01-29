@@ -37,7 +37,6 @@ export function Sidebar({ onExportClick }: SidebarProps) {
         { icon: Calendar, label: "Kalender", href: "/admin/schedule" },
         { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
         { icon: Users, label: "Assistenten", href: "/admin/assistants" },
-        { icon: FileText, label: "Stundennachweise", href: "/admin/submissions" },
     ]
 
     const secondaryNavItems: NavItem[] = [
