@@ -8,9 +8,9 @@ const fetcher = (url: string) => fetch(url).then(res => {
 
 // SWR configuration for admin pages
 const swrConfig = {
-    revalidateOnFocus: false,
+    revalidateOnFocus: true,     // Refetch when window regains focus
     revalidateOnReconnect: true,
-    dedupingInterval: 5000, // Dedupe requests within 5 seconds
+    dedupingInterval: 2000,      // Dedupe requests within 2 seconds (reduced from 5s for faster updates)
 }
 
 // Dashboard / Timesheets

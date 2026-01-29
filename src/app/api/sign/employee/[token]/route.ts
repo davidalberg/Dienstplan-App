@@ -181,9 +181,12 @@ export async function POST(
 
         const signedAt = new Date()
 
-        // Update EmployeeSignature with signature
-        await prisma.employeeSignature.update({
-            where: { id: employeeSignature.id },
+        // Update EmployeeSignature with signature (with WHERE filter to prevent overwrite)
+        const updateResult = await prisma.employeeSignature.updateMany({
+            where: {
+                id: employeeSignature.id,
+                signature: null  // Only update if NOT already signed
+            },
             data: {
                 signature,
                 signedAt,
@@ -191,15 +194,39 @@ export async function POST(
             }
         })
 
-        const teamSubmission = employeeSignature.teamSubmission
+        // If update failed, signature was already saved (race condition or duplicate request)
+        if (updateResult.count === 0) {
+            return NextResponse.json({
+                error: "Diese Unterschrift wurde bereits gespeichert"
+            }, { status: 409 })
+        }
+
+        // Re-fetch TeamSubmission with UPDATED employeeSignatures to get accurate count
+        const updatedSubmission = await prisma.teamSubmission.findUnique({
+            where: { id: employeeSignature.teamSubmissionId },
+            include: {
+                client: true,
+                employeeSignatures: {
+                    include: {
+                        employee: {
+                            select: { id: true, name: true, email: true }
+                        }
+                    }
+                }
+            }
+        })
+
+        if (!updatedSubmission) {
+            return NextResponse.json({ error: "Submission nicht gefunden" }, { status: 404 })
+        }
+
+        const teamSubmission = updatedSubmission
         const client = teamSubmission.client
         const clientName = client ? `${client.firstName} ${client.lastName}` : "Unbekannt"
 
-        // Check if ALL employees have now signed
-        const allSignatures = teamSubmission.employeeSignatures
-        const signedCount = allSignatures.filter(sig =>
-            sig.id === employeeSignature.id ? true : !!sig.signature
-        ).length
+        // Check if ALL employees have now signed (using FRESH data)
+        const allSignatures = updatedSubmission.employeeSignatures
+        const signedCount = allSignatures.filter(sig => !!sig.signature).length
         const totalCount = allSignatures.length
         const allSigned = signedCount === totalCount
 

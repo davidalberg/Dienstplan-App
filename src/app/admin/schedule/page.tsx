@@ -531,7 +531,7 @@ export default function SchedulePage() {
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation()
-                                                        router.push(`/admin?clientId=${clientId}&month=${month}&year=${year}`)
+                                                        router.push(`/admin/submissions?clientId=${clientId}&month=${month}&year=${year}`)
                                                     }}
                                                     className="p-2 rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-violet-400 transition-colors"
                                                     aria-label="Zu den Nachweisen"

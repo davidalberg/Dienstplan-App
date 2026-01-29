@@ -418,13 +418,7 @@ export default function AdminSubmissionsPage() {
         <div className="min-h-screen bg-neutral-950 text-white">
             {/* Header */}
             <div className="border-b border-neutral-800 px-6 py-4">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-xl font-semibold">Stundennachweise</h1>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm font-medium transition-colors">
-                        <Plus className="w-4 h-4" />
-                        Erstellen
-                    </button>
-                </div>
+                <h1 className="text-xl font-semibold">Stundennachweise</h1>
 
                 {/* Filter bar */}
                 <div className="flex items-center gap-4 mt-4">
