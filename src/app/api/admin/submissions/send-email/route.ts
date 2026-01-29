@@ -131,7 +131,10 @@ export async function POST(req: NextRequest) {
                 distinct: ['employeeId']
             })
 
-            const signedEmployeeIds = teamSubmission.employeeSignatures.map(sig => sig.employeeId)
+            // Pruefe ob Mitarbeiter tatsaechlich unterschrieben haben (signature !== null)
+            const signedEmployeeIds = teamSubmission.employeeSignatures
+                .filter(sig => sig.signature !== null) // Nur wenn Signatur vorhanden
+                .map(sig => sig.employeeId)
             const allSigned = allEmployeeIds.every(e => signedEmployeeIds.includes(e.employeeId))
 
             if (!allSigned) {

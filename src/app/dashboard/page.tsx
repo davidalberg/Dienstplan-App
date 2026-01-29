@@ -31,15 +31,27 @@ export default function DashboardPage() {
                 const data = await res.json()
                 setAvailableMonths(data)
 
-                // If current month is not available, switch to the most recent available month
+                // If current month is not available, switch to the closest available month
                 const currentMonth = currentDate.getMonth() + 1
                 const currentYear = currentDate.getFullYear()
                 const hasCurrentMonth = data.some((m: any) => m.month === currentMonth && m.year === currentYear)
 
                 if (!hasCurrentMonth && data.length > 0) {
-                    // Switch to the most recent month
-                    const mostRecent = data[0]
-                    setCurrentDate(new Date(mostRecent.year, mostRecent.month - 1, 1))
+                    // Find the month closest to today (not just first in array)
+                    const today = new Date()
+                    const todayValue = today.getFullYear() * 12 + (today.getMonth() + 1)
+
+                    const closest = data.reduce((closest: any, m: any) => {
+                        const mValue = m.year * 12 + m.month
+                        const closestValue = closest.year * 12 + closest.month
+
+                        const mDiff = Math.abs(mValue - todayValue)
+                        const closestDiff = Math.abs(closestValue - todayValue)
+
+                        return mDiff < closestDiff ? m : closest
+                    })
+
+                    setCurrentDate(new Date(closest.year, closest.month - 1, 1))
                 }
             }
         } catch (err) {

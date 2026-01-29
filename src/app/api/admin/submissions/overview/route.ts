@@ -103,6 +103,7 @@ export async function GET(req: NextRequest) {
                 employeeSignatures: {
                     select: {
                         employeeId: true,
+                        signature: true, // Benoetigt um zu pruefen ob tatsaechlich unterschrieben
                         signedAt: true
                     }
                 }
@@ -223,9 +224,9 @@ export async function GET(req: NextRequest) {
                     }
                 }
 
-                // Signatur-Status prüfen
+                // Signatur-Status pruefen - nur wenn tatsaechlich unterschrieben (signature !== null)
                 const employeeSigned = submission?.employeeSignatures.some(
-                    sig => sig.employeeId === emp.id
+                    sig => sig.employeeId === emp.id && sig.signature !== null
                 ) || false
 
                 const clientSigned = submission?.status === "COMPLETED"

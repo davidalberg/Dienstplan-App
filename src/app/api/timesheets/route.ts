@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
             where,
             select: { month: true, year: true },
             distinct: ['month', 'year'],
-            orderBy: [{ year: 'desc' }, { month: 'desc' }]
+            orderBy: [{ year: 'asc' }, { month: 'asc' }]  // Chronological: Feb, Mar, Apr
         })
 
         return NextResponse.json(timesheets)

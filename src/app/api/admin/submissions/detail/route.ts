@@ -103,8 +103,8 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        // TeamSubmission ueber sheetFileName suchen (neue Struktur)
-        const submission = sheetFileName ? await prisma.teamSubmission.findUnique({
+        // TeamSubmission suchen - versuche zuerst ueber sheetFileName, dann ueber clientId
+        let submission = sheetFileName ? await prisma.teamSubmission.findUnique({
             where: {
                 sheetFileName_month_year: {
                     sheetFileName,
@@ -123,6 +123,27 @@ export async function GET(req: NextRequest) {
                 }
             }
         }) : null
+
+        // Fallback: Suche ueber clientId wenn sheetFileName-Suche fehlschlaegt
+        if (!submission) {
+            submission = await prisma.teamSubmission.findFirst({
+                where: {
+                    clientId,
+                    month,
+                    year
+                },
+                include: {
+                    employeeSignatures: {
+                        where: { employeeId },
+                        select: {
+                            id: true,
+                            signature: true,
+                            signedAt: true
+                        }
+                    }
+                }
+            })
+        }
 
         // Stunden berechnen
         let totalMinutes = 0
@@ -165,9 +186,9 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        // Signatur-Status
-        const employeeSigned = submission?.employeeSignatures && submission.employeeSignatures.length > 0
+        // Signatur-Status - pruefe ob Signatur tatsaechlich vorhanden ist (nicht nur Eintrag)
         const employeeSignature = submission?.employeeSignatures?.[0] || null
+        const employeeSigned = !!employeeSignature?.signature // Signatur-Daten muessen vorhanden sein
         const clientSigned = !!submission?.recipientSignature
 
         return NextResponse.json({

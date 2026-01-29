@@ -87,6 +87,21 @@ export async function POST(req: NextRequest) {
 
         // Use transaction to prevent race condition when multiple employees sign simultaneously
         const result = await prisma.$transaction(async (tx) => {
+            // Double-check inside transaction (race condition safety)
+            const existingSignature = await tx.employeeSignature.findUnique({
+                where: {
+                    teamSubmissionId_employeeId: {
+                        teamSubmissionId: submissionId,
+                        employeeId: user.id
+                    }
+                }
+            })
+
+            if (existingSignature) {
+                // User already signed (race condition between outer check and transaction)
+                return { alreadySigned: true as const, allSigned: false, totalEmployees: 0, signedCount: 0, statusTransitioned: false }
+            }
+
             // Create EmployeeSignature
             await tx.employeeSignature.create({
                 data: {
@@ -146,6 +161,7 @@ export async function POST(req: NextRequest) {
             }
 
             return {
+                alreadySigned: false,
                 allSigned,
                 totalEmployees,
                 signedCount,
@@ -156,6 +172,13 @@ export async function POST(req: NextRequest) {
             maxWait: 5000,
             timeout: 10000
         })
+
+        // Handle race condition case where user signed between outer check and transaction
+        if (result.alreadySigned) {
+            return NextResponse.json({
+                error: "Sie haben bereits für diese Einreichung unterschrieben."
+            }, { status: 400 })
+        }
 
         // Only send email if WE were the one to transition the status
         if (result.allSigned && result.statusTransitioned) {
@@ -243,11 +266,11 @@ export async function POST(req: NextRequest) {
         })
 
         return NextResponse.json({
-            message: `Erfolgreich unterschrieben! ${result.signedCount} von ${result.totalEmployees} Teammitgliedern haben unterschrieben.`,
+            message: `Erfolgreich unterschrieben! ${result.signedCount ?? 0} von ${result.totalEmployees ?? 0} Teammitgliedern haben unterschrieben.`,
             allSigned: false,
-            totalCount: result.totalEmployees,
-            signedCount: result.signedCount,
-            pendingCount: result.totalEmployees - result.signedCount,
+            totalCount: result.totalEmployees ?? 0,
+            signedCount: result.signedCount ?? 0,
+            pendingCount: (result.totalEmployees ?? 0) - (result.signedCount ?? 0),
             employees: allEmployees.map(emp => {
                 const hasSigned = updatedSubmission?.employeeSignatures.some(
                     sig => sig.employeeId === emp.id
@@ -261,6 +284,14 @@ export async function POST(req: NextRequest) {
             })
         })
     } catch (error: any) {
+        // Handle Prisma unique constraint violation (race condition fallback)
+        if (error.code === 'P2002') {
+            console.log("[POST /api/submissions/sign] P2002 - User already signed (race condition)")
+            return NextResponse.json({
+                error: "Sie haben bereits für diese Einreichung unterschrieben."
+            }, { status: 400 })
+        }
+
         console.error("[POST /api/submissions/sign] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }

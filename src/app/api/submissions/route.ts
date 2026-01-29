@@ -393,9 +393,39 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        // 3. Use transaction to prevent race condition between check and create
+        // 3. Check if user already signed BEFORE transaction (fast-fail)
+        const existingSubmission = await prisma.teamSubmission.findUnique({
+            where: {
+                sheetFileName_month_year: {
+                    sheetFileName,
+                    month,
+                    year
+                }
+            },
+            include: {
+                employeeSignatures: {
+                    select: { employeeId: true }
+                }
+            }
+        })
+
+        if (existingSubmission) {
+            const alreadySigned = existingSubmission.employeeSignatures.some(
+                sig => sig.employeeId === user.id
+            )
+
+            if (alreadySigned) {
+                // Return early with user-friendly error
+                console.log(`[POST /api/submissions] User ${user.id} already signed for ${sheetFileName} ${month}/${year}`)
+                return NextResponse.json({
+                    error: "Sie haben bereits für diesen Monat unterschrieben. Die Einreichung ist bereits aktiv."
+                }, { status: 400 })
+            }
+        }
+
+        // 4. Use transaction to prevent race condition between check and create
         const result = await prisma.$transaction(async (tx) => {
-            // Check if TeamSubmission exists (inside transaction)
+            // Re-check if TeamSubmission exists (inside transaction for consistency)
             let teamSubmission = await tx.teamSubmission.findUnique({
                 where: {
                     sheetFileName_month_year: {
@@ -419,18 +449,20 @@ export async function POST(req: NextRequest) {
                 }
             })
 
-            // 4. If submission exists, check if current user already signed
+            // 5. If submission exists, return it (user hasn't signed yet - checked above)
             if (teamSubmission) {
+                // Double-check inside transaction (race condition safety)
                 const alreadySigned = teamSubmission.employeeSignatures.some(
                     sig => sig.employeeId === user.id
                 )
 
                 if (alreadySigned) {
-                    throw new Error("ALREADY_SIGNED")
+                    // This should rarely happen (race condition between outer check and transaction)
+                    return { alreadySigned: true, teamSubmission }
                 }
 
                 // User hasn't signed yet, return existing submission
-                return { teamSubmission, isNew: false }
+                return { teamSubmission, isNew: false, alreadySigned: false }
             }
 
             // 6. Create new TeamSubmission (no duplicate possible due to unique constraint)
@@ -464,15 +496,12 @@ export async function POST(req: NextRequest) {
                 }
             })
 
-            return { teamSubmission, isNew: true }
+            return { teamSubmission, isNew: true, alreadySigned: false }
         }, {
             isolationLevel: 'Serializable', // Highest isolation level for race condition safety
             maxWait: 5000,
             timeout: 10000
         }).catch((error) => {
-            if (error.message === "ALREADY_SIGNED") {
-                throw error // Re-throw to handle below
-            }
             // Handle Prisma unique constraint violation
             if (error.code === 'P2002') {
                 // Another user just created it, fetch and return
@@ -489,10 +518,17 @@ export async function POST(req: NextRequest) {
                             }
                         }
                     }
-                }).then(teamSubmission => ({ teamSubmission, isNew: false }))
+                }).then(teamSubmission => ({ teamSubmission, isNew: false, alreadySigned: false }))
             }
             throw error
         })
+
+        // Handle race condition case where user signed between outer check and transaction
+        if (result.alreadySigned) {
+            return NextResponse.json({
+                error: "Sie haben bereits für diesen Monat unterschrieben. Die Einreichung ist bereits aktiv."
+            }, { status: 400 })
+        }
 
         if (!result.teamSubmission) {
             return NextResponse.json({ error: "Failed to create or find submission" }, { status: 500 })
@@ -517,13 +553,6 @@ export async function POST(req: NextRequest) {
                 : `${result.teamSubmission.employeeSignatures.length} von ${allEmployees.length} Mitarbeitern haben bereits unterschrieben.`
         })
     } catch (error: any) {
-        // Handle ALREADY_SIGNED error with user-friendly message
-        if (error.message === "ALREADY_SIGNED") {
-            return NextResponse.json({
-                error: "Sie haben bereits für diesen Monat unterschrieben. Die Einreichung ist bereits aktiv."
-            }, { status: 400 })
-        }
-
         console.error("[POST /api/submissions] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
