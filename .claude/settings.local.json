@@ -46,7 +46,21 @@
       "Bash(vercel env:*)",
       "Bash(vercel link:*)",
       "Bash(echo:*)",
-      "Bash(vercel:*)"
+      "Bash(vercel:*)",
+      "Bash(npx playwright install chromium)",
+      "Bash(npx tsx:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(npx vercel:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git stash pop:*)",
+      "Bash(npm ls:*)",
+      "Bash(npx next build:*)",
+      "Bash(del \"c:\\\\Users\\\\david\\\\Desktop\\\\Stundennachweis_App\\\\Dienstplan-App\\\\scripts\\\\debug-overview.ts\")",
+      "Bash(cmd /c \"del c:\\\\Users\\\\david\\\\Desktop\\\\Stundennachweis_App\\\\Dienstplan-App\\\\scripts\\\\debug-overview.ts\")",
+      "Bash(npx prisma db push:*)"
     ]
   }
 }

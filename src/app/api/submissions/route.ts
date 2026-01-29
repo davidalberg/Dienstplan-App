@@ -30,23 +30,60 @@ export async function GET(req: NextRequest) {
         }
 
         // 1. Check for TeamSubmission (new multi-employee system)
-        // Get user's sheetFileName for this month
-        const userTimesheet = await prisma.timesheet.findFirst({
+        // FALLBACK: Suche zuerst nach sheetFileName, dann nach teamId (alte Struktur)
+        let userTimesheet = await prisma.timesheet.findFirst({
             where: {
                 employeeId: user.id,
                 month,
                 year,
                 sheetFileName: { not: null }
             },
-            select: { sheetFileName: true }
+            select: {
+                sheetFileName: true,
+                teamId: true,
+                team: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            }
         })
 
-        if (userTimesheet?.sheetFileName) {
+        // FALLBACK: Wenn kein sheetFileName, suche nach teamId (alte Timesheets)
+        if (!userTimesheet) {
+            userTimesheet = await prisma.timesheet.findFirst({
+                where: {
+                    employeeId: user.id,
+                    month,
+                    year,
+                    teamId: { not: null }
+                },
+                select: {
+                    sheetFileName: true,
+                    teamId: true,
+                    team: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
+                    }
+                }
+            })
+        }
+
+        // Generiere sheetFileName on-the-fly fuer alte Daten (nur in GET fuer Lookup)
+        let sheetFileName = userTimesheet?.sheetFileName
+        if (!sheetFileName && userTimesheet?.team) {
+            sheetFileName = `Team_${userTimesheet.team.name.replace(/\s+/g, '_')}_${year}`
+        }
+
+        if (sheetFileName) {
             // Look for TeamSubmission
             const teamSubmission = await prisma.teamSubmission.findUnique({
                 where: {
                     sheetFileName_month_year: {
-                        sheetFileName: userTimesheet.sheetFileName,
+                        sheetFileName,
                         month,
                         year
                     }
@@ -70,7 +107,7 @@ export async function GET(req: NextRequest) {
             if (teamSubmission) {
                 // Get all employees in this Dienstplan
                 const allEmployees = await getAllEmployeesInDienstplan(
-                    userTimesheet.sheetFileName,
+                    sheetFileName,
                     month,
                     year
                 )
@@ -157,33 +194,137 @@ export async function POST(req: NextRequest) {
         }
 
         // 1. Get user's sheetFileName from their timesheets
-        const userTimesheet = await prisma.timesheet.findFirst({
+        // FALLBACK: Suche zuerst nach sheetFileName, dann nach teamId (alte Struktur)
+        let userTimesheet = await prisma.timesheet.findFirst({
             where: {
                 employeeId: user.id,
                 month,
                 year,
                 sheetFileName: { not: null }
             },
-            select: { sheetFileName: true }
+            select: {
+                sheetFileName: true,
+                teamId: true,
+                team: {
+                    select: {
+                        id: true,
+                        name: true,
+                        client: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true,
+                                email: true
+                            }
+                        }
+                    }
+                }
+            }
         })
 
-        if (!userTimesheet?.sheetFileName) {
+        // FALLBACK: Wenn kein sheetFileName, suche nach teamId (alte Timesheets)
+        if (!userTimesheet) {
+            userTimesheet = await prisma.timesheet.findFirst({
+                where: {
+                    employeeId: user.id,
+                    month,
+                    year,
+                    teamId: { not: null }
+                },
+                select: {
+                    sheetFileName: true,
+                    teamId: true,
+                    team: {
+                        select: {
+                            id: true,
+                            name: true,
+                            client: {
+                                select: {
+                                    id: true,
+                                    firstName: true,
+                                    lastName: true,
+                                    email: true
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+        }
+
+        if (!userTimesheet) {
             return NextResponse.json({
                 error: "Kein Dienstplan zugewiesen. Bitte kontaktieren Sie den Administrator."
             }, { status: 400 })
         }
 
-        const sheetFileName = userTimesheet.sheetFileName
+        // Generiere sheetFileName on-the-fly wenn es fehlt (alte Timesheets)
+        let sheetFileName = userTimesheet.sheetFileName
+        const isLegacyTimesheet = !sheetFileName && userTimesheet.team
 
-        // 2. Check if DienstplanConfig exists (REPLACES old Team check)
-        const dienstplanConfig = await prisma.dienstplanConfig.findUnique({
+        if (isLegacyTimesheet && userTimesheet.team) {
+            // Generiere einen eindeutigen sheetFileName aus Team-Name + Jahr
+            sheetFileName = `Team_${userTimesheet.team.name.replace(/\s+/g, '_')}_${year}`
+            console.log(`[POST /api/submissions] Generated sheetFileName for legacy timesheet: ${sheetFileName}`)
+
+            // WICHTIG: Aktualisiere ALLE Timesheets dieses Teams/Monats mit dem generierten sheetFileName
+            // damit getAllEmployeesInDienstplan korrekt funktioniert
+            const updateResult = await prisma.timesheet.updateMany({
+                where: {
+                    teamId: userTimesheet.team.id,
+                    month,
+                    year,
+                    sheetFileName: null
+                },
+                data: {
+                    sheetFileName
+                }
+            })
+            console.log(`[POST /api/submissions] Updated ${updateResult.count} legacy timesheets with sheetFileName: ${sheetFileName}`)
+        }
+
+        if (!sheetFileName) {
+            return NextResponse.json({
+                error: "Kein Dienstplan zugewiesen. Bitte kontaktieren Sie den Administrator."
+            }, { status: 400 })
+        }
+
+        // 2. Check if DienstplanConfig exists, create if missing (for legacy data)
+        let dienstplanConfig = await prisma.dienstplanConfig.findUnique({
             where: { sheetFileName }
         })
 
+        // FALLBACK: Erstelle DienstplanConfig automatisch fuer alte Daten
         if (!dienstplanConfig) {
-            return NextResponse.json({
-                error: `Der Dienstplan "${sheetFileName}" ist noch nicht konfiguriert. Bitte kontaktieren Sie den Administrator.`
-            }, { status: 400 })
+            // Versuche Config-Daten aus Team oder Client zu ermitteln
+            const team = userTimesheet.team
+            const client = team?.client
+
+            if (client) {
+                // Erstelle neue DienstplanConfig mit Client-Daten
+                dienstplanConfig = await prisma.dienstplanConfig.create({
+                    data: {
+                        sheetFileName,
+                        assistantRecipientEmail: client.email || "konfiguration-erforderlich@example.com",
+                        assistantRecipientName: `${client.firstName} ${client.lastName}`
+                    }
+                })
+                console.log(`[POST /api/submissions] Auto-created DienstplanConfig for: ${sheetFileName}`)
+            } else if (team) {
+                // Fallback: Nutze Team-Daten wenn kein Client
+                dienstplanConfig = await prisma.dienstplanConfig.create({
+                    data: {
+                        sheetFileName,
+                        assistantRecipientEmail: "konfiguration-erforderlich@example.com",
+                        assistantRecipientName: team.name
+                    }
+                })
+                console.log(`[POST /api/submissions] Auto-created DienstplanConfig (from team) for: ${sheetFileName}`)
+            } else {
+                return NextResponse.json({
+                    error: `Der Dienstplan "${sheetFileName}" ist noch nicht konfiguriert. Bitte kontaktieren Sie den Administrator.`
+                }, { status: 400 })
+            }
         }
 
         // 5. Check that all user's timesheets are confirmed BEFORE any transaction

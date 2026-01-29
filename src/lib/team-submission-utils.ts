@@ -1,8 +1,18 @@
 import prisma from "@/lib/prisma"
 
 /**
+ * Extrahiert teamId aus generiertem sheetFileName (falls vorhanden)
+ * Format: "Team_TeamName_Jahr"
+ */
+function extractTeamNameFromSheetFileName(sheetFileName: string): string | null {
+    const match = sheetFileName.match(/^Team_(.+)_\d{4}$/)
+    return match ? match[1].replace(/_/g, ' ') : null
+}
+
+/**
  * Holt alle Mitarbeiter-IDs für einen bestimmten Dienstplan (sheetFileName) in einem Monat/Jahr
- * @param sheetFileName z.B. "Dienstplan Finn Jonschker 2026"
+ * FALLBACK: Wenn sheetFileName generiert wurde (Team_*_Jahr), sucht auch nach teamId
+ * @param sheetFileName z.B. "Dienstplan Finn Jonschker 2026" oder "Team_TeamName_2026"
  * @param month Monat (1-12)
  * @param year Jahr (z.B. 2026)
  * @returns Array von employeeIds
@@ -12,7 +22,8 @@ export async function getEmployeesInDienstplan(
     month: number,
     year: number
 ): Promise<string[]> {
-    const timesheets = await prisma.timesheet.findMany({
+    // Primaer: Suche nach sheetFileName
+    let timesheets = await prisma.timesheet.findMany({
         where: {
             sheetFileName,
             month,
@@ -23,6 +34,35 @@ export async function getEmployeesInDienstplan(
         },
         distinct: ['employeeId']
     })
+
+    // FALLBACK: Wenn sheetFileName generiert wurde, suche auch nach passendem Team
+    if (timesheets.length === 0) {
+        const teamName = extractTeamNameFromSheetFileName(sheetFileName)
+        if (teamName) {
+            // Suche Team nach Name
+            const team = await prisma.team.findFirst({
+                where: {
+                    name: { contains: teamName, mode: 'insensitive' }
+                }
+            })
+
+            if (team) {
+                // Suche Timesheets mit diesem teamId (Legacy-Daten)
+                timesheets = await prisma.timesheet.findMany({
+                    where: {
+                        teamId: team.id,
+                        month,
+                        year,
+                        sheetFileName: null // Nur Legacy-Daten
+                    },
+                    select: {
+                        employeeId: true
+                    },
+                    distinct: ['employeeId']
+                })
+            }
+        }
+    }
 
     return timesheets.map(ts => ts.employeeId)
 }
@@ -190,11 +230,14 @@ export async function getSignedEmployees(
         throw new Error("TeamSubmission not found")
     }
 
-    return submission.employeeSignatures.map(sig => ({
-        id: sig.employee.id,
-        name: sig.employee.name,
-        email: sig.employee.email,
-        signedAt: sig.signedAt,
-        signature: sig.signature
-    }))
+    // Filter only signed employees (with non-null signature and signedAt)
+    return submission.employeeSignatures
+        .filter(sig => sig.signature && sig.signedAt)
+        .map(sig => ({
+            id: sig.employee.id,
+            name: sig.employee.name,
+            email: sig.employee.email,
+            signedAt: sig.signedAt!,
+            signature: sig.signature!
+        }))
 }

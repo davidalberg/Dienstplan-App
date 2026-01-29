@@ -19,8 +19,11 @@ export async function GET(req: NextRequest) {
         const clients = await prisma.client.findMany({
             where: { isActive: true },
             include: {
-                // Many-to-Many: Direkt zugeordnete Mitarbeiter
+                // Many-to-Many: Direkt zugeordnete Mitarbeiter (nur EMPLOYEE-Rolle!)
                 employees: {
+                    where: {
+                        role: "EMPLOYEE"
+                    },
                     select: {
                         id: true,
                         name: true,
@@ -33,6 +36,9 @@ export async function GET(req: NextRequest) {
                         id: true,
                         name: true,
                         members: {
+                            where: {
+                                role: "EMPLOYEE"
+                            },
                             select: {
                                 id: true,
                                 name: true,
@@ -75,12 +81,13 @@ export async function GET(req: NextRequest) {
                         clientId: true
                     }
                 },
-                // Employee-Daten für Mitarbeiter die nur über Timesheets zugeordnet sind
+                // Employee-Daten fuer Mitarbeiter die nur ueber Timesheets zugeordnet sind
                 employee: {
                     select: {
                         id: true,
                         name: true,
-                        email: true
+                        email: true,
+                        role: true
                     }
                 }
             }

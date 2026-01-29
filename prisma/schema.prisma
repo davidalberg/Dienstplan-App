@@ -227,10 +227,14 @@ model EmployeeSignature {
   teamSubmissionId String
   employeeId       String
 
-  // Signatur-Daten
-  signature        String         @db.Text // Base64 PNG
-  signedAt         DateTime
-  ipAddress        String
+  // Token fuer E-Mail-Link
+  signToken        String?        @unique
+  tokenExpiresAt   DateTime?
+
+  // Signatur-Daten (null bis unterschrieben)
+  signature        String?        @db.Text // Base64 PNG
+  signedAt         DateTime?
+  ipAddress        String?
 
   createdAt        DateTime       @default(now())
 
@@ -241,6 +245,7 @@ model EmployeeSignature {
   @@unique([teamSubmissionId, employeeId])
   @@index([teamSubmissionId])
   @@index([employeeId])
+  @@index([signToken])
 }
 
 // Aktivitätsprotokoll für System-Events und Debugging

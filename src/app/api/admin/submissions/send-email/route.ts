@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { sendSignatureRequestEmail, sendEmployeeConfirmationEmail } from "@/lib/email"
+import { sendSignatureRequestEmail, sendEmployeeConfirmationEmail, sendEmployeeSignatureEmail } from "@/lib/email"
 import { randomBytes } from "crypto"
 
 /**
@@ -107,12 +107,80 @@ export async function POST(req: NextRequest) {
         const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
 
         if (type === "employee") {
-            // For now, employees sign through the dashboard, not via email link
-            // But we can send a reminder email
-            return NextResponse.json({
-                message: "Mitarbeiter können über ihr Dashboard unterschreiben.",
-                note: "Eine E-Mail-Benachrichtigung für Mitarbeiter ist derzeit nicht implementiert."
-            })
+            // Check if employee has an email
+            if (!employee.email) {
+                return NextResponse.json({
+                    error: "Fuer diesen Mitarbeiter ist keine E-Mail-Adresse hinterlegt"
+                }, { status: 400 })
+            }
+
+            // Find or create employee signature record with token
+            let employeeSignature = teamSubmission.employeeSignatures.find(
+                sig => sig.employeeId === employeeId
+            )
+
+            if (!employeeSignature) {
+                // Create new employee signature record with token
+                const signToken = randomBytes(32).toString("hex")
+                const tokenExpiresAt = new Date()
+                tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 7) // 7 days validity
+
+                employeeSignature = await prisma.employeeSignature.create({
+                    data: {
+                        teamSubmissionId: teamSubmission.id,
+                        employeeId,
+                        signToken,
+                        tokenExpiresAt
+                    },
+                    include: {
+                        employee: { select: { id: true, name: true, email: true } }
+                    }
+                })
+            } else if (!employeeSignature.signToken) {
+                // Update existing record with token if missing
+                const signToken = randomBytes(32).toString("hex")
+                const tokenExpiresAt = new Date()
+                tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 7)
+
+                employeeSignature = await prisma.employeeSignature.update({
+                    where: { id: employeeSignature.id },
+                    data: {
+                        signToken,
+                        tokenExpiresAt
+                    },
+                    include: {
+                        employee: { select: { id: true, name: true, email: true } }
+                    }
+                })
+            }
+
+            // Build signature URL for employee
+            const signatureUrl = `${baseUrl}/sign/employee/${employeeSignature.signToken}`
+
+            // Send email to employee
+            try {
+                await sendEmployeeSignatureEmail({
+                    employeeEmail: employee.email,
+                    employeeName: employee.name || employee.email,
+                    clientName,
+                    sheetFileName: teamSubmission.sheetFileName,
+                    month,
+                    year,
+                    signatureUrl,
+                    expiresAt: employeeSignature.tokenExpiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                })
+
+                return NextResponse.json({
+                    success: true,
+                    message: `E-Mail an ${employee.name || employee.email} gesendet`
+                })
+            } catch (emailError: any) {
+                console.error("[POST /api/admin/submissions/send-email] Email error:", emailError)
+                return NextResponse.json({
+                    error: "E-Mail konnte nicht gesendet werden",
+                    details: emailError.message
+                }, { status: 500 })
+            }
         } else {
             // Send email to client (Assistenznehmer)
             if (!client.email) {

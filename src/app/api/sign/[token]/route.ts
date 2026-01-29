@@ -340,12 +340,14 @@ export async function POST(
                 vacationHours: totalVacationHours
             },
             signatures: {
-                // NEW: Multiple employee signatures
-                employeeSignatures: teamSubmission.employeeSignatures.map(sig => ({
-                    employeeName: sig.employee.name || sig.employee.email,
-                    signature: sig.signature,
-                    signedAt: sig.signedAt
-                })),
+                // NEW: Multiple employee signatures (only include signed ones)
+                employeeSignatures: teamSubmission.employeeSignatures
+                    .filter(sig => sig.signature && sig.signedAt)
+                    .map(sig => ({
+                        employeeName: sig.employee.name || sig.employee.email,
+                        signature: sig.signature!,
+                        signedAt: sig.signedAt!
+                    })),
                 // Recipient signature - use dienstplanConfig or client
                 recipientName: teamSubmission.dienstplanConfig?.assistantRecipientName ||
                     (teamSubmission.client ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}` : "Unbekannt"),
@@ -451,10 +453,12 @@ export async function POST(
                     pdfUrl: pdfUrl || "",
                     sheetFileName: teamSubmission.sheetFileName,
                     totalHours,
-                    employeeSignatures: teamSubmission.employeeSignatures.map(sig => ({
-                        name: sig.employee.name || sig.employee.email,
-                        signedAt: sig.signedAt
-                    })),
+                    employeeSignatures: teamSubmission.employeeSignatures
+                        .filter(sig => sig.signedAt)
+                        .map(sig => ({
+                            name: sig.employee.name || sig.employee.email,
+                            signedAt: sig.signedAt!
+                        })),
                     recipientSignedAt
                 })
             }
