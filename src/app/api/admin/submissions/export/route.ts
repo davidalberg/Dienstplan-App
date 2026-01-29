@@ -64,13 +64,13 @@ export async function GET(req: NextRequest) {
 
         const clientName = client ? `${client.firstName} ${client.lastName}` : "Unbekannt"
 
-        // Timesheets laden
+        // Timesheets laden (inkl. PLANNED)
         const timesheets = await prisma.timesheet.findMany({
             where: {
                 employeeId,
                 month,
                 year,
-                status: { in: ["CONFIRMED", "CHANGED", "SUBMITTED"] }
+                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED"] }
             },
             orderBy: { date: "asc" }
         })

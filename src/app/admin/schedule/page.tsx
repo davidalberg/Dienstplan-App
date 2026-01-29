@@ -16,7 +16,8 @@ import {
     ChevronDown,
     ChevronUp,
     X,
-    Save
+    Save,
+    ExternalLink
 } from "lucide-react"
 import { showToast } from "@/lib/toast-utils"
 import { formatTimeRange } from "@/lib/time-utils"
@@ -508,11 +509,11 @@ export default function SchedulePage() {
                                 return (
                                     <div key={clientId} className="bg-neutral-900 rounded-xl overflow-hidden">
                                         {/* Klient Header */}
-                                        <button
-                                            onClick={() => toggleClientExpansion(clientId)}
-                                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-neutral-800/50 transition-colors"
-                                        >
-                                            <div className="flex items-center gap-3">
+                                        <div className="w-full px-4 py-3 flex items-center justify-between hover:bg-neutral-800/50 transition-colors">
+                                            <button
+                                                onClick={() => toggleClientExpansion(clientId)}
+                                                className="flex-1 flex items-center gap-3"
+                                            >
                                                 {isExpanded ? (
                                                     <ChevronDown className="text-neutral-400" size={20} />
                                                 ) : (
@@ -524,8 +525,21 @@ export default function SchedulePage() {
                                                 <span className="bg-violet-600/20 text-violet-400 px-2.5 py-0.5 rounded-full text-xs font-bold">
                                                     {group.shifts.length}
                                                 </span>
-                                            </div>
-                                        </button>
+                                            </button>
+                                            {clientId !== "unassigned" && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        router.push(`/admin?clientId=${clientId}&month=${month}&year=${year}`)
+                                                    }}
+                                                    className="p-2 rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-violet-400 transition-colors"
+                                                    aria-label="Zu den Nachweisen"
+                                                    title="Zu den Nachweisen"
+                                                >
+                                                    <ExternalLink size={16} />
+                                                </button>
+                                            )}
+                                        </div>
 
                                         {/* Schichten-Tabelle (nur wenn expanded) */}
                                         {isExpanded && (

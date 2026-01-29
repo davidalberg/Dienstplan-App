@@ -22,6 +22,7 @@ interface Employee {
     submissionStatus: string | null
     lastActivity: string | null
     timesheetCount: number
+    timesheetStatus?: string | null // Dominant status der Timesheets (PLANNED, CONFIRMED, etc.)
 }
 
 interface Client {
@@ -73,6 +74,41 @@ function SignatureBadge({ label, signed }: { label: string; signed: boolean }) {
         }`}>
             {signed && <Check size={12} />}
             {label}
+        </span>
+    )
+}
+
+// Badge für Timesheet-Status
+function StatusBadge({ status }: { status?: string | null }) {
+    if (!status) return null
+
+    const statusConfig: Record<string, { label: string; className: string }> = {
+        PLANNED: {
+            label: "Geplant",
+            className: "bg-amber-900/50 text-amber-400 border border-amber-700"
+        },
+        CONFIRMED: {
+            label: "Bestätigt",
+            className: "bg-emerald-900/50 text-emerald-400 border border-emerald-700"
+        },
+        CHANGED: {
+            label: "Geändert",
+            className: "bg-blue-900/50 text-blue-400 border border-blue-700"
+        },
+        SUBMITTED: {
+            label: "Eingereicht",
+            className: "bg-violet-900/50 text-violet-400 border border-violet-700"
+        }
+    }
+
+    const config = statusConfig[status] || {
+        label: status,
+        className: "bg-neutral-800 text-neutral-400 border border-neutral-700"
+    }
+
+    return (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${config.className}`}>
+            {config.label}
         </span>
     )
 }
@@ -245,6 +281,7 @@ export default function AdminPage() {
                                                         {formatHours(employee.totalMinutes)}
                                                     </span>
                                                     <div className="flex items-center gap-2">
+                                                        <StatusBadge status={employee.timesheetStatus} />
                                                         <SignatureBadge label="A" signed={employee.employeeSigned} />
                                                         <SignatureBadge label="K" signed={employee.clientSigned} />
                                                     </div>

@@ -34,12 +34,12 @@ export async function GET(req: NextRequest) {
             ]
         })
 
-        // 2. Alle Timesheets für den Monat laden
+        // 2. Alle Timesheets für den Monat laden (inkl. PLANNED)
         const timesheets = await prisma.timesheet.findMany({
             where: {
                 month,
                 year,
-                status: { in: ["CONFIRMED", "CHANGED", "SUBMITTED"] }
+                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED"] }
             },
             select: {
                 id: true,

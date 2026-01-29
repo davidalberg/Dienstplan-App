@@ -52,13 +52,13 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Klient nicht gefunden" }, { status: 404 })
         }
 
-        // Timesheets für diesen Mitarbeiter im Monat laden
+        // Timesheets für diesen Mitarbeiter im Monat laden (inkl. PLANNED)
         const timesheets = await prisma.timesheet.findMany({
             where: {
                 employeeId,
                 month,
                 year,
-                status: { in: ["CONFIRMED", "CHANGED", "SUBMITTED"] }
+                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED"] }
             },
             orderBy: { date: "asc" },
             select: {
@@ -120,6 +120,7 @@ export async function GET(req: NextRequest) {
             let type = ""
             if (ts.absenceType === "SICK") type = "K" // Krank
             else if (ts.absenceType === "VACATION") type = "U" // Urlaub
+            else if (ts.status === "PLANNED") type = "G" // Geplant
             else if (ts.note?.includes("Feiertag")) type = "F"
             else if (ts.note?.includes("Fahrt")) type = "FZ"
             else if (ts.note?.includes("Bereitschaft")) type = "BD"

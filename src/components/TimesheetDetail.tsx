@@ -296,7 +296,7 @@ export default function TimesheetDetail({
 
                                     {/* Legende */}
                                     <p className="text-[10px] text-gray-500 mb-6">
-                                        (Diensttypen: F = Feiertag, FZ = Fahrtzeit, BD = Bereitschaftsdienst, B = Büro, K = Krank, U = Urlaub)
+                                        (Diensttypen: G = Geplant, F = Feiertag, FZ = Fahrtzeit, BD = Bereitschaftsdienst, B = Büro, K = Krank, U = Urlaub)
                                     </p>
 
                                     {/* Unterschriften */}
