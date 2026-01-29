@@ -15,15 +15,30 @@ export async function GET(req: NextRequest) {
     const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()))
 
     try {
-        // 1. Alle aktiven Klienten mit ihren Mitarbeitern laden
+        // 1. Alle aktiven Klienten mit ihren Teams laden
         const clients = await prisma.client.findMany({
             where: { isActive: true },
             include: {
+                // Many-to-Many: Direkt zugeordnete Mitarbeiter
                 employees: {
                     select: {
                         id: true,
                         name: true,
                         email: true
+                    }
+                },
+                // Teams die diesem Klienten zugeordnet sind
+                teams: {
+                    select: {
+                        id: true,
+                        name: true,
+                        members: {
+                            select: {
+                                id: true,
+                                name: true,
+                                email: true
+                            }
+                        }
                     }
                 }
             },
@@ -34,7 +49,7 @@ export async function GET(req: NextRequest) {
             ]
         })
 
-        // 2. Alle Timesheets für den Monat laden (inkl. PLANNED)
+        // 2. Alle Timesheets für den Monat laden (inkl. PLANNED) - MIT Team- und Employee-Relation
         const timesheets = await prisma.timesheet.findMany({
             where: {
                 month,
@@ -44,6 +59,7 @@ export async function GET(req: NextRequest) {
             select: {
                 id: true,
                 employeeId: true,
+                teamId: true,
                 date: true,
                 plannedStart: true,
                 plannedEnd: true,
@@ -51,7 +67,22 @@ export async function GET(req: NextRequest) {
                 actualEnd: true,
                 breakMinutes: true,
                 status: true,
-                absenceType: true
+                absenceType: true,
+                // Team mit Client-Zuordnung laden
+                team: {
+                    select: {
+                        id: true,
+                        clientId: true
+                    }
+                },
+                // Employee-Daten für Mitarbeiter die nur über Timesheets zugeordnet sind
+                employee: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true
+                    }
+                }
             }
         })
 
@@ -71,15 +102,52 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        // 4. Timesheets nach Employee gruppieren
-        const timesheetsByEmployee = new Map<string, typeof timesheets>()
-        for (const ts of timesheets) {
-            const existing = timesheetsByEmployee.get(ts.employeeId) || []
-            existing.push(ts)
-            timesheetsByEmployee.set(ts.employeeId, existing)
+        // 4. Mapping: Employee -> Clients (via Many-to-Many Relation)
+        // Fuer Timesheets ohne Team-Zuordnung brauchen wir diese Info
+        const clientsByEmployee = new Map<string, string[]>()
+        for (const client of clients) {
+            for (const emp of client.employees) {
+                const existing = clientsByEmployee.get(emp.id) || []
+                existing.push(client.id)
+                clientsByEmployee.set(emp.id, existing)
+            }
+            for (const team of client.teams) {
+                for (const member of team.members) {
+                    const existing = clientsByEmployee.get(member.id) || []
+                    if (!existing.includes(client.id)) {
+                        existing.push(client.id)
+                        clientsByEmployee.set(member.id, existing)
+                    }
+                }
+            }
         }
 
-        // 5. Submissions nach ClientId gruppieren
+        // 5. Timesheets nach Employee UND Client gruppieren (Key: "employeeId:clientId")
+        // Ein Timesheet gehört zu einem Client über:
+        //   A) Timesheet.teamId -> Team.clientId (direkte Team-Zuordnung)
+        //   B) Timesheet.employeeId -> User.clients (Many-to-Many, wenn kein Team)
+        const timesheetsByEmployeeAndClient = new Map<string, typeof timesheets>()
+        for (const ts of timesheets) {
+            // A) ClientId aus Team-Relation
+            const teamClientId = ts.team?.clientId
+            if (teamClientId) {
+                const key = `${ts.employeeId}:${teamClientId}`
+                const existing = timesheetsByEmployeeAndClient.get(key) || []
+                existing.push(ts)
+                timesheetsByEmployeeAndClient.set(key, existing)
+            } else {
+                // B) Kein Team -> Clients aus Many-to-Many Relation des Employees
+                const employeeClientIds = clientsByEmployee.get(ts.employeeId) || []
+                for (const clientId of employeeClientIds) {
+                    const key = `${ts.employeeId}:${clientId}`
+                    const existing = timesheetsByEmployeeAndClient.get(key) || []
+                    existing.push(ts)
+                    timesheetsByEmployeeAndClient.set(key, existing)
+                }
+            }
+        }
+
+        // 6. Submissions nach ClientId gruppieren
         const submissionsByClient = new Map<string, typeof submissions[0]>()
         for (const sub of submissions) {
             if (sub.clientId) {
@@ -87,12 +155,45 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        // 6. Daten für jeden Klienten aufbereiten
+        // 7. Daten für jeden Klienten aufbereiten
         const clientsWithData = clients.map(client => {
             const submission = submissionsByClient.get(client.id)
 
-            const employeesWithData = client.employees.map(emp => {
-                const empTimesheets = timesheetsByEmployee.get(emp.id) || []
+            // Mitarbeiter sammeln: aus Many-to-Many UND aus Teams
+            const employeeMap = new Map<string, { id: string; name: string | null; email: string }>()
+
+            // 1. Direkt zugeordnete Mitarbeiter (Many-to-Many)
+            for (const emp of client.employees) {
+                employeeMap.set(emp.id, emp)
+            }
+
+            // 2. Mitarbeiter aus Teams
+            for (const team of client.teams) {
+                for (const member of team.members) {
+                    if (!employeeMap.has(member.id)) {
+                        employeeMap.set(member.id, member)
+                    }
+                }
+            }
+
+            // 3. Mitarbeiter die Timesheets für diesen Client haben (über Team)
+            for (const ts of timesheets) {
+                if (ts.team?.clientId === client.id && ts.employee) {
+                    // Dieser Timesheet gehört zu diesem Client
+                    if (!employeeMap.has(ts.employeeId)) {
+                        employeeMap.set(ts.employeeId, {
+                            id: ts.employee.id,
+                            name: ts.employee.name,
+                            email: ts.employee.email
+                        })
+                    }
+                }
+            }
+
+            const employeesWithData = Array.from(employeeMap.values()).map(emp => {
+                // Timesheets für diesen Mitarbeiter UND diesen Client
+                const key = `${emp.id}:${client.id}`
+                const empTimesheets = timesheetsByEmployeeAndClient.get(key) || []
 
                 // Stunden berechnen
                 let totalMinutes = 0
@@ -122,6 +223,20 @@ export async function GET(req: NextRequest) {
 
                 const clientSigned = submission?.status === "COMPLETED"
 
+                // Dominanter Timesheet-Status ermitteln (PLANNED < CONFIRMED < CHANGED < SUBMITTED)
+                const statusPriority: Record<string, number> = {
+                    PLANNED: 1,
+                    CONFIRMED: 2,
+                    CHANGED: 3,
+                    SUBMITTED: 4
+                }
+                let dominantStatus: string | null = null
+                for (const ts of empTimesheets) {
+                    if (!dominantStatus || (statusPriority[ts.status] || 0) > (statusPriority[dominantStatus] || 0)) {
+                        dominantStatus = ts.status
+                    }
+                }
+
                 return {
                     id: emp.id,
                     name: emp.name,
@@ -133,7 +248,8 @@ export async function GET(req: NextRequest) {
                     submissionId: submission?.id || null,
                     submissionStatus: submission?.status || null,
                     lastActivity: lastActivityDate?.toISOString().split("T")[0] || null,
-                    timesheetCount: empTimesheets.length
+                    timesheetCount: empTimesheets.length,
+                    timesheetStatus: dominantStatus
                 }
             })
 

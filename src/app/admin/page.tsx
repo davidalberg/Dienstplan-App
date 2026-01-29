@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { format, addMonths, subMonths } from "date-fns"
 import { de } from "date-fns/locale"
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, ExternalLink, Check } from "lucide-react"
@@ -115,6 +116,7 @@ function StatusBadge({ status }: { status?: string | null }) {
 
 export default function AdminPage() {
     const { data: session } = useSession()
+    const router = useRouter()
     const [currentDate, setCurrentDate] = useState(new Date())
     const [expandedClients, setExpandedClients] = useState<Record<string, boolean>>({})
     const [selectedEmployee, setSelectedEmployee] = useState<{ employee: Employee; client: Client } | null>(null)
@@ -207,7 +209,10 @@ export default function AdminPage() {
                                 Heute
                             </button>
                         </div>
-                        <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-neutral-800 border border-neutral-700 text-white font-medium hover:bg-neutral-700 transition-colors">
+                        <button
+                            onClick={() => router.push('/admin/schedule')}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-neutral-800 border border-neutral-700 text-white font-medium hover:bg-neutral-700 transition-colors"
+                        >
                             <Plus size={18} />
                             Erstellen
                         </button>
