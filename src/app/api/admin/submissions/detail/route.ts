@@ -37,6 +37,34 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Mitarbeiter nicht gefunden" }, { status: 404 })
         }
 
+        // sheetFileName aus Timesheet ermitteln (fuer TeamSubmission-Lookup)
+        const userTimesheet = await prisma.timesheet.findFirst({
+            where: {
+                employeeId,
+                month,
+                year,
+                OR: [
+                    { sheetFileName: { not: null } },
+                    { teamId: { not: null } }
+                ]
+            },
+            select: {
+                sheetFileName: true,
+                team: {
+                    select: {
+                        name: true,
+                        client: { select: { id: true } }
+                    }
+                }
+            }
+        })
+
+        // Generiere sheetFileName falls nicht vorhanden (Legacy-Support)
+        let sheetFileName = userTimesheet?.sheetFileName
+        if (!sheetFileName && userTimesheet?.team) {
+            sheetFileName = `Team_${userTimesheet.team.name.replace(/\s+/g, '_')}_${year}`
+        }
+
         // Klient laden
         const client = await prisma.client.findUnique({
             where: { id: clientId },
@@ -75,12 +103,14 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        // TeamSubmission für diesen Klienten suchen
-        const submission = await prisma.teamSubmission.findFirst({
+        // TeamSubmission ueber sheetFileName suchen (neue Struktur)
+        const submission = sheetFileName ? await prisma.teamSubmission.findUnique({
             where: {
-                clientId,
-                month,
-                year
+                sheetFileName_month_year: {
+                    sheetFileName,
+                    month,
+                    year
+                }
             },
             include: {
                 employeeSignatures: {
@@ -92,7 +122,7 @@ export async function GET(req: NextRequest) {
                     }
                 }
             }
-        })
+        }) : null
 
         // Stunden berechnen
         let totalMinutes = 0
@@ -138,7 +168,7 @@ export async function GET(req: NextRequest) {
         // Signatur-Status
         const employeeSigned = submission?.employeeSignatures && submission.employeeSignatures.length > 0
         const employeeSignature = submission?.employeeSignatures?.[0] || null
-        const clientSigned = submission?.status === "COMPLETED"
+        const clientSigned = !!submission?.recipientSignature
 
         return NextResponse.json({
             employee: {

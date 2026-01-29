@@ -517,6 +517,13 @@ export async function POST(req: NextRequest) {
                 : `${result.teamSubmission.employeeSignatures.length} von ${allEmployees.length} Mitarbeitern haben bereits unterschrieben.`
         })
     } catch (error: any) {
+        // Handle ALREADY_SIGNED error with user-friendly message
+        if (error.message === "ALREADY_SIGNED") {
+            return NextResponse.json({
+                error: "Sie haben bereits für diesen Monat unterschrieben. Die Einreichung ist bereits aktiv."
+            }, { status: 400 })
+        }
+
         console.error("[POST /api/submissions] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }

@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
         // Eigene Schichten (inkl. aktivierte Backup-Schichten mit "Eingesprungen" Note)
         const ownTimesheets = await prisma.timesheet.findMany({
             where: { month, year, employeeId: user.id },
+            include: { team: { include: { client: true } } },
             orderBy: { date: "asc" },
         })
 
@@ -116,6 +117,7 @@ export async function GET(req: NextRequest) {
 
         const timesheets = await prisma.timesheet.findMany({
             where: { month, year, teamId: dbUser.teamId },
+            include: { team: { include: { client: true } } },
             orderBy: { date: "asc" },
         })
 

@@ -94,9 +94,12 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
             }, 0)
             setTotalHours(total)
 
-            // Extrahiere Client-Name aus erstem Timesheet
-            if (sheets.length > 0 && sheets[0].client?.name) {
-                setClientName(sheets[0].client.name)
+            // Extrahiere Client-Name aus erstem Timesheet via team.client
+            if (sheets.length > 0) {
+                const client = sheets[0].team?.client
+                if (client && client.firstName && client.lastName) {
+                    setClientName(`${client.firstName} ${client.lastName}`)
+                }
             }
         } catch (error) {
             console.error("Fetch timesheets error:", error)
