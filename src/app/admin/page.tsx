@@ -1,8 +1,8 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { format, addMonths, subMonths } from "date-fns"
 import { de } from "date-fns/locale"
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, ExternalLink, Check } from "lucide-react"
@@ -114,10 +114,27 @@ function StatusBadge({ status }: { status?: string | null }) {
     )
 }
 
-export default function AdminPage() {
+// Inner Component mit useSearchParams
+function AdminPageContent() {
     const { data: session } = useSession()
     const router = useRouter()
-    const [currentDate, setCurrentDate] = useState(new Date())
+    const searchParams = useSearchParams()
+
+    // Lese URL-Parameter und initialisiere currentDate entsprechend
+    const [currentDate, setCurrentDate] = useState(() => {
+        const urlMonth = searchParams.get('month')
+        const urlYear = searchParams.get('year')
+
+        if (urlMonth && urlYear) {
+            const monthNum = parseInt(urlMonth, 10)
+            const yearNum = parseInt(urlYear, 10)
+            if (!isNaN(monthNum) && !isNaN(yearNum) && monthNum >= 1 && monthNum <= 12) {
+                return new Date(yearNum, monthNum - 1, 1)
+            }
+        }
+        return new Date()
+    })
+
     const [expandedClients, setExpandedClients] = useState<Record<string, boolean>>({})
     const [selectedEmployee, setSelectedEmployee] = useState<{ employee: Employee; client: Client } | null>(null)
 
@@ -134,19 +151,34 @@ export default function AdminPage() {
     const clients = data?.clients || []
 
     // Alle Gruppen standardmäßig aufklappen
+    // Wenn clientId in URL, diesen Client prioritär expandieren und scrollen
     useEffect(() => {
         if (clients.length > 0) {
+            const urlClientId = searchParams.get('clientId')
             const expanded: Record<string, boolean> = {}
+
             clients.forEach(c => {
                 if (expandedClients[c.id] === undefined) {
-                    expanded[c.id] = true
+                    // Wenn clientId in URL, nur diesen expandieren, sonst alle
+                    expanded[c.id] = urlClientId ? c.id === urlClientId : true
                 }
             })
+
             if (Object.keys(expanded).length > 0) {
                 setExpandedClients(prev => ({ ...prev, ...expanded }))
+
+                // Optional: Scroll zum spezifischen Client
+                if (urlClientId) {
+                    setTimeout(() => {
+                        const element = document.getElementById(`client-${urlClientId}`)
+                        if (element) {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        }
+                    }, 100)
+                }
             }
         }
-    }, [clients])
+    }, [clients, searchParams])
 
     const toggleClient = (clientId: string) => {
         setExpandedClients(prev => ({ ...prev, [clientId]: !prev[clientId] }))
@@ -236,7 +268,7 @@ export default function AdminPage() {
                     {!isLoading && clients.length > 0 && (
                         <div className="divide-y divide-neutral-800">
                             {clients.map(client => (
-                                <div key={client.id}>
+                                <div key={client.id} id={`client-${client.id}`}>
                                     {/* Klient-Header */}
                                     <button
                                         onClick={() => toggleClient(client.id)}
@@ -316,5 +348,18 @@ export default function AdminPage() {
                 )}
             </div>
         </div>
+    )
+}
+
+// Wrapper mit Suspense
+export default function AdminPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
+                <div className="text-neutral-400">Lade Stundennachweise...</div>
+            </div>
+        }>
+            <AdminPageContent />
+        </Suspense>
     )
 }

@@ -377,8 +377,9 @@ export default function SchedulePage() {
     }
 
     const navigateMonth = (delta: number) => {
-        const newDate = new Date(currentDate)
-        newDate.setMonth(newDate.getMonth() + delta)
+        // Wichtig: Zuerst auf den 1. des Monats setzen, um Month-Skipping zu vermeiden
+        // (z.B. 31. Januar + 1 Monat = 3. März, weil 31. Februar nicht existiert)
+        const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1)
         setCurrentDate(newDate)
     }
 
