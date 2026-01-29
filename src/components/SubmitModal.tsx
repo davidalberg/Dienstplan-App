@@ -114,37 +114,60 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
     }
 
     const handleProceedToSignature = async () => {
+        console.log("[SubmitModal] handleProceedToSignature - START", { month, year })
         setStep("loading")
         setError(null)
 
         try {
             // Create submission
+            console.log("[SubmitModal] Calling POST /api/submissions...")
             const res = await fetch("/api/submissions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ month, year })
             })
 
-            const data = await res.json()
+            console.log("[SubmitModal] Response status:", res.status, res.statusText)
+
+            let data: any
+            try {
+                const responseText = await res.text()
+                console.log("[SubmitModal] Raw response text:", responseText.substring(0, 500))
+                data = JSON.parse(responseText)
+                console.log("[SubmitModal] Parsed response data:", data)
+            } catch (parseError) {
+                console.error("[SubmitModal] Failed to parse JSON response:", parseError)
+                setError("Server-Antwort konnte nicht verarbeitet werden. Bitte erneut versuchen.")
+                setStep("error")
+                return
+            }
 
             if (!res.ok) {
+                console.log("[SubmitModal] Response NOT OK - error:", data.error)
                 setError(data.error || "Fehler beim Erstellen der Einreichung")
                 setStep("error")
                 return
             }
 
+            console.log("[SubmitModal] Success! Submission ID:", data.submission?.id)
             setSubmissionId(data.submission.id)
             setSubmissionData(data)
             setStep("signature")
-        } catch (err) {
-            console.error(err)
+        } catch (err: any) {
+            console.error("[SubmitModal] CATCH block - Network/Fetch error:", err)
+            console.error("[SubmitModal] Error name:", err?.name)
+            console.error("[SubmitModal] Error message:", err?.message)
+            console.error("[SubmitModal] Error stack:", err?.stack)
             setError("Netzwerkfehler. Bitte erneut versuchen.")
             setStep("error")
         }
     }
 
     const handleSign = async () => {
+        console.log("[SubmitModal] handleSign - START", { signature: signature ? "EXISTS" : "MISSING", submissionId })
+
         if (!signature || !submissionId) {
+            console.log("[SubmitModal] handleSign - Missing signature or submissionId")
             showToast("error", "Bitte unterschreiben Sie zuerst")
             return
         }
@@ -152,6 +175,7 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
         setStep("loading")
 
         try {
+            console.log("[SubmitModal] Calling POST /api/submissions/sign...")
             const res = await fetch("/api/submissions/sign", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -161,23 +185,43 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
                 })
             })
 
-            const data = await res.json()
+            console.log("[SubmitModal] Sign response status:", res.status, res.statusText)
+
+            let data: any
+            try {
+                const responseText = await res.text()
+                console.log("[SubmitModal] Sign raw response text:", responseText.substring(0, 500))
+                data = JSON.parse(responseText)
+                console.log("[SubmitModal] Sign parsed response data:", data)
+            } catch (parseError) {
+                console.error("[SubmitModal] Failed to parse sign JSON response:", parseError)
+                setError("Server-Antwort konnte nicht verarbeitet werden. Bitte erneut versuchen.")
+                setStep("error")
+                return
+            }
 
             if (!res.ok) {
+                console.log("[SubmitModal] Sign response NOT OK - error:", data.error)
                 setError(data.error || "Fehler beim Unterschreiben")
                 setStep("error")
                 return
             }
 
+            console.log("[SubmitModal] Sign success!", data)
+
             if (data.warning) {
+                console.log("[SubmitModal] Sign warning:", data.warning)
                 showToast("warning", data.warning)
             }
 
             setSignResponse(data)
             setStep("success")
             showToast("success", data.message || "Erfolgreich eingereicht!")
-        } catch (err) {
-            console.error(err)
+        } catch (err: any) {
+            console.error("[SubmitModal] CATCH block - Sign Network/Fetch error:", err)
+            console.error("[SubmitModal] Sign Error name:", err?.name)
+            console.error("[SubmitModal] Sign Error message:", err?.message)
+            console.error("[SubmitModal] Sign Error stack:", err?.stack)
             setError("Netzwerkfehler. Bitte erneut versuchen.")
             setStep("error")
         }

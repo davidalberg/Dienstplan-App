@@ -19,22 +19,29 @@ import {
  * 4. If NO: Status stays PENDING_EMPLOYEES, return progress
  */
 export async function POST(req: NextRequest) {
+    console.log("[POST /api/submissions/sign] === REQUEST START ===")
     try {
         const session = await auth()
+        console.log("[POST /api/submissions/sign] Session:", session?.user ? { id: (session.user as any).id, email: session.user.email } : "NO SESSION")
+
         if (!session?.user) {
+            console.log("[POST /api/submissions/sign] RETURNING 401 - No session")
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const user = session.user as any
         const body = await req.json()
         const { submissionId, signature } = body
+        console.log("[POST /api/submissions/sign] Request body:", { submissionId, signatureLength: signature?.length })
 
         if (!submissionId || !signature) {
+            console.log("[POST /api/submissions/sign] RETURNING 400 - Missing submissionId or signature")
             return NextResponse.json({ error: "Submission ID and signature required" }, { status: 400 })
         }
 
         // Validate signature is a valid base64 PNG
         if (!signature.startsWith("data:image/png;base64,")) {
+            console.log("[POST /api/submissions/sign] RETURNING 400 - Invalid signature format")
             return NextResponse.json({ error: "Invalid signature format" }, { status: 400 })
         }
 
@@ -58,12 +65,16 @@ export async function POST(req: NextRequest) {
             }
         })
 
+        console.log("[POST /api/submissions/sign] teamSubmission:", teamSubmission ? { id: teamSubmission.id, status: teamSubmission.status, signaturesCount: teamSubmission.employeeSignatures.length } : "NULL")
+
         if (!teamSubmission) {
+            console.log("[POST /api/submissions/sign] RETURNING 404 - Submission not found")
             return NextResponse.json({ error: "Submission not found" }, { status: 404 })
         }
 
         // Check if status allows signing
         if (teamSubmission.status !== "PENDING_EMPLOYEES") {
+            console.log("[POST /api/submissions/sign] RETURNING 400 - Status is not PENDING_EMPLOYEES, actual:", teamSubmission.status)
             return NextResponse.json({
                 error: "Diese Einreichung ist nicht mehr im Signaturstatus."
             }, { status: 400 })
@@ -73,8 +84,10 @@ export async function POST(req: NextRequest) {
         const alreadySigned = teamSubmission.employeeSignatures.some(
             sig => sig.employeeId === user.id
         )
+        console.log("[POST /api/submissions/sign] User already signed?", alreadySigned)
 
         if (alreadySigned) {
+            console.log("[POST /api/submissions/sign] RETURNING 400 - User already signed")
             return NextResponse.json({
                 error: "Sie haben bereits für diese Einreichung unterschrieben."
             }, { status: 400 })
@@ -86,7 +99,9 @@ export async function POST(req: NextRequest) {
         const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : "unknown"
 
         // Use transaction to prevent race condition when multiple employees sign simultaneously
+        console.log("[POST /api/submissions/sign] Starting transaction...")
         const result = await prisma.$transaction(async (tx) => {
+            console.log("[POST /api/submissions/sign] INSIDE transaction")
             // Double-check inside transaction (race condition safety)
             const existingSignature = await tx.employeeSignature.findUnique({
                 where: {
@@ -160,6 +175,7 @@ export async function POST(req: NextRequest) {
                 statusTransitioned = updateResult.count > 0 // True if we were the one to transition
             }
 
+            console.log("[POST /api/submissions/sign] Transaction result:", { allSigned, totalEmployees, signedCount, statusTransitioned })
             return {
                 alreadySigned: false,
                 allSigned,
@@ -173,14 +189,18 @@ export async function POST(req: NextRequest) {
             timeout: 10000
         })
 
+        console.log("[POST /api/submissions/sign] Transaction completed. Result:", result)
+
         // Handle race condition case where user signed between outer check and transaction
         if (result.alreadySigned) {
+            console.log("[POST /api/submissions/sign] RETURNING 400 - Already signed (from transaction)")
             return NextResponse.json({
                 error: "Sie haben bereits für diese Einreichung unterschrieben."
             }, { status: 400 })
         }
 
         // Only send email if WE were the one to transition the status
+        console.log("[POST /api/submissions/sign] Checking if email should be sent:", { allSigned: result.allSigned, statusTransitioned: result.statusTransitioned })
         if (result.allSigned && result.statusTransitioned) {
             // Send email to Assistenznehmer
             const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
@@ -265,6 +285,7 @@ export async function POST(req: NextRequest) {
             }
         })
 
+        console.log("[POST /api/submissions/sign] === SUCCESS - Not all signed yet, returning progress ===")
         return NextResponse.json({
             message: `Erfolgreich unterschrieben! ${result.signedCount ?? 0} von ${result.totalEmployees ?? 0} Teammitgliedern haben unterschrieben.`,
             allSigned: false,
@@ -284,6 +305,12 @@ export async function POST(req: NextRequest) {
             })
         })
     } catch (error: any) {
+        console.error("[POST /api/submissions/sign] === OUTER CATCH BLOCK ===")
+        console.error("[POST /api/submissions/sign] Error name:", error?.name)
+        console.error("[POST /api/submissions/sign] Error message:", error?.message)
+        console.error("[POST /api/submissions/sign] Error code:", error?.code)
+        console.error("[POST /api/submissions/sign] Error stack:", error?.stack)
+
         // Handle Prisma unique constraint violation (race condition fallback)
         if (error.code === 'P2002') {
             console.log("[POST /api/submissions/sign] P2002 - User already signed (race condition)")
@@ -292,7 +319,11 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        console.error("[POST /api/submissions/sign] Error:", error)
-        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+        // Return more specific error message for debugging
+        const errorMessage = error?.message || "Internal server error"
+        return NextResponse.json({
+            error: "Interner Server-Fehler beim Unterschreiben. Bitte versuchen Sie es erneut.",
+            debug: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+        }, { status: 500 })
     }
 }

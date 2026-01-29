@@ -51,8 +51,15 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
         try {
             const res = await fetch(`/api/submissions/status?month=${currentMonth}&year=${currentYear}`)
             if (res.ok) {
-                const data = await res.json()
-                setSubmissionStatus(data)
+                const contentType = res.headers.get("content-type")
+                if (contentType && contentType.includes("application/json")) {
+                    try {
+                        const data = await res.json()
+                        setSubmissionStatus(data)
+                    } catch (parseError) {
+                        console.error("Failed to parse submission status JSON:", parseError)
+                    }
+                }
             }
         } catch (err) {
             console.error("Failed to fetch submission status:", err)
@@ -111,15 +118,37 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
                 })
             })
 
+            // Sicheres Parsen der Response
+            let data: { error?: string } = {}
+            const contentType = res.headers.get("content-type")
+            if (contentType && contentType.includes("application/json")) {
+                try {
+                    data = await res.json()
+                } catch (parseError) {
+                    console.error("Failed to parse JSON response:", parseError)
+                    if (!res.ok) {
+                        setError("Serverfehler: Ungueltige Antwort vom Server")
+                        return
+                    }
+                }
+            } else if (!res.ok) {
+                setError("Serverfehler: Der Server hat einen unerwarteten Fehler zurueckgegeben")
+                return
+            }
+
             if (!res.ok) {
-                const data = await res.json()
                 setError(data.error || "Abbruch fehlgeschlagen")
             } else {
-                onRefresh()
-                fetchSubmissionStatus()
+                try {
+                    onRefresh()
+                    await fetchSubmissionStatus()
+                } catch (refreshError) {
+                    console.error("Failed to refresh after cancel:", refreshError)
+                }
             }
         } catch (err) {
-            setError("Ein unerwarteter Fehler ist aufgetreten")
+            console.error("Cancel submit error:", err)
+            setError("Netzwerkfehler: Bitte pruefen Sie Ihre Internetverbindung")
         } finally {
             setCancelling(false)
         }
@@ -152,21 +181,45 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
                 })
             })
 
-            const data = await res.json()
+            // Sicheres Parsen der Response - pruefe zuerst ob JSON
+            let data: { error?: string; code?: string; success?: boolean; message?: string } = {}
+            const contentType = res.headers.get("content-type")
+            if (contentType && contentType.includes("application/json")) {
+                try {
+                    data = await res.json()
+                } catch (parseError) {
+                    console.error("Failed to parse JSON response:", parseError)
+                    setError("Serverfehler: Ungueltige Antwort vom Server")
+                    return
+                }
+            } else {
+                // Server hat kein JSON zurueckgegeben (z.B. HTML Fehlerseite)
+                console.error("Server returned non-JSON response:", contentType)
+                setError("Serverfehler: Der Server hat einen unerwarteten Fehler zurueckgegeben")
+                return
+            }
 
             if (!res.ok) {
                 if (data.code === "RECIPIENT_ALREADY_SIGNED") {
                     setError("Der Assistenznehmer hat bereits unterschrieben. Sie koennen Ihre Unterschrift nicht mehr zurueckziehen.")
+                } else if (data.code === "SUBMISSION_COMPLETED") {
+                    setError("Diese Einreichung ist bereits abgeschlossen.")
                 } else {
                     setError(data.error || "Zurueckziehen fehlgeschlagen")
                 }
             } else {
                 // Success - refresh data
-                onRefresh()
-                fetchSubmissionStatus()
+                try {
+                    onRefresh()
+                    await fetchSubmissionStatus()
+                } catch (refreshError) {
+                    console.error("Failed to refresh after withdraw:", refreshError)
+                    // Trotzdem erfolgreich - Unterschrift wurde zurueckgezogen
+                }
             }
         } catch (err) {
-            setError("Ein unerwarteter Fehler ist aufgetreten")
+            console.error("Withdraw signature error:", err)
+            setError("Netzwerkfehler: Bitte pruefen Sie Ihre Internetverbindung")
         } finally {
             setWithdrawing(false)
         }

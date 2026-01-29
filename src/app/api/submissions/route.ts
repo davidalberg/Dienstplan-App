@@ -175,21 +175,28 @@ export async function GET(req: NextRequest) {
  * FIXES: Katharina Broll's "kein Team zugewiesen" error by using sheetFileName instead of teamId
  */
 export async function POST(req: NextRequest) {
+    console.log("[POST /api/submissions] === REQUEST START ===")
     try {
         const session = await auth()
+        console.log("[POST /api/submissions] Session:", session?.user ? { id: (session.user as any).id, email: session.user.email, role: (session.user as any).role } : "NO SESSION")
+
         if (!session?.user) {
+            console.log("[POST /api/submissions] RETURNING 401 - No session")
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const user = session.user as any
         if (user.role !== "EMPLOYEE") {
+            console.log("[POST /api/submissions] RETURNING 403 - User is not EMPLOYEE, role:", user.role)
             return NextResponse.json({ error: "Only employees can submit timesheets" }, { status: 403 })
         }
 
         const body = await req.json()
         const { month, year } = body
+        console.log("[POST /api/submissions] Request body:", { month, year })
 
         if (!month || !year) {
+            console.log("[POST /api/submissions] RETURNING 400 - Missing month/year")
             return NextResponse.json({ error: "Month and year required" }, { status: 400 })
         }
 
@@ -255,6 +262,8 @@ export async function POST(req: NextRequest) {
         // Variable fuer sheetFileName - wird entweder aus Timesheet oder generiert
         let sheetFileName: string
         let dienstplanConfig: any
+
+        console.log("[POST /api/submissions] userTimesheet found:", userTimesheet ? { sheetFileName: userTimesheet.sheetFileName, teamId: userTimesheet.teamId, teamName: userTimesheet.team?.name } : "NULL")
 
         if (!userTimesheet) {
             // FALLBACK: Erstelle Submission automatisch wenn kein Timesheet existiert
@@ -377,6 +386,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 5. Check that all user's timesheets are confirmed BEFORE any transaction
+        console.log("[POST /api/submissions] Checking for unconfirmed timesheets...")
         const unconfirmedTimesheets = await prisma.timesheet.count({
             where: {
                 employeeId: user.id,
@@ -386,8 +396,10 @@ export async function POST(req: NextRequest) {
                 plannedStart: { not: null }
             }
         })
+        console.log("[POST /api/submissions] Unconfirmed timesheets count:", unconfirmedTimesheets)
 
         if (unconfirmedTimesheets > 0) {
+            console.log("[POST /api/submissions] RETURNING 400 - Unconfirmed timesheets exist")
             return NextResponse.json({
                 error: `Es gibt noch ${unconfirmedTimesheets} unbestätigte Schichten. Bitte bestätigen Sie alle Schichten bevor Sie einreichen.`
             }, { status: 400 })
@@ -409,14 +421,17 @@ export async function POST(req: NextRequest) {
             }
         })
 
+        console.log("[POST /api/submissions] existingSubmission:", existingSubmission ? { id: existingSubmission.id, signaturesCount: existingSubmission.employeeSignatures.length } : "NULL")
+
         if (existingSubmission) {
             const alreadySigned = existingSubmission.employeeSignatures.some(
                 sig => sig.employeeId === user.id
             )
+            console.log("[POST /api/submissions] User already signed?", alreadySigned)
 
             if (alreadySigned) {
                 // Return early with user-friendly error
-                console.log(`[POST /api/submissions] User ${user.id} already signed for ${sheetFileName} ${month}/${year}`)
+                console.log(`[POST /api/submissions] RETURNING 400 - User ${user.id} already signed for ${sheetFileName} ${month}/${year}`)
                 return NextResponse.json({
                     error: "Sie haben bereits für diesen Monat unterschrieben. Die Einreichung ist bereits aktiv."
                 }, { status: 400 })
@@ -424,7 +439,9 @@ export async function POST(req: NextRequest) {
         }
 
         // 4. Use transaction to prevent race condition between check and create
+        console.log("[POST /api/submissions] Starting transaction...")
         const result = await prisma.$transaction(async (tx) => {
+            console.log("[POST /api/submissions] INSIDE transaction")
             // Re-check if TeamSubmission exists (inside transaction for consistency)
             let teamSubmission = await tx.teamSubmission.findUnique({
                 where: {
@@ -496,14 +513,20 @@ export async function POST(req: NextRequest) {
                 }
             })
 
+            console.log("[POST /api/submissions] Transaction returning teamSubmission:", teamSubmission.id)
             return { teamSubmission, isNew: true, alreadySigned: false }
         }, {
             isolationLevel: 'Serializable', // Highest isolation level for race condition safety
             maxWait: 5000,
             timeout: 10000
         }).catch((error) => {
+            console.error("[POST /api/submissions] Transaction CATCH - error code:", error.code)
+            console.error("[POST /api/submissions] Transaction CATCH - error message:", error.message)
+            console.error("[POST /api/submissions] Transaction CATCH - full error:", error)
+
             // Handle Prisma unique constraint violation
             if (error.code === 'P2002') {
+                console.log("[POST /api/submissions] P2002 - Unique constraint violation, fetching existing...")
                 // Another user just created it, fetch and return
                 return prisma.teamSubmission.findUnique({
                     where: {
@@ -518,26 +541,41 @@ export async function POST(req: NextRequest) {
                             }
                         }
                     }
-                }).then(teamSubmission => ({ teamSubmission, isNew: false, alreadySigned: false }))
+                }).then(teamSubmission => {
+                    console.log("[POST /api/submissions] P2002 - Found existing submission:", teamSubmission?.id)
+                    return { teamSubmission, isNew: false, alreadySigned: false }
+                })
             }
+            console.error("[POST /api/submissions] RE-THROWING error (not P2002)")
             throw error
+        })
+
+        console.log("[POST /api/submissions] Transaction completed. Result:", {
+            alreadySigned: result.alreadySigned,
+            isNew: result.isNew,
+            teamSubmissionId: result.teamSubmission?.id || "NULL"
         })
 
         // Handle race condition case where user signed between outer check and transaction
         if (result.alreadySigned) {
+            console.log("[POST /api/submissions] RETURNING 400 - Already signed (from transaction)")
             return NextResponse.json({
                 error: "Sie haben bereits für diesen Monat unterschrieben. Die Einreichung ist bereits aktiv."
             }, { status: 400 })
         }
 
         if (!result.teamSubmission) {
+            console.log("[POST /api/submissions] RETURNING 500 - teamSubmission is null/undefined")
             return NextResponse.json({ error: "Failed to create or find submission" }, { status: 500 })
         }
 
         // 7. Get all employees in this Dienstplan
+        console.log("[POST /api/submissions] Getting all employees in Dienstplan:", sheetFileName)
         const allEmployees = await getAllEmployeesInDienstplan(sheetFileName, month, year)
+        console.log("[POST /api/submissions] Found employees:", allEmployees.length)
 
-        return NextResponse.json({
+        console.log("[POST /api/submissions] Building response...")
+        const response = {
             submission: result.teamSubmission,
             allEmployees,
             signedEmployees: result.teamSubmission.employeeSignatures.map(sig => ({
@@ -551,9 +589,22 @@ export async function POST(req: NextRequest) {
             message: result.isNew
                 ? "Einreichung erstellt. Bitte unterschreiben Sie jetzt."
                 : `${result.teamSubmission.employeeSignatures.length} von ${allEmployees.length} Mitarbeitern haben bereits unterschrieben.`
-        })
+        }
+        console.log("[POST /api/submissions] === SUCCESS - Returning response ===")
+        return NextResponse.json(response)
     } catch (error: any) {
-        console.error("[POST /api/submissions] Error:", error)
-        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+        console.error("[POST /api/submissions] === OUTER CATCH BLOCK ===")
+        console.error("[POST /api/submissions] Error name:", error?.name)
+        console.error("[POST /api/submissions] Error message:", error?.message)
+        console.error("[POST /api/submissions] Error code:", error?.code)
+        console.error("[POST /api/submissions] Error stack:", error?.stack)
+        console.error("[POST /api/submissions] Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
+
+        // Return more specific error message for debugging
+        const errorMessage = error?.message || "Internal server error"
+        return NextResponse.json({
+            error: "Interner Server-Fehler. Bitte versuchen Sie es erneut oder kontaktieren Sie den Administrator.",
+            debug: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+        }, { status: 500 })
     }
 }
