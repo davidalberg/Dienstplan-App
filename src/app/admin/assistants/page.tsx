@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, DragEvent } from "react"
+import { Suspense, useEffect, useState, DragEvent } from "react"
 import { useSearchParams } from "next/navigation"
 import {
     Users, Edit2, Trash2, X, Save, Search,
@@ -51,7 +51,25 @@ function getAvatarColor(name: string): string {
     return colors[Math.abs(hash) % colors.length]
 }
 
+// Loading Fallback for Suspense
+function AssistantsLoading() {
+    return (
+        <div className="min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
+            <div className="text-neutral-500">Laden...</div>
+        </div>
+    )
+}
+
+// Main Page wrapped in Suspense for useSearchParams
 export default function AssistantsPage() {
+    return (
+        <Suspense fallback={<AssistantsLoading />}>
+            <AssistantsContent />
+        </Suspense>
+    )
+}
+
+function AssistantsContent() {
     // URL-Parameter für direktes Öffnen des Edit-Modals
     const searchParams = useSearchParams()
 
@@ -127,6 +145,7 @@ export default function AssistantsPage() {
                 openEditEmployee(employee)
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams, allEmployees])
 
     // Active search with highlight and auto-expand
