@@ -12,7 +12,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
-    "test:db:reset": "npx prisma db push --force-reset && tsx prisma/seed-test.ts"
+    "DANGER_test:db:reset": "echo '⚠️ WARNUNG: Dieser Befehl löscht die PRODUCTION-Datenbank! Drücke Ctrl+C zum Abbrechen...' && timeout /t 10 && npx prisma db push --force-reset && tsx prisma/seed-test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

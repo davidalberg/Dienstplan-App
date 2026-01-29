@@ -95,6 +95,9 @@ export default function SchedulePage() {
     const [clients, setClients] = useState<Client[]>([])
     const [loading, setLoading] = useState(true)
 
+    // Bulk-Delete State
+    const [selectedShiftIds, setSelectedShiftIds] = useState<Set<string>>(new Set())
+
     // Sync SWR data to local state
     useEffect(() => {
         if (swrShifts) setShifts(swrShifts)
@@ -339,6 +342,60 @@ export default function SchedulePage() {
         }
     }
 
+    const handleBulkDelete = async () => {
+        if (selectedShiftIds.size === 0) return
+
+        if (!window.confirm(`Wirklich ${selectedShiftIds.size} Schichten löschen?`)) {
+            return
+        }
+
+        try {
+            const res = await fetch("/api/admin/schedule/bulk-delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ shiftIds: Array.from(selectedShiftIds) })
+            })
+
+            const data = await res.json()
+
+            if (res.ok) {
+                showToast("success", `${data.deleted} Schichten gelöscht`)
+                setSelectedShiftIds(new Set())
+
+                // Optimistisches Update
+                setShifts(prev => prev.filter(s => !selectedShiftIds.has(s.id)))
+
+                // SWR revalidate
+                mutate()
+            } else {
+                showToast("error", data.error || "Fehler beim Löschen")
+            }
+        } catch (error) {
+            console.error("Bulk delete error:", error)
+            showToast("error", "Fehler beim Löschen")
+        }
+    }
+
+    const toggleShiftSelection = (shiftId: string) => {
+        setSelectedShiftIds(prev => {
+            const newSet = new Set(prev)
+            if (newSet.has(shiftId)) {
+                newSet.delete(shiftId)
+            } else {
+                newSet.add(shiftId)
+            }
+            return newSet
+        })
+    }
+
+    const toggleSelectAll = () => {
+        if (selectedShiftIds.size === shifts.length) {
+            setSelectedShiftIds(new Set())
+        } else {
+            setSelectedShiftIds(new Set(shifts.map(s => s.id)))
+        }
+    }
+
     const openCreateModal = (date?: Date) => {
         setEditingShift(null)
         setSelectedClientId("")
@@ -441,6 +498,17 @@ export default function SchedulePage() {
                                 Kalender
                             </button>
                         </div>
+
+                        {/* Bulk Delete Button (nur in Listen-Ansicht sichtbar) */}
+                        {viewMode === "list" && selectedShiftIds.size > 0 && (
+                            <button
+                                onClick={handleBulkDelete}
+                                className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium"
+                            >
+                                <Trash2 size={20} />
+                                {selectedShiftIds.size} Schichten löschen
+                            </button>
+                        )}
 
                         <button
                             onClick={() => openCreateModal()}
@@ -547,6 +615,15 @@ export default function SchedulePage() {
                                             <table className="w-full">
                                                 <thead className="bg-neutral-800">
                                                     <tr>
+                                                        <th className="px-3 py-2 text-left w-12">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={shifts.length > 0 && selectedShiftIds.size === shifts.length}
+                                                                onChange={toggleSelectAll}
+                                                                className="w-5 h-5 rounded bg-neutral-700 border-neutral-600 text-violet-600 focus:ring-2 focus:ring-violet-500 cursor-pointer"
+                                                                aria-label="Alle Schichten auswählen"
+                                                            />
+                                                        </th>
                                                         <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Datum</th>
                                                         <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Mitarbeiter</th>
                                                         <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Zeit</th>
@@ -556,58 +633,77 @@ export default function SchedulePage() {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-neutral-800">
-                                                    {group.shifts.map(shift => (
-                                                        <tr key={shift.id} className="hover:bg-neutral-800/50 transition">
-                                                            <td className="px-3 py-2 font-medium text-white text-sm">
-                                                                {format(new Date(shift.date), "EEE, dd.MM.", { locale: de })}
-                                                            </td>
-                                                            <td className="px-3 py-2 text-sm">
-                                                                <button
-                                                                    onClick={() => router.push(`/admin/assistants?employeeId=${shift.employee.id}`)}
-                                                                    className="text-violet-400 hover:text-violet-300 transition-colors duration-150 cursor-pointer"
-                                                                    title="Assistent bearbeiten"
-                                                                >
-                                                                    {shift.employee.name}
-                                                                </button>
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <span className="bg-neutral-800 px-2 py-0.5 rounded text-xs font-medium text-neutral-300">
-                                                                    {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-3 py-2 text-neutral-400 text-sm">
-                                                                {shift.backupEmployee?.name || "-"}
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase ${
-                                                                    shift.status === "CONFIRMED" ? "bg-green-900/50 text-green-400" :
-                                                                    shift.status === "CHANGED" ? "bg-amber-900/50 text-amber-400" :
-                                                                    shift.status === "SUBMITTED" ? "bg-blue-900/50 text-blue-400" :
-                                                                    "bg-neutral-800 text-neutral-400"
-                                                                }`}>
-                                                                    {shift.status === "CONFIRMED" ? "Bestätigt" :
-                                                                     shift.status === "CHANGED" ? "Geändert" :
-                                                                     shift.status === "SUBMITTED" ? "Eingereicht" : "Geplant"}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-3 py-2 text-right">
-                                                                <div className="flex gap-1 justify-end">
+                                                    {group.shifts.map(shift => {
+                                                        const isSelected = selectedShiftIds.has(shift.id)
+                                                        return (
+                                                            <tr
+                                                                key={shift.id}
+                                                                className={`transition ${
+                                                                    isSelected
+                                                                        ? "bg-violet-900/20 border-l-2 border-violet-600"
+                                                                        : "hover:bg-neutral-800/50"
+                                                                }`}
+                                                            >
+                                                                <td className="px-3 py-2">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isSelected}
+                                                                        onChange={() => toggleShiftSelection(shift.id)}
+                                                                        className="w-5 h-5 rounded bg-neutral-700 border-neutral-600 text-violet-600 focus:ring-2 focus:ring-violet-500 cursor-pointer"
+                                                                        aria-label={`Schicht vom ${format(new Date(shift.date), "dd.MM.")} auswählen`}
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-2 font-medium text-white text-sm">
+                                                                    {format(new Date(shift.date), "EEE, dd.MM.", { locale: de })}
+                                                                </td>
+                                                                <td className="px-3 py-2 text-sm">
                                                                     <button
-                                                                        onClick={() => openEditModal(shift)}
-                                                                        className="p-1.5 text-neutral-500 hover:text-blue-400 hover:bg-blue-900/30 rounded transition"
+                                                                        onClick={() => router.push(`/admin/assistants?employeeId=${shift.employee.id}`)}
+                                                                        className="text-violet-400 hover:text-violet-300 transition-colors duration-150 cursor-pointer"
+                                                                        title="Assistent bearbeiten"
                                                                     >
-                                                                        <Edit2 size={14} />
+                                                                        {shift.employee.name}
                                                                     </button>
-                                                                    <button
-                                                                        onClick={() => handleDelete(shift.id)}
-                                                                        className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-900/30 rounded transition"
-                                                                    >
-                                                                        <Trash2 size={14} />
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
+                                                                </td>
+                                                                <td className="px-3 py-2">
+                                                                    <span className="bg-neutral-800 px-2 py-0.5 rounded text-xs font-medium text-neutral-300">
+                                                                        {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-3 py-2 text-neutral-400 text-sm">
+                                                                    {shift.backupEmployee?.name || "-"}
+                                                                </td>
+                                                                <td className="px-3 py-2">
+                                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase ${
+                                                                        shift.status === "CONFIRMED" ? "bg-green-900/50 text-green-400" :
+                                                                        shift.status === "CHANGED" ? "bg-amber-900/50 text-amber-400" :
+                                                                        shift.status === "SUBMITTED" ? "bg-blue-900/50 text-blue-400" :
+                                                                        "bg-neutral-800 text-neutral-400"
+                                                                    }`}>
+                                                                        {shift.status === "CONFIRMED" ? "Bestätigt" :
+                                                                         shift.status === "CHANGED" ? "Geändert" :
+                                                                         shift.status === "SUBMITTED" ? "Eingereicht" : "Geplant"}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-3 py-2 text-right">
+                                                                    <div className="flex gap-1 justify-end">
+                                                                        <button
+                                                                            onClick={() => openEditModal(shift)}
+                                                                            className="p-1.5 text-neutral-500 hover:text-blue-400 hover:bg-blue-900/30 rounded transition"
+                                                                        >
+                                                                            <Edit2 size={14} />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleDelete(shift.id)}
+                                                                            className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-900/30 rounded transition"
+                                                                        >
+                                                                            <Trash2 size={14} />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )
+                                                    })}
                                                 </tbody>
                                             </table>
                                         )}
