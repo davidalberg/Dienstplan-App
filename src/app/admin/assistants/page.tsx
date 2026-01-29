@@ -503,7 +503,7 @@ function AssistantsContent() {
     }
 
     return (
-        <div className="min-h-screen bg-neutral-950 p-6">
+        <div className="admin-dark min-h-screen bg-neutral-950 p-6">
             <div className="max-w-5xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
