@@ -336,6 +336,35 @@ export default function AdminSubmissionsPage() {
         }
     }
 
+    const handleDeleteRecipientSignature = async (submissionId: string) => {
+        if (!window.confirm("Assistenznehmer-Unterschrift wirklich löschen? Status wird auf 'Ausstehend' zurückgesetzt.")) {
+            return
+        }
+
+        setProcessing(true)
+        try {
+            const res = await fetch(`/api/admin/submissions/${submissionId}/signatures/recipient`, {
+                method: "DELETE"
+            })
+
+            const data = await res.json()
+
+            if (res.ok) {
+                toast.success("Assistenznehmer-Unterschrift gelöscht")
+                setShowSignatureModal(false)
+                setSelectedSubmission(null)
+                await fetchSubmissions()
+            } else {
+                toast.error(data.error || "Fehler beim Löschen")
+            }
+        } catch (error) {
+            console.error("Error deleting recipient signature:", error)
+            toast.error("Fehler beim Löschen")
+        } finally {
+            setProcessing(false)
+        }
+    }
+
     const handleReset = async (submissionId: string, sheetFileName: string) => {
         const reason = window.prompt("Grund für Reset (optional):")
         if (reason === null) return
@@ -689,6 +718,31 @@ export default function AdminSubmissionsPage() {
                                 </div>
                             ))}
                         </div>
+
+                        {/* Assistenznehmer-Unterschrift (falls vorhanden) */}
+                        {selectedSubmission.recipientSignedAt && (
+                            <div className="mt-4 border-t border-neutral-800 pt-4">
+                                <h3 className="font-medium mb-2 text-white">Assistenznehmer-Unterschrift</h3>
+                                <div className="flex items-center justify-between p-3 bg-neutral-800 rounded-lg">
+                                    <div>
+                                        <p className="font-medium text-white">
+                                            {selectedSubmission.recipientName || "Unbekannt"}
+                                        </p>
+                                        <p className="text-xs text-neutral-500">
+                                            Unterschrieben: {new Date(selectedSubmission.recipientSignedAt).toLocaleString("de-DE")}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDeleteRecipientSignature(selectedSubmission.id!)}
+                                        disabled={processing}
+                                        className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                                        title="Unterschrift löschen"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="flex justify-end">
                             <button
