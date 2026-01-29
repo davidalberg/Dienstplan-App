@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
                 return {
                     id: submission.id,
                     sheetFileName: submission.sheetFileName,
+                    employeeNames: allEmployees.map(emp => emp.name).filter(Boolean), // Array of employee names
                     month: submission.month,
                     year: submission.year,
                     status: submission.status,
@@ -115,6 +116,7 @@ export async function GET(req: NextRequest) {
                     return {
                         id: null, // No submission yet
                         sheetFileName: config.sheetFileName,
+                        employeeNames: allEmployees.map(emp => emp.name).filter(Boolean), // Array of employee names
                         month: targetMonth,
                         year: targetYear,
                         status: "NOT_STARTED",

@@ -10,7 +10,6 @@ import {
     Plus,
     Check,
     Clock,
-    ExternalLink,
     Eye,
     RotateCcw,
     Trash2,
@@ -30,6 +29,7 @@ interface EmployeeSignature {
 interface Submission {
     id: string | null
     sheetFileName: string
+    employeeNames?: string[] // Array of employee names in this submission
     month: number
     year: number
     status: string
@@ -537,9 +537,6 @@ export default function AdminSubmissionsPage() {
                                         {/* Client name */}
                                         <span className="font-medium flex-1 text-left">{clientName}</span>
 
-                                        {/* Expand icon */}
-                                        <ExternalLink className="w-4 h-4 text-neutral-500" />
-
                                         {/* Chevron */}
                                         {isExpanded ? (
                                             <ChevronUp className="w-4 h-4 text-neutral-500" />
@@ -579,11 +576,20 @@ export default function AdminSubmissionsPage() {
                                                             {getAvatar(subIndex + 5)}
                                                         </div>
 
-                                                        {/* Dienstplan name */}
+                                                        {/* Employee names */}
                                                         <div className="flex-1 min-w-0">
-                                                            <span className="font-medium truncate block">
-                                                                {submission.sheetFileName}
-                                                            </span>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    openPreviewModal(submission)
+                                                                }}
+                                                                className="font-medium truncate block text-violet-400 underline hover:text-violet-300 transition-colors text-left"
+                                                            >
+                                                                {submission.employeeNames && submission.employeeNames.length > 0
+                                                                    ? submission.employeeNames.join(", ")
+                                                                    : submission.sheetFileName
+                                                                }
+                                                            </button>
                                                         </div>
 
                                                         {/* Hours */}
