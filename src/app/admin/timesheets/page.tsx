@@ -23,6 +23,27 @@ const MONTH_NAMES = [
     "Juli", "August", "September", "Oktober", "November", "Dezember"
 ]
 
+/**
+ * Clean up sheet file name for display
+ * Converts "Team_Team_Jana_Scheuer_2026_2026" to "Team Jana Scheuer"
+ */
+function cleanSheetFileName(sheetFileName: string): string {
+    let cleaned = sheetFileName
+
+    // Remove duplicate "Team_Team" prefix
+    if (cleaned.startsWith("Team_Team_")) {
+        cleaned = cleaned.replace("Team_Team_", "Team_")
+    }
+
+    // Replace underscores with spaces
+    cleaned = cleaned.replace(/_/g, " ")
+
+    // Remove year suffix (e.g., " 2026" or " 2026 2026")
+    cleaned = cleaned.replace(/\s+\d{4}(\s+\d{4})?$/g, "")
+
+    return cleaned
+}
+
 // Submission type from API
 interface Submission {
     id: string | null
@@ -136,7 +157,7 @@ function TeamSubmissionRow({
                 />
 
                 <div className="min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{submission.sheetFileName}</p>
+                    <p className="text-sm font-medium text-white truncate">{cleanSheetFileName(submission.sheetFileName)}</p>
                     <p className="text-xs text-neutral-400 truncate">
                         {submission.employeeNames.join(", ")}
                     </p>
