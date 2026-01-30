@@ -37,20 +37,10 @@ export async function sendSignatureRequestEmail(params: SendSignatureRequestPara
         year: "numeric"
     })
 
-    // Extract friendly name from employeeName - robustly handle all formats
-    const friendlyEmployeeName = (() => {
-        let name = employeeName
-
-        // Remove all "Team_" prefixes recursively (handles "Team_Team_...")
-        while (name.startsWith("Team_")) {
-            name = name.substring(5) // Remove "Team_"
-        }
-
-        // Split by underscore and remove year patterns (4-digit numbers)
-        const parts = name.split("_").filter(part => !/^\d{4}$/.test(part))
-
-        return parts.join(" ")
-    })()
+    // Check if multiple employees (contains "und" or comma)
+    const hasMultipleEmployees = employeeName.includes(" und ") || employeeName.includes(", ")
+    const verb = hasMultipleEmployees ? "haben" : "hat"
+    const possessivePronoun = hasMultipleEmployees ? "ihren" : "seinen"
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -72,7 +62,7 @@ export async function sendSignatureRequestEmail(params: SendSignatureRequestPara
         </p>
 
         <p style="font-size: 15px; color: #4b5563;">
-            <strong>${friendlyEmployeeName}</strong> hat seinen Stundennachweis für <strong>${year}</strong> eingereicht und wartet auf Ihre Gegenzeichnung.
+            <strong>${employeeName}</strong> ${verb} ${possessivePronoun} Stundennachweis für <strong>${year}</strong> eingereicht und ${hasMultipleEmployees ? "warten" : "wartet"} auf Ihre Gegenzeichnung.
         </p>
 
         <p style="font-size: 15px; color: #4b5563;">
@@ -111,7 +101,7 @@ Stundennachweis zur Unterschrift - ${monthName} ${year}
 
 Hallo ${recipientName || ""},
 
-${friendlyEmployeeName} hat seinen Stundennachweis für ${year} eingereicht und wartet auf Ihre Gegenzeichnung.
+${employeeName} ${verb} ${possessivePronoun} Stundennachweis für ${year} eingereicht und ${hasMultipleEmployees ? "warten" : "wartet"} auf Ihre Gegenzeichnung.
 
 Bitte öffnen Sie den folgenden Link, um den Nachweis zu prüfen und zu unterschreiben:
 
@@ -126,7 +116,7 @@ Dienstplan App
     await resend.emails.send({
         from: fromEmail,
         to: recipientEmail,
-        subject: `Stundennachweis zur Unterschrift - Team ${friendlyEmployeeName}`,
+        subject: `Stundennachweis zur Unterschrift`,
         html: htmlContent,
     })
 }

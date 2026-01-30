@@ -309,9 +309,9 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
                                     className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 font-semibold transition-all bg-amber-500/80 text-white hover:bg-amber-500 disabled:opacity-50"
                                 >
                                     <Undo2 size={18} />
-                                    {withdrawing ? "Wird zurueckgezogen..." : "Unterschrift zurueckziehen"}
+                                    {withdrawing ? "Wird zurückgezogen..." : "Unterschrift zurückziehen"}
                                 </button>
-                                <p className="text-xs text-neutral-500 text-center">
+                                <p className="text-sm text-blue-100 text-center font-medium">
                                     Sie können Ihre Unterschrift zurückziehen, solange der Klient noch nicht unterschrieben hat.
                                 </p>
                             </div>

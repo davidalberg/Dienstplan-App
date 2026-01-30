@@ -222,11 +222,28 @@ export async function POST(req: NextRequest) {
                 }, { status: 207 })
             }
 
+            // Build employee names list for email
+            const employeeNames = teamSubmission.employeeSignatures.map(sig =>
+                sig.employee.name || sig.employee.email
+            )
+
+            // Format employee names as comma-separated list
+            let formattedEmployeeNames: string
+            if (employeeNames.length === 1) {
+                formattedEmployeeNames = employeeNames[0]
+            } else if (employeeNames.length === 2) {
+                formattedEmployeeNames = `${employeeNames[0]} und ${employeeNames[1]}`
+            } else {
+                const lastEmployee = employeeNames[employeeNames.length - 1]
+                const otherEmployees = employeeNames.slice(0, -1).join(", ")
+                formattedEmployeeNames = `${otherEmployees} und ${lastEmployee}`
+            }
+
             try {
                 await sendSignatureRequestEmail({
                     recipientEmail,
                     recipientName,
-                    employeeName: teamSubmission.sheetFileName,
+                    employeeName: formattedEmployeeNames,
                     month: teamSubmission.month,
                     year: teamSubmission.year,
                     signatureUrl,
