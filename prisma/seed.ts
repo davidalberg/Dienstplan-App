@@ -20,20 +20,10 @@ const Status = {
 async function main() {
     const hashedPassword = await bcrypt.hash('password123', 10)
 
-    // 1. Create Teams (für Test-Daten)
-    const teamA = await prisma.team.upsert({
-        where: { name: 'Test Team A' },
-        update: {},
-        create: { name: 'Test Team A' },
-    })
+    // Keine Test-Teams mehr in Produktion
+    // Teams werden automatisch bei Klient-Zuordnung erstellt
 
-    const teamB = await prisma.team.upsert({
-        where: { name: 'Test Team B' },
-        update: {},
-        create: { name: 'Test Team B' },
-    })
-
-    // 2. Create Admin
+    // 1. Create Admin
     await prisma.user.upsert({
         where: { email: 'david.alberg@assistenzplus.de' },
         update: {},
@@ -45,7 +35,7 @@ async function main() {
         },
     })
 
-    // 3. Create Teamlead
+    // 2. Create Teamlead (ohne Team - wird bei Klient-Zuordnung erstellt)
     await prisma.user.upsert({
         where: { email: 'personal@assistenzplus.de' },
         update: {},
@@ -54,15 +44,14 @@ async function main() {
             name: 'Personal Abteilung',
             password: hashedPassword,
             role: Role.TEAMLEAD,
-            teamId: teamA.id,
         },
     })
 
-    // 4. Create Employees
+    // 3. Create Employees (ohne Team - wird bei Klient-Zuordnung erstellt)
     const employees = [
-        { email: 'yusuf.agca@assistenzplus.de', name: 'Yusuf Agca', employeeId: 'EMP001', teamId: teamA.id },
-        { email: 'elena@assistenzplus.de', name: 'Elena Engagiert', employeeId: 'EMP002', teamId: teamA.id },
-        { email: 'stefan@assistenzplus.de', name: 'Stefan Süd', employeeId: 'EMP003', teamId: teamB.id },
+        { email: 'yusuf.agca@assistenzplus.de', name: 'Yusuf Agca', employeeId: 'EMP001' },
+        { email: 'elena@assistenzplus.de', name: 'Elena Engagiert', employeeId: 'EMP002' },
+        { email: 'stefan@assistenzplus.de', name: 'Stefan Süd', employeeId: 'EMP003' },
     ]
 
     for (const emp of employees) {
@@ -75,7 +64,6 @@ async function main() {
                 password: hashedPassword,
                 role: Role.EMPLOYEE,
                 employeeId: emp.employeeId,
-                teamId: emp.teamId,
             },
         })
 
@@ -104,7 +92,7 @@ async function main() {
                     status: Status.PLANNED,
                     month: month,
                     year: year,
-                    teamId: user.teamId,
+                    // teamId wird automatisch gesetzt wenn Mitarbeiter zu Klient zugeordnet wird
                 }
             })
         }
