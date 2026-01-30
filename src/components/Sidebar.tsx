@@ -36,11 +36,12 @@ export function Sidebar({ onExportClick }: SidebarProps) {
     const mainNavItems: NavItem[] = [
         { icon: Calendar, label: "Kalender", href: "/admin/schedule" },
         { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
-        { icon: Users, label: "Assistenten", href: "/admin/assistants" },
     ]
 
     const secondaryNavItems: NavItem[] = [
         { icon: Settings, label: "Einstellungen", href: "/admin/settings" },
+        { icon: FileText, label: "Stundennachweise", href: "/admin/timesheets" },
+        { icon: Users, label: "Assistenten", href: "/admin/assistants" },
     ]
 
     const isActive = (href?: string) => {
