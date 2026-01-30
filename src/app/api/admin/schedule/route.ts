@@ -167,6 +167,24 @@ export async function POST(req: NextRequest) {
 
             const { employeeId, startDate, endDate, plannedStart, plannedEnd, backupEmployeeId, note, teamId, repeatDays } = validated.data
 
+            // Lade Mitarbeiter + Team für sheetFileName
+            const employee = await prisma.user.findUnique({
+                where: { id: employeeId },
+                select: {
+                    id: true,
+                    team: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
+                    }
+                }
+            })
+
+            if (!employee) {
+                return NextResponse.json({ error: "Mitarbeiter nicht gefunden" }, { status: 400 })
+            }
+
             // Generiere alle Daten zwischen Start und Ende
             const start = new Date(startDate)
             const end = new Date(endDate)
@@ -191,6 +209,11 @@ export async function POST(req: NextRequest) {
 
                 if (existing) continue // Überspringe existierende
 
+                // Generiere sheetFileName für diese Schicht
+                const sheetFileName = employee.team
+                    ? `Team_${employee.team.name.replace(/\s+/g, '_')}_${year}`
+                    : null
+
                 const shift = await prisma.timesheet.create({
                     data: {
                         employeeId,
@@ -201,7 +224,8 @@ export async function POST(req: NextRequest) {
                         plannedEnd,
                         backupEmployeeId: backupEmployeeId || null,
                         note: note || null,
-                        teamId: teamId || null,
+                        teamId: employee.team?.id || null,
+                        sheetFileName,
                         status: "PLANNED",
                         source: "APP",
                         syncVerified: true

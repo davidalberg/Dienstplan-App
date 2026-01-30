@@ -37,6 +37,11 @@ export async function sendSignatureRequestEmail(params: SendSignatureRequestPara
         year: "numeric"
     })
 
+    // Extract friendly name from employeeName (remove Team_ prefix if present)
+    const friendlyEmployeeName = employeeName.startsWith("Team_")
+        ? employeeName.split("_").slice(1, -2).join(" ") // Remove "Team_" and "_year"
+        : employeeName
+
     const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -57,7 +62,7 @@ export async function sendSignatureRequestEmail(params: SendSignatureRequestPara
         </p>
 
         <p style="font-size: 15px; color: #4b5563;">
-            <strong>${employeeName}</strong> hat seinen Stundennachweis für <strong>${monthName} ${year}</strong> eingereicht und wartet auf Ihre Gegenzeichnung.
+            <strong>${friendlyEmployeeName}</strong> hat seinen Stundennachweis für <strong>${year}</strong> eingereicht und wartet auf Ihre Gegenzeichnung.
         </p>
 
         <p style="font-size: 15px; color: #4b5563;">
@@ -96,7 +101,7 @@ Stundennachweis zur Unterschrift - ${monthName} ${year}
 
 Hallo ${recipientName || ""},
 
-${employeeName} hat seinen Stundennachweis für ${monthName} ${year} eingereicht und wartet auf Ihre Gegenzeichnung.
+${friendlyEmployeeName} hat seinen Stundennachweis für ${year} eingereicht und wartet auf Ihre Gegenzeichnung.
 
 Bitte öffnen Sie den folgenden Link, um den Nachweis zu prüfen und zu unterschreiben:
 
@@ -111,7 +116,7 @@ Dienstplan App
     await resend.emails.send({
         from: fromEmail,
         to: recipientEmail,
-        subject: `Stundennachweis zur Unterschrift - ${employeeName} ${monthName} ${year}`,
+        subject: `Stundennachweis zur Unterschrift - Team ${friendlyEmployeeName}`,
         html: htmlContent,
     })
 }
@@ -175,6 +180,11 @@ export async function sendCompletionEmails(params: SendCompletionEmailParams) {
 
     const monthName = MONTH_NAMES[month - 1]
 
+    // Extract friendly team name from sheetFileName (e.g., "Team_Jana_Scheuer_2026" -> "Jana Scheuer")
+    const friendlyTeamName = sheetFileName && sheetFileName.startsWith("Team_")
+        ? sheetFileName.split("_").slice(1, -1).join(" ") // Remove "Team_" prefix and year suffix
+        : recipientName
+
     const formatDate = (date: Date) => date.toLocaleDateString("de-DE", {
         day: "2-digit",
         month: "2-digit",
@@ -229,7 +239,7 @@ export async function sendCompletionEmails(params: SendCompletionEmailParams) {
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
     <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0;">
         <h1 style="color: white; margin: 0; font-size: 24px;">✓ Stundennachweis abgeschlossen</h1>
-        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">${sheetFileName || monthName} - ${monthName} ${year}</p>
+        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">${monthName} ${year}</p>
     </div>
 
     <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
@@ -324,18 +334,18 @@ Dienstplan App
         resend.emails.send({
             from: fromEmail,
             to: recipientEmail,
-            subject: `✓ Stundennachweis abgeschlossen - ${sheetFileName || employeeName} ${monthName} ${year}`,
+            subject: `✓ Stundennachweis abgeschlossen - Team ${friendlyTeamName}`,
             html: htmlContent,
         })
     )
 
-    // NEW: Send to employer
-    if (employerEmail) {
+    // NEW: Send to employer (only if different from recipient to prevent duplicates)
+    if (employerEmail && employerEmail !== recipientEmail) {
         emailPromises.push(
             resend.emails.send({
                 from: fromEmail,
                 to: employerEmail,
-                subject: `✓ Stundennachweis abgeschlossen - ${sheetFileName || employeeName} ${monthName} ${year}`,
+                subject: `✓ Stundennachweis abgeschlossen - Team ${friendlyTeamName}`,
                 html: htmlContent,
             })
         )
