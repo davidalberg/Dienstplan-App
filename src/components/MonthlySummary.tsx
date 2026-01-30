@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Send, Clock, CheckCircle, X, AlertCircle, FileSignature, Undo2, Lock } from "lucide-react"
 import { calculateTotalHoursFromTimesheets } from "@/lib/time-utils"
 import SubmitModal from "./SubmitModal"
@@ -25,6 +26,7 @@ interface MonthlySummaryProps {
 }
 
 export default function MonthlySummary({ timesheets, onRefresh, month, year }: MonthlySummaryProps) {
+    const router = useRouter()
     const [loading, setLoading] = useState(false)
     const [cancelling, setCancelling] = useState(false)
     const [withdrawing, setWithdrawing] = useState(false)
@@ -94,6 +96,7 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
     const handleSubmitSuccess = () => {
         onRefresh()
         fetchSubmissionStatus()
+        router.refresh() // Force full refresh to ensure status updates are visible
     }
 
     const handleCancelSubmit = async () => {
