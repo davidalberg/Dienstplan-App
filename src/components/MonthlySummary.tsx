@@ -301,15 +301,20 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
 
                         {/* Withdraw signature button - only if employee signed and client hasn't */}
                         {canWithdraw && (
-                            <button
-                                type="button"
-                                onClick={handleWithdrawSignature}
-                                disabled={withdrawing}
-                                className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 font-semibold transition-all bg-amber-500/80 text-white hover:bg-amber-500 disabled:opacity-50"
-                            >
-                                <Undo2 size={18} />
-                                {withdrawing ? "Wird zurueckgezogen..." : "Unterschrift zurueckziehen"}
-                            </button>
+                            <div className="space-y-2">
+                                <button
+                                    type="button"
+                                    onClick={handleWithdrawSignature}
+                                    disabled={withdrawing}
+                                    className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 font-semibold transition-all bg-amber-500/80 text-white hover:bg-amber-500 disabled:opacity-50"
+                                >
+                                    <Undo2 size={18} />
+                                    {withdrawing ? "Wird zurueckgezogen..." : "Unterschrift zurueckziehen"}
+                                </button>
+                                <p className="text-xs text-neutral-500 text-center">
+                                    Sie können Ihre Unterschrift zurückziehen, solange der Klient noch nicht unterschrieben hat.
+                                </p>
+                            </div>
                         )}
 
                         {/* Show locked message if client has signed */}
