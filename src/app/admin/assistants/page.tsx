@@ -598,7 +598,6 @@ function AssistantsContent() {
                                             <EmployeeCard
                                                 key={employee.id}
                                                 employee={employee}
-                                                onDragStart={(e) => handleDragStart(e, employee, null)}
                                                 onEdit={() => openEditEmployee(employee)}
                                                 onDelete={() => handleDeleteEmployee(employee)}
                                                 isHighlighted={highlightedEmployees.has(employee.id)}
@@ -642,45 +641,48 @@ function AssistantsContent() {
                                 }}
                             >
                                 {/* Klient Header */}
-                                <div className="flex items-center gap-2 p-2.5 cursor-grab active:cursor-grabbing group hover:bg-neutral-800/50 transition-colors duration-150">
-                                    {/* Drag Handle */}
-                                    <div className="text-neutral-600 group-hover:text-neutral-400 transition-colors">
+                                <div className="flex items-center gap-2 p-2.5 group">
+                                    {/* Drag Handle - only for dragging */}
+                                    <div
+                                        className="text-neutral-600 group-hover:text-neutral-400 transition-colors cursor-grab active:cursor-grabbing"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
                                         <GripVertical size={16} strokeWidth={2} />
                                     </div>
 
-                                    {/* Chevron Button */}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation()
-                                            toggleClientExpanded(client.id)
-                                        }}
-                                        className="text-neutral-400 hover:text-neutral-300 transition-colors"
+                                    {/* Clickable area - entire header except drag handle */}
+                                    <div
+                                        onClick={() => toggleClientExpanded(client.id)}
+                                        className="flex items-center gap-2 flex-1 cursor-pointer hover:bg-neutral-800/50 transition-colors duration-150 rounded-lg px-2 py-1 -ml-1"
                                     >
-                                        {expandedClients.has(client.id) ? (
-                                            <ChevronDown size={16} strokeWidth={2} />
-                                        ) : (
-                                            <ChevronRight size={16} strokeWidth={2} />
-                                        )}
-                                    </button>
+                                        {/* Chevron Icon */}
+                                        <div className="text-neutral-400">
+                                            {expandedClients.has(client.id) ? (
+                                                <ChevronDown size={16} strokeWidth={2} />
+                                            ) : (
+                                                <ChevronRight size={16} strokeWidth={2} />
+                                            )}
+                                        </div>
 
-                                    {/* Avatar */}
-                                    <div className={`w-7 h-7 rounded-full ${getAvatarColor(client.firstName + client.lastName)} flex items-center justify-center shrink-0`}>
-                                        <span className="text-white text-sm font-semibold">
-                                            {client.firstName.charAt(0).toUpperCase()}
-                                        </span>
-                                    </div>
+                                        {/* Avatar */}
+                                        <div className={`w-7 h-7 rounded-full ${getAvatarColor(client.firstName + client.lastName)} flex items-center justify-center shrink-0`}>
+                                            <span className="text-white text-sm font-semibold">
+                                                {client.firstName.charAt(0).toUpperCase()}
+                                            </span>
+                                        </div>
 
-                                    {/* Klient Name */}
-                                    <h3 className="text-base font-semibold text-white flex-1">
-                                        {client.firstName} {client.lastName}
-                                    </h3>
+                                        {/* Klient Name */}
+                                        <h3 className="text-base font-semibold text-white flex-1">
+                                            {client.firstName} {client.lastName}
+                                        </h3>
 
-                                    {/* Badge mit Anzahl */}
-                                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-neutral-800 rounded-full">
-                                        <Users size={12} className="text-neutral-400" />
-                                        <span className="text-xs font-medium text-neutral-300">
-                                            {clientEmployees.length}
-                                        </span>
+                                        {/* Badge mit Anzahl */}
+                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-neutral-800 rounded-full">
+                                            <Users size={12} className="text-neutral-400" />
+                                            <span className="text-xs font-medium text-neutral-300">
+                                                {clientEmployees.length}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -699,7 +701,6 @@ function AssistantsContent() {
                                                     <EmployeeCard
                                                         key={employee.id}
                                                         employee={employee}
-                                                        onDragStart={(e) => handleDragStart(e, employee, client.id)}
                                                         onEdit={() => openEditEmployee(employee)}
                                                         onDelete={() => handleDeleteEmployee(employee)}
                                                         isHighlighted={highlightedEmployees.has(employee.id)}
@@ -918,32 +919,23 @@ function AssistantsContent() {
 // Employee Card Component
 function EmployeeCard({
     employee,
-    onDragStart,
     onEdit,
     onDelete,
     isHighlighted = false
 }: {
     employee: Employee
-    onDragStart: (e: DragEvent<HTMLDivElement>) => void
     onEdit: () => void
     onDelete: () => void
     isHighlighted?: boolean
 }) {
     return (
         <div
-            draggable
-            onDragStart={onDragStart}
-            className={`flex items-center gap-2 p-2 rounded-lg cursor-grab active:cursor-grabbing group transition-all duration-200 ${
+            className={`flex items-center gap-2 p-2 rounded-lg group transition-all duration-200 ${
                 isHighlighted
                     ? "bg-violet-500/10 border-2 border-violet-500 shadow-lg shadow-violet-500/50"
                     : "bg-neutral-800/30 hover:bg-neutral-800/60 border border-transparent hover:border-neutral-700"
             }`}
         >
-            {/* Drag Handle */}
-            <div className="text-neutral-600 group-hover:text-neutral-400 transition-colors">
-                <GripVertical size={16} strokeWidth={2} />
-            </div>
-
             {/* Avatar */}
             <div className={`w-7 h-7 rounded-full ${getAvatarColor(employee.name || employee.email)} flex items-center justify-center shrink-0 shadow-sm`}>
                 <span className="text-white text-xs font-semibold">
