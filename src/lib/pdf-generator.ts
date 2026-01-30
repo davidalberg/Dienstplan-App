@@ -520,3 +520,464 @@ export function generatePdfDataUrl(options: GeneratePdfOptions): string {
     // This is a simplified approach - the full PDF is generated in generateTimesheetPdf
     return doc.output("dataurlstring")
 }
+
+// ============================================================================
+// COMBINED TEAM PDF GENERATION
+// ============================================================================
+
+/**
+ * A single timesheet entry for the combined team PDF.
+ * All timesheets from all employees are merged into one chronological list.
+ */
+interface CombinedTimesheetEntry {
+    date: Date
+    employeeId: string
+    employeeName: string
+    plannedStart: string | null
+    plannedEnd: string | null
+    actualStart: string | null
+    actualEnd: string | null
+    breakMinutes: number
+    absenceType: string | null
+    note: string | null
+    status: string
+    hours: number  // Pre-calculated hours for this entry
+}
+
+/**
+ * Statistics for a single employee in the combined PDF.
+ */
+interface EmployeeStats {
+    employeeId: string
+    employeeName: string
+    totalHours: number
+    sickDays: number
+    vacationDays: number
+    workDays: number
+}
+
+/**
+ * Options for generating the combined team PDF.
+ */
+interface GenerateCombinedPdfOptions {
+    teamName: string
+    clientName: string
+    month: number
+    year: number
+    timesheets: CombinedTimesheetEntry[]
+    employeeStats: EmployeeStats[]
+    totalHours: number
+    signatures: {
+        employees: Array<{
+            employeeId: string
+            employeeName: string
+            signature: string  // Base64 PNG
+            signedAt: Date
+        }>
+        client: {
+            clientName: string
+            signature: string | null  // Base64 PNG
+            signedAt: Date | null
+        }
+    }
+}
+
+/**
+ * Generates a combined PDF showing all employees' timesheets in one table.
+ * Used for submitting to insurance providers (Traeger) who need to see
+ * the entire team's work hours at once.
+ *
+ * @param options - Configuration for the combined PDF
+ * @returns ArrayBuffer containing the PDF data
+ */
+export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): ArrayBuffer {
+    const {
+        teamName,
+        clientName,
+        month,
+        year,
+        timesheets,
+        employeeStats,
+        totalHours,
+        signatures
+    } = options
+
+    const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+    })
+
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const margin = 15
+    let yPos = margin
+
+    // -------------------------------------------------------------------------
+    // HEADER SECTION
+    // -------------------------------------------------------------------------
+    doc.setFontSize(20)
+    doc.setFont("helvetica", "bold")
+    doc.text("KOMBINIERTER STUNDENNACHWEIS", pageWidth / 2, yPos, { align: "center" })
+    yPos += 8
+
+    doc.setFontSize(14)
+    doc.setFont("helvetica", "normal")
+    doc.text(`${MONTH_NAMES[month - 1]} ${year}`, pageWidth / 2, yPos, { align: "center" })
+    yPos += 12
+
+    // Info Box
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "bold")
+    doc.text("Team:", margin, yPos)
+    doc.setFont("helvetica", "normal")
+    doc.text(teamName, margin + 25, yPos)
+    yPos += 5
+
+    doc.setFont("helvetica", "bold")
+    doc.text("Klient:", margin, yPos)
+    doc.setFont("helvetica", "normal")
+    doc.text(clientName, margin + 25, yPos)
+    yPos += 5
+
+    const daysInMonth = new Date(year, month, 0).getDate()
+    doc.setFont("helvetica", "bold")
+    doc.text("Zeitraum:", margin, yPos)
+    doc.setFont("helvetica", "normal")
+    doc.text(
+        `01.${String(month).padStart(2, "0")}.${year} - ${daysInMonth}.${String(month).padStart(2, "0")}.${year}`,
+        margin + 25,
+        yPos
+    )
+    yPos += 10
+
+    // Horizontal line
+    doc.setLineWidth(0.5)
+    doc.line(margin, yPos, pageWidth - margin, yPos)
+    yPos += 8
+
+    // -------------------------------------------------------------------------
+    // TABLE SECTION
+    // -------------------------------------------------------------------------
+    doc.setFontSize(11)
+    doc.setFont("helvetica", "bold")
+    doc.text("TAGESÜBERSICHT - ALLE MITARBEITER", margin, yPos)
+    yPos += 5
+
+    // Sort ALL timesheets chronologically, then by employee name
+    const sortedTimesheets = [...timesheets].sort((a, b) => {
+        const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
+        if (dateCompare !== 0) return dateCompare
+        return a.employeeName.localeCompare(b.employeeName)
+    })
+
+    // Prepare table data
+    const tableData: string[][] = []
+
+    for (const ts of sortedTimesheets) {
+        const date = new Date(ts.date)
+        const dayName = format(date, "EE", { locale: de })
+        const dateStr = format(date, "dd.MM.", { locale: de })
+
+        let plannedStr = "-"
+        let actualStr = "-"
+        let hoursStr = "0.00h"
+
+        if (ts.absenceType === "SICK") {
+            actualStr = "KRANK"
+            hoursStr = "-"
+        } else if (ts.absenceType === "VACATION") {
+            actualStr = "URLAUB"
+            hoursStr = "-"
+        } else {
+            if (ts.plannedStart && ts.plannedEnd) {
+                plannedStr = formatTimeRangeForPdf(ts.plannedStart, ts.plannedEnd)
+            }
+            if (ts.actualStart && ts.actualEnd) {
+                actualStr = formatTimeRangeForPdf(ts.actualStart, ts.actualEnd)
+            } else if (["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status)) {
+                // Use planned times if confirmed but no actual times recorded
+                actualStr = plannedStr
+            }
+            hoursStr = `${ts.hours.toFixed(2)}h`
+        }
+
+        tableData.push([
+            `${dayName} ${dateStr}`,
+            ts.employeeName,
+            plannedStr,
+            actualStr,
+            hoursStr,
+            ts.note || ""
+        ])
+    }
+
+    // Generate table with violet header (distinct from single-employee blue)
+    autoTable(doc, {
+        startY: yPos,
+        head: [["Datum", "Mitarbeiter", "Geplant", "Tatsächlich", "Stunden", "Notiz"]],
+        body: tableData,
+        theme: "striped",
+        headStyles: {
+            fillColor: [139, 92, 246],  // Violet to distinguish from single employee PDF
+            textColor: 255,
+            fontStyle: "bold",
+            fontSize: 9
+        },
+        bodyStyles: {
+            fontSize: 8,
+            cellPadding: 2
+        },
+        columnStyles: {
+            0: { cellWidth: 25 },      // Datum
+            1: { cellWidth: 30 },      // Mitarbeiter
+            2: { cellWidth: 30 },      // Geplant
+            3: { cellWidth: 30 },      // Tatsächlich
+            4: { cellWidth: 20 },      // Stunden
+            5: { cellWidth: "auto" }   // Notiz
+        },
+        margin: { left: margin, right: margin },
+        didDrawPage: (data) => {
+            // Footer on each page
+            doc.setFontSize(8)
+            doc.setFont("helvetica", "normal")
+            doc.text(
+                `Seite ${data.pageNumber}`,
+                pageWidth / 2,
+                pageHeight - 10,
+                { align: "center" }
+            )
+        }
+    })
+
+    // Get the final Y position after the table
+    yPos = (doc as any).lastAutoTable.finalY + 10
+
+    // -------------------------------------------------------------------------
+    // SUMMARY SECTION
+    // -------------------------------------------------------------------------
+
+    // Check if we need a new page for summary
+    if (yPos > 220) {
+        doc.addPage()
+        yPos = margin
+    }
+
+    doc.setLineWidth(0.5)
+    doc.line(margin, yPos, pageWidth - margin, yPos)
+    yPos += 8
+
+    doc.setFontSize(11)
+    doc.setFont("helvetica", "bold")
+    doc.text("ZUSAMMENFASSUNG", margin, yPos)
+    yPos += 8
+
+    // Per-employee breakdown
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "bold")
+    doc.text("Mitarbeiter:", margin, yPos)
+    yPos += 6
+
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "normal")
+
+    for (const empStat of employeeStats) {
+        const sickText = empStat.sickDays === 1 ? "Krankheitstag" : "Krankheitstage"
+        const vacationText = empStat.vacationDays === 1 ? "Urlaubstag" : "Urlaubstage"
+        const line = `- ${empStat.employeeName}:  ${empStat.totalHours.toFixed(2)} Std. (${empStat.sickDays} ${sickText}, ${empStat.vacationDays} ${vacationText})`
+        doc.text(line, margin + 5, yPos)
+        yPos += 5
+    }
+
+    // Separator line
+    yPos += 2
+    doc.setLineWidth(0.3)
+    doc.line(margin, yPos, pageWidth - margin, yPos)
+    yPos += 6
+
+    // Total
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "bold")
+    doc.text(`Gesamt:      ${totalHours.toFixed(2)} Std.`, margin, yPos)
+    yPos += 10
+
+    // -------------------------------------------------------------------------
+    // SIGNATURES SECTION
+    // -------------------------------------------------------------------------
+
+    // Check if we need a new page for signatures
+    if (yPos > 230) {
+        doc.addPage()
+        yPos = margin
+    }
+
+    doc.setLineWidth(0.5)
+    doc.line(margin, yPos, pageWidth - margin, yPos)
+    yPos += 8
+
+    doc.setFontSize(11)
+    doc.setFont("helvetica", "bold")
+    doc.text("UNTERSCHRIFTEN", margin, yPos)
+    yPos += 8
+
+    // Employee signatures section
+    doc.setFontSize(10)
+    doc.text("Mitarbeiter:", margin, yPos)
+    yPos += 8
+
+    const signatureBoxWidth = 50
+    const signatureBoxHeight = 25
+    const signatureGap = 10
+    const signaturesPerRow = Math.floor((pageWidth - 2 * margin + signatureGap) / (signatureBoxWidth + signatureGap))
+
+    let xPos = margin
+    let rowCount = 0
+
+    for (const empSig of signatures.employees) {
+        // Check if we need a new row or page
+        if (rowCount >= signaturesPerRow) {
+            xPos = margin
+            yPos += signatureBoxHeight + 15
+            rowCount = 0
+        }
+
+        // Check if we need a new page
+        if (yPos + signatureBoxHeight + 15 > pageHeight - 30) {
+            doc.addPage()
+            yPos = margin
+            xPos = margin
+            rowCount = 0
+
+            // Re-add section header on new page
+            doc.setFontSize(10)
+            doc.setFont("helvetica", "bold")
+            doc.text("Mitarbeiter (Fortsetzung):", margin, yPos)
+            yPos += 8
+        }
+
+        // Draw signature box
+        doc.setLineWidth(0.3)
+        doc.rect(xPos, yPos, signatureBoxWidth, signatureBoxHeight)
+
+        // Add signature image if available
+        if (empSig.signature) {
+            try {
+                doc.addImage(
+                    empSig.signature,
+                    "PNG",
+                    xPos + 2,
+                    yPos + 2,
+                    signatureBoxWidth - 4,
+                    signatureBoxHeight - 4
+                )
+            } catch (error) {
+                console.error("Error adding employee signature:", error)
+            }
+        }
+
+        // Employee name and date below signature
+        doc.setFontSize(8)
+        doc.setFont("helvetica", "normal")
+        const signedDateStr = format(new Date(empSig.signedAt), "dd.MM.yyyy", { locale: de })
+        doc.text(
+            empSig.employeeName,
+            xPos + signatureBoxWidth / 2,
+            yPos + signatureBoxHeight + 4,
+            { align: "center" }
+        )
+        doc.text(
+            signedDateStr,
+            xPos + signatureBoxWidth / 2,
+            yPos + signatureBoxHeight + 8,
+            { align: "center" }
+        )
+
+        xPos += signatureBoxWidth + signatureGap
+        rowCount++
+    }
+
+    // Move down after employee signatures
+    if (rowCount > 0) {
+        yPos += signatureBoxHeight + 15
+    }
+
+    // Check if we need a new page for client signature
+    if (yPos > pageHeight - 60) {
+        doc.addPage()
+        yPos = margin
+    }
+
+    yPos += 5
+
+    // Client signature section
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "bold")
+    doc.text("Klient:", margin, yPos)
+    yPos += 8
+
+    // Draw client signature box (larger)
+    const clientBoxWidth = 70
+    const clientBoxHeight = 30
+
+    doc.setLineWidth(0.3)
+    doc.rect(margin, yPos, clientBoxWidth, clientBoxHeight)
+
+    // Add client signature image if available
+    if (signatures.client.signature && signatures.client.signedAt) {
+        try {
+            doc.addImage(
+                signatures.client.signature,
+                "PNG",
+                margin + 2,
+                yPos + 2,
+                clientBoxWidth - 4,
+                clientBoxHeight - 4
+            )
+        } catch (error) {
+            console.error("Error adding client signature:", error)
+        }
+    }
+
+    // Client name and date below signature
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "normal")
+
+    if (signatures.client.signedAt) {
+        const clientSignedDateStr = format(new Date(signatures.client.signedAt), "dd.MM.yyyy", { locale: de })
+        doc.text(
+            signatures.client.clientName,
+            margin + clientBoxWidth / 2,
+            yPos + clientBoxHeight + 4,
+            { align: "center" }
+        )
+        doc.text(
+            clientSignedDateStr,
+            margin + clientBoxWidth / 2,
+            yPos + clientBoxHeight + 8,
+            { align: "center" }
+        )
+    } else {
+        doc.setFont("helvetica", "italic")
+        doc.text(
+            "Noch nicht unterschrieben",
+            margin + clientBoxWidth / 2,
+            yPos + clientBoxHeight + 5,
+            { align: "center" }
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // FOOTER
+    // -------------------------------------------------------------------------
+    yPos = pageHeight - 20
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "italic")
+    doc.text(
+        `Generiert am ${format(new Date(), "dd.MM.yyyy 'um' HH:mm 'Uhr'", { locale: de })}`,
+        pageWidth / 2,
+        yPos,
+        { align: "center" }
+    )
+
+    return doc.output("arraybuffer")
+}

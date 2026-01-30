@@ -221,7 +221,15 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
 
             setSignResponse(data)
             setStep("success")
-            showToast("success", data.message || "Erfolgreich eingereicht!")
+
+            // Show different toast types based on whether all team members signed
+            if (data.allSigned) {
+                // All team members signed - green success toast
+                showToast("success", data.message || `Alle ${data.totalCount || ''} Teammitglieder haben unterschrieben! Der Klient wurde per E-Mail benachrichtigt.`)
+            } else {
+                // Not all signed yet - blue info toast
+                showToast("info", data.message || `Erfolgreich unterschrieben! ${data.signedCount || 1} von ${data.totalCount || 1} Teammitgliedern haben unterschrieben.`)
+            }
 
             // Parent component handles refresh via onSuccess() in handleClose()
         } catch (err: any) {
