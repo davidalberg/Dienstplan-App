@@ -406,6 +406,8 @@ export async function POST(
                 recipientSignature: signature,
                 recipientSignedAt,
                 recipientIp: clientIp,
+                clientSignatureUrl: signature,        // NEW: Store persistent signature URL (Base64 data URL)
+                allEmployeesSigned: true,             // NEW: Mark all employees as signed (cache flag)
                 status: "COMPLETED",
                 pdfUrl,
                 googleDriveFileId

@@ -190,6 +190,8 @@ model TeamSubmission {
   recipientSignature String?             @db.Text
   recipientSignedAt  DateTime?
   recipientIp        String?
+  clientSignatureUrl String?             // NEU: Persistente URL für Klient-Unterschrift
+  allEmployeesSigned Boolean             @default(false) // NEU: Performance-Cache für vollständige Team-Unterschriften
 
   // Token für Assistenznehmer-Link
   signatureToken     String              @unique
