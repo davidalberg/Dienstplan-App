@@ -368,24 +368,32 @@ export async function POST(
             const clientName = teamSubmission.dienstplanConfig?.assistantRecipientName ||
                 (teamSubmission.client ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}` : "Unbekannt")
 
-            // For multi-employee, use "Team" or first employee name
-            const employeeName = teamSubmission.employeeSignatures.length === 1
-                ? teamSubmission.employeeSignatures[0].employee.name || "Mitarbeiter"
-                : `Team_${teamSubmission.employeeSignatures.length}MA`
+            // Generate direct download link via APP (no Google Drive needed)
+            const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+            pdfUrl = `${baseUrl}/api/timesheets/download/${teamSubmission.id}`
 
-            const uploadResult = await uploadTimesheetPdf({
-                pdfBuffer: Buffer.from(pdfBuffer),
-                clientName,
-                employeeName,
-                month: teamSubmission.month,
-                year: teamSubmission.year
-            })
+            // Optional: Still upload to Google Drive for backup
+            try {
+                const employeeName = teamSubmission.employeeSignatures.length === 1
+                    ? teamSubmission.employeeSignatures[0].employee.name || "Mitarbeiter"
+                    : `Team_${teamSubmission.employeeSignatures.length}MA`
 
-            pdfUrl = uploadResult.webViewLink
-            googleDriveFileId = uploadResult.fileId
+                const uploadResult = await uploadTimesheetPdf({
+                    pdfBuffer: Buffer.from(pdfBuffer),
+                    clientName,
+                    employeeName,
+                    month: teamSubmission.month,
+                    year: teamSubmission.year
+                })
+
+                googleDriveFileId = uploadResult.fileId
+            } catch (driveError: any) {
+                console.error("[RECIPIENT SIGN] Google Drive backup upload failed:", driveError)
+                // Continue - we have the app link
+            }
         } catch (uploadError: any) {
-            console.error("[RECIPIENT SIGN] Google Drive upload failed:", uploadError)
-            // Continue without Google Drive - PDF generation succeeded
+            console.error("[RECIPIENT SIGN] PDF generation failed:", uploadError)
+            // Continue without PDF link
         }
 
         // Update TeamSubmission to COMPLETED (atomically with status check to prevent re-signing)
