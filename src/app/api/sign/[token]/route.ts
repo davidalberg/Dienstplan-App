@@ -412,9 +412,17 @@ export async function POST(
             }, { status: 409 })
         }
 
-        // Keep timesheets at SUBMITTED status (don't change to COMPLETED)
-        // The TeamSubmission has status "COMPLETED", but timesheets stay "SUBMITTED"
-        // This prevents UI confusion where COMPLETED shows as "Geplant"
+        // Update all timesheets to COMPLETED status
+        await prisma.timesheet.updateMany({
+            where: {
+                sheetFileName: teamSubmission.sheetFileName,
+                month: teamSubmission.month,
+                year: teamSubmission.year
+            },
+            data: {
+                status: "COMPLETED"
+            }
+        })
 
         // Send completion emails to ALL employees + recipient + employer
         let emailSuccess = true
