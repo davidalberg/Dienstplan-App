@@ -77,6 +77,7 @@ interface Submission {
         email: string | null
     } | null
     clientId?: string | null
+    timesheetCount?: number // Number of timesheets (for pending)
 }
 
 // Client group type
@@ -109,19 +110,36 @@ function SignatureBadge({ type, signed, label }: { type: string; signed: boolean
 /**
  * StatusBadge - Shows submission status
  */
-function StatusBadge({ status }: { status: string }) {
-    const config: Record<string, { label: string; color: string }> = {
-        NOT_STARTED: { label: "Nicht gestartet", color: "bg-neutral-700 text-neutral-400" },
-        PENDING_EMPLOYEES: { label: "Mitarbeiter ausstehend", color: "bg-amber-500/20 text-amber-400" },
-        PENDING_RECIPIENT: { label: "Klient ausstehend", color: "bg-blue-500/20 text-blue-400" },
-        COMPLETED: { label: "Abgeschlossen", color: "bg-emerald-500/20 text-emerald-400" }
+function StatusBadge({ status, timesheetCount }: { status: string; timesheetCount?: number }) {
+    const config: Record<string, { label: string; icon: string; color: string }> = {
+        NOT_STARTED: {
+            label: timesheetCount ? `Ausstehend (${timesheetCount} Schichten)` : "Ausstehend",
+            icon: "⏳",
+            color: "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+        },
+        PENDING_EMPLOYEES: {
+            label: "In Bearbeitung",
+            icon: "🔄",
+            color: "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+        },
+        PENDING_RECIPIENT: {
+            label: "Klient ausstehend",
+            icon: "🔄",
+            color: "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+        },
+        COMPLETED: {
+            label: "Eingereicht",
+            icon: "✅",
+            color: "bg-green-500/20 text-green-300 border border-green-500/30"
+        }
     }
 
-    const { label, color } = config[status] || config.PENDING_EMPLOYEES
+    const { label, icon, color } = config[status] || config.PENDING_EMPLOYEES
 
     return (
-        <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
-            {label}
+        <span className={`px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 ${color}`}>
+            <span>{icon}</span>
+            <span>{label}</span>
         </span>
     )
 }
@@ -158,9 +176,15 @@ function TeamSubmissionRow({
 
                 <div className="min-w-0">
                     <p className="text-sm font-medium text-white truncate">{cleanSheetFileName(submission.sheetFileName)}</p>
-                    <p className="text-xs text-neutral-400 truncate">
-                        {submission.employeeNames.join(", ")}
-                    </p>
+                    {submission.status === "NOT_STARTED" ? (
+                        <p className="text-xs text-neutral-400 truncate">
+                            Mitarbeiter: {submission.employeeNames.join(", ")}
+                        </p>
+                    ) : (
+                        <p className="text-xs text-neutral-400 truncate">
+                            {submission.employeeNames.join(", ")}
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -186,36 +210,43 @@ function TeamSubmissionRow({
 
             {/* Right: Status Badge + Actions */}
             <div className="flex items-center gap-2 flex-shrink-0">
-                <StatusBadge status={submission.status} />
+                <StatusBadge status={submission.status} timesheetCount={submission.timesheetCount} />
 
-                <button
-                    onClick={onViewCombined}
-                    className="p-1.5 text-neutral-500 hover:text-violet-400 hover:bg-violet-900/30 rounded transition-colors duration-150"
-                    title="Team-Ansicht öffnen"
-                    aria-label="Team-Ansicht öffnen"
-                >
-                    <Eye size={14} />
-                </button>
+                {submission.status !== "NOT_STARTED" ? (
+                    <>
+                        <button
+                            onClick={onViewCombined}
+                            className="p-1.5 text-neutral-500 hover:text-violet-400 hover:bg-violet-900/30 rounded transition-colors duration-150"
+                            title="Team-Ansicht öffnen"
+                            aria-label="Team-Ansicht öffnen"
+                        >
+                            <Eye size={14} />
+                        </button>
 
-                {submission.pdfUrl ? (
-                    <button
-                        onClick={onDownload}
-                        className="p-1.5 text-neutral-500 hover:text-violet-400 hover:bg-violet-900/30 rounded transition-colors duration-150"
-                        title="PDF herunterladen"
-                        aria-label="PDF herunterladen"
-                    >
-                        <Download size={14} />
-                    </button>
+                        {submission.pdfUrl ? (
+                            <button
+                                onClick={onDownload}
+                                className="p-1.5 text-neutral-500 hover:text-violet-400 hover:bg-violet-900/30 rounded transition-colors duration-150"
+                                title="PDF herunterladen"
+                                aria-label="PDF herunterladen"
+                            >
+                                <Download size={14} />
+                            </button>
+                        ) : (
+                            <button
+                                onClick={onSendEmail}
+                                className="p-1.5 text-neutral-500 hover:text-violet-400 hover:bg-violet-900/30 rounded transition-colors duration-150"
+                                title="E-Mail senden"
+                                aria-label="E-Mail an Klient senden"
+                            >
+                                <Mail size={14} />
+                            </button>
+                        )}
+                    </>
                 ) : (
-                    <button
-                        onClick={onSendEmail}
-                        className="p-1.5 text-neutral-500 hover:text-violet-400 hover:bg-violet-900/30 rounded transition-colors duration-150"
-                        title="E-Mail senden"
-                        aria-label="E-Mail an Klient senden"
-                        disabled={submission.status === "NOT_STARTED"}
-                    >
-                        <Mail size={14} />
-                    </button>
+                    <div className="text-xs text-neutral-500 italic px-2">
+                        Noch nicht eingereicht
+                    </div>
                 )}
             </div>
         </div>
@@ -414,8 +445,8 @@ export default function TimesheetsPage() {
                 {!isLoading && groupedByClient.length === 0 && (
                     <div className="text-center py-12 text-neutral-500">
                         <FileText size={48} className="mx-auto mb-4 opacity-50" />
-                        <p className="text-lg font-medium">Keine Stundennachweise für {MONTH_NAMES[month - 1]} {year}</p>
-                        <p className="text-sm mt-2">Stundennachweise werden nach Einreichung angezeigt.</p>
+                        <p className="text-lg font-medium">Keine Dienste im {MONTH_NAMES[month - 1]} {year}</p>
+                        <p className="text-sm mt-2">Es gibt keine geplanten Schichten für diesen Monat.</p>
                     </div>
                 )}
 
