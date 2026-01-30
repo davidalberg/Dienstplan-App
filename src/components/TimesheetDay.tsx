@@ -106,6 +106,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
         const status = getCurrentStatus()
         switch (status) {
             case "SUBMITTED": return "bg-blue-100 text-blue-700"  // BLAU für Eingereicht
+            case "COMPLETED": return "bg-emerald-100 text-emerald-700"  // GRÜN für Abgeschlossen
             case "CONFIRMED":
             case "CHANGED":  // Vereinfacht: Gleiche Farbe wie CONFIRMED
                 return "bg-green-100 text-green-700"
@@ -126,6 +127,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
         const status = getCurrentStatus()
         switch (status) {
             case "SUBMITTED": return "Eingereicht"
+            case "COMPLETED": return "Abgeschlossen"  // Klient hat unterschrieben
             case "CONFIRMED": return isOptimistic ? "Wird bestätigt..." : "Bestätigt"
             case "CHANGED": return "Bestätigt"  // Vereinfacht: CHANGED = Bestätigt
             default: return isOptimistic ? "Wird zurückgesetzt..." : "Geplant"
@@ -200,7 +202,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
                                     )}
                                 </button>
                             )}
-                            {timesheet.status !== "SUBMITTED" && (
+                            {timesheet.status !== "SUBMITTED" && timesheet.status !== "COMPLETED" && (
                                 <button
                                     type="button"
                                     onClick={() => setIsEditing(true)}

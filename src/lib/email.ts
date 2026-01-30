@@ -37,10 +37,20 @@ export async function sendSignatureRequestEmail(params: SendSignatureRequestPara
         year: "numeric"
     })
 
-    // Extract friendly name from employeeName (remove Team_ prefix if present)
-    const friendlyEmployeeName = employeeName.startsWith("Team_")
-        ? employeeName.split("_").slice(1, -2).join(" ") // Remove "Team_" and "_year"
-        : employeeName
+    // Extract friendly name from employeeName - robustly handle all formats
+    const friendlyEmployeeName = (() => {
+        let name = employeeName
+
+        // Remove all "Team_" prefixes recursively (handles "Team_Team_...")
+        while (name.startsWith("Team_")) {
+            name = name.substring(5) // Remove "Team_"
+        }
+
+        // Split by underscore and remove year patterns (4-digit numbers)
+        const parts = name.split("_").filter(part => !/^\d{4}$/.test(part))
+
+        return parts.join(" ")
+    })()
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -180,10 +190,22 @@ export async function sendCompletionEmails(params: SendCompletionEmailParams) {
 
     const monthName = MONTH_NAMES[month - 1]
 
-    // Extract friendly team name from sheetFileName (e.g., "Team_Jana_Scheuer_2026" -> "Jana Scheuer")
-    const friendlyTeamName = sheetFileName && sheetFileName.startsWith("Team_")
-        ? sheetFileName.split("_").slice(1, -1).join(" ") // Remove "Team_" prefix and year suffix
-        : recipientName
+    // Extract friendly team name from sheetFileName - robustly handle all formats
+    const friendlyTeamName = (() => {
+        if (!sheetFileName) return recipientName
+
+        let name = sheetFileName
+
+        // Remove all "Team_" prefixes recursively
+        while (name.startsWith("Team_")) {
+            name = name.substring(5)
+        }
+
+        // Split by underscore and remove year patterns (4-digit numbers)
+        const parts = name.split("_").filter(part => !/^\d{4}$/.test(part))
+
+        return parts.length > 0 ? parts.join(" ") : recipientName
+    })()
 
     const formatDate = (date: Date) => date.toLocaleDateString("de-DE", {
         day: "2-digit",

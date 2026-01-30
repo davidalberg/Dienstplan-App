@@ -79,7 +79,7 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
     }
 
     const isAlreadySubmitted = () => {
-        return timesheets.length > 0 && timesheets.every(ts => ts.status === "SUBMITTED")
+        return timesheets.length > 0 && timesheets.every(ts => ts.status === "SUBMITTED" || ts.status === "COMPLETED")
     }
 
     const handleOpenSubmitModal = () => {
