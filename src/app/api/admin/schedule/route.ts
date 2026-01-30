@@ -233,14 +233,27 @@ export async function POST(req: NextRequest) {
         const month = dateObj.getUTCMonth() + 1
         const year = dateObj.getUTCFullYear()
 
-        // Prüfe, ob der Mitarbeiter existiert
-        const employeeExists = await prisma.user.findUnique({
+        // Prüfe, ob der Mitarbeiter existiert UND lade Team-Info für sheetFileName
+        const employee = await prisma.user.findUnique({
             where: { id: employeeId },
-            select: { id: true }
+            select: {
+                id: true,
+                team: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            }
         })
-        if (!employeeExists) {
+        if (!employee) {
             return NextResponse.json({ error: "Mitarbeiter nicht gefunden" }, { status: 400 })
         }
+
+        // Generiere sheetFileName (CRITICAL für Submission-System!)
+        const sheetFileName = employee.team
+            ? `Team_${employee.team.name.replace(/\s+/g, '_')}_${year}`
+            : null
 
         // Prüfe ob bereits eine Schicht existiert
         const existing = await prisma.timesheet.findUnique({
@@ -263,7 +276,8 @@ export async function POST(req: NextRequest) {
                 plannedEnd,
                 backupEmployeeId: backupEmployeeId || null,
                 note: note || null,
-                teamId: teamId || null,
+                teamId: employee.team?.id || null,
+                sheetFileName,  // 🆕 CRITICAL FIX: sheetFileName setzen!
                 status: "PLANNED",
                 source: "APP",
                 syncVerified: true
