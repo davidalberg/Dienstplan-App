@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
                 await sendSignatureRequestEmail({
                     recipientEmail,
                     recipientName,
-                    employeeName: `Team ${teamSubmission.sheetFileName}`,
+                    employeeName: teamSubmission.sheetFileName,
                     month: teamSubmission.month,
                     year: teamSubmission.year,
                     signatureUrl,
