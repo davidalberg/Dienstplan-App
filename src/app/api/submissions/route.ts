@@ -430,11 +430,33 @@ export async function POST(req: NextRequest) {
             console.log("[POST /api/submissions] User already signed?", alreadySigned)
 
             if (alreadySigned) {
-                // Return early with user-friendly error
-                console.log(`[POST /api/submissions] RETURNING 400 - User ${user.id} already signed for ${sheetFileName} ${month}/${year}`)
-                return NextResponse.json({
-                    error: "Sie haben bereits für diesen Monat unterschrieben. Die Einreichung ist bereits aktiv."
-                }, { status: 400 })
+                // DEFENSIVE CHECK: Verify timesheets still exist before blocking resubmission
+                console.log("[POST /api/submissions] Checking if timesheets still exist for this submission...")
+                const timesheetCount = await prisma.timesheet.count({
+                    where: {
+                        sheetFileName: existingSubmission.sheetFileName,
+                        month: existingSubmission.month,
+                        year: existingSubmission.year
+                    }
+                })
+
+                console.log(`[POST /api/submissions] Timesheet count for ${sheetFileName} ${month}/${year}: ${timesheetCount}`)
+
+                if (timesheetCount === 0) {
+                    // Timesheets were deleted - clean up orphaned submission
+                    console.log(`[POST /api/submissions] CLEANUP: Deleting orphaned TeamSubmission ${existingSubmission.id}`)
+                    await prisma.teamSubmission.delete({
+                        where: { id: existingSubmission.id }
+                    })
+                    console.log("[POST /api/submissions] Orphaned submission deleted - continuing with new submission")
+                    // Continue with new submission creation below
+                } else {
+                    // Legitimate block: timesheets exist and user already signed
+                    console.log(`[POST /api/submissions] RETURNING 400 - User ${user.id} already signed for ${sheetFileName} ${month}/${year}`)
+                    return NextResponse.json({
+                        error: "Sie haben bereits für diesen Monat unterschrieben. Die Einreichung ist bereits aktiv."
+                    }, { status: 400 })
+                }
             }
         }
 
