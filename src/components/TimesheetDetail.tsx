@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
-import { ChevronLeft, Download, Trash2, Mail, Check, X, Loader2 } from "lucide-react"
+import { ChevronLeft, Download, Trash2, Mail, Check, X, Loader2, Undo2 } from "lucide-react"
 import useSWR from "swr"
 import { showToast } from "@/lib/toast-utils"
 
@@ -90,7 +90,7 @@ export default function TimesheetDetail({
     const signaturesEnabled = true // Immer aktiviert - kein Toggle mehr
     const [sendingEmail, setSendingEmail] = useState<string | null>(null)
     const [showDownloadMenu, setShowDownloadMenu] = useState(false)
-    const [deleting, setDeleting] = useState(false)
+    const [withdrawing, setWithdrawing] = useState<string | null>(null)
 
     // Daten laden
     const { data, isLoading, error, mutate } = useSWR<DetailData>(
@@ -197,19 +197,39 @@ export default function TimesheetDetail({
         }
     }
 
-    const handleDelete = async () => {
-        if (!confirm("Möchten Sie diesen Stundennachweis wirklich löschen?")) return
+    const handleWithdrawSignature = async (type: "employee" | "client") => {
+        const typeLabel = type === "employee" ? "Assistenten" : "Klienten"
 
-        setDeleting(true)
+        if (!confirm(`Möchten Sie die ${typeLabel}-Unterschrift wirklich zurückziehen?\n\nDadurch kann der Stundennachweis erneut bearbeitet und eingereicht werden.`)) {
+            return
+        }
+
+        setWithdrawing(type)
         try {
-            // TODO: Implement delete logic
-            showToast("success", "Stundennachweis gelöscht")
-            onDelete?.()
-            onClose()
-        } catch (err) {
-            showToast("error", "Löschen fehlgeschlagen")
+            const res = await fetch("/api/admin/submissions/withdraw-signature", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employeeId,
+                    clientId,
+                    month,
+                    year,
+                    type
+                })
+            })
+
+            const result = await res.json()
+
+            if (!res.ok) {
+                throw new Error(result.error || "Fehler beim Zurückziehen")
+            }
+
+            showToast("success", `${typeLabel}-Unterschrift erfolgreich zurückgezogen`)
+            mutate() // Revalidate data
+        } catch (error: any) {
+            showToast("error", error.message || "Fehler beim Zurückziehen der Unterschrift")
         } finally {
-            setDeleting(false)
+            setWithdrawing(null)
         }
     }
 
@@ -369,45 +389,36 @@ export default function TimesheetDetail({
                             <div className="rounded-xl bg-neutral-800 border border-neutral-700">
                                 <div className="p-4 border-b border-neutral-700 flex items-center justify-between">
                                     <h3 className="text-sm font-medium text-neutral-400">Übersicht</h3>
-                                    <div className="flex gap-2">
-                                        <div className="relative">
-                                            <button
-                                                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-700 border border-neutral-600 text-white text-sm font-medium hover:bg-neutral-600 transition-colors"
-                                            >
-                                                <Download size={16} />
-                                                Download
-                                            </button>
-                                            {showDownloadMenu && (
-                                                <div className="absolute right-0 mt-1 w-32 rounded-lg bg-neutral-700 border border-neutral-600 shadow-lg overflow-hidden z-10">
-                                                    <button
-                                                        onClick={() => handleDownload("pdf")}
-                                                        className="w-full px-3 py-2 text-left text-sm text-white hover:bg-neutral-600"
-                                                    >
-                                                        PDF
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDownload("csv")}
-                                                        className="w-full px-3 py-2 text-left text-sm text-white hover:bg-neutral-600"
-                                                    >
-                                                        CSV
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDownload("xlsx")}
-                                                        className="w-full px-3 py-2 text-left text-sm text-white hover:bg-neutral-600"
-                                                    >
-                                                        Excel
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
+                                    <div className="relative">
                                         <button
-                                            onClick={handleDelete}
-                                            disabled={deleting}
-                                            className="px-3 py-1.5 rounded-lg bg-red-900/50 border border-red-700 text-red-400 text-sm font-medium hover:bg-red-900 transition-colors disabled:opacity-50"
+                                            onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-700 border border-neutral-600 text-white text-sm font-medium hover:bg-neutral-600 transition-colors"
                                         >
-                                            Löschen
+                                            <Download size={16} />
+                                            Download
                                         </button>
+                                        {showDownloadMenu && (
+                                            <div className="absolute right-0 mt-1 w-32 rounded-lg bg-neutral-700 border border-neutral-600 shadow-lg overflow-hidden z-10">
+                                                <button
+                                                    onClick={() => handleDownload("pdf")}
+                                                    className="w-full px-3 py-2 text-left text-sm text-white hover:bg-neutral-600"
+                                                >
+                                                    PDF
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDownload("csv")}
+                                                    className="w-full px-3 py-2 text-left text-sm text-white hover:bg-neutral-600"
+                                                >
+                                                    CSV
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDownload("xlsx")}
+                                                    className="w-full px-3 py-2 text-left text-sm text-white hover:bg-neutral-600"
+                                                >
+                                                    Excel
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="p-4 space-y-3">
@@ -454,44 +465,89 @@ export default function TimesheetDetail({
                                     <h3 className="text-sm font-medium text-neutral-400">Unterschriften</h3>
                                 </div>
                                 <div className="p-4 space-y-4">
+                                    {/* Assistent */}
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div>
+                                                <p className="text-white font-medium">{data.employee.name}</p>
+                                                <p className="text-xs text-neutral-500">Assistent</p>
+                                            </div>
+                                            {data.signatures.employee.signed ? (
+                                                <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-900/50 text-emerald-400 text-xs font-medium">
+                                                    <Check size={14} />
+                                                    Unterschrieben
+                                                </span>
+                                            ) : (
+                                                <span className="text-neutral-500 text-xs">Nicht unterschrieben</span>
+                                            )}
+                                        </div>
+                                        {data.signatures.employee.signed && (
+                                            <button
+                                                onClick={() => handleWithdrawSignature("employee")}
+                                                disabled={withdrawing === "employee"}
+                                                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-900/50 border border-amber-700 text-amber-400 font-medium hover:bg-amber-900 transition-colors disabled:opacity-50"
+                                            >
+                                                {withdrawing === "employee" ? (
+                                                    <Loader2 size={16} className="animate-spin" />
+                                                ) : (
+                                                    <Undo2 size={16} />
+                                                )}
+                                                Unterschrift zurückziehen
+                                            </button>
+                                        )}
+                                    </div>
+
                                     {/* Klient */}
                                     <div>
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div>
-                                                        <p className="text-white font-medium">{data.client.fullName}</p>
-                                                        <p className="text-xs text-neutral-500">
-                                                            {data.client.email || "Keine E-Mail hinterlegt"}
-                                                        </p>
-                                                    </div>
-                                                    {data.signatures.client.signed ? (
-                                                        <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-900/50 text-emerald-400 text-xs font-medium">
-                                                            <Check size={14} />
-                                                            Unterschrieben
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-neutral-500 text-xs">E-Mail nicht gesendet</span>
-                                                    )}
-                                                </div>
-                                                {!data.signatures.client.signed && data.client.email && (
-                                                    <button
-                                                        onClick={() => handleSendEmail("client")}
-                                                        disabled={sendingEmail === "client" || !data.signatures.employee.signed}
-                                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-neutral-700 border border-neutral-600 text-white font-medium hover:bg-neutral-600 transition-colors disabled:opacity-50"
-                                                    >
-                                                        {sendingEmail === "client" ? (
-                                                            <Loader2 size={16} className="animate-spin" />
-                                                        ) : (
-                                                            <Mail size={16} />
-                                                        )}
-                                                        E-Mail anfordern
-                                                    </button>
-                                                )}
-                                                {!data.signatures.employee.signed && !data.signatures.client.signed && (
-                                                    <p className="text-xs text-neutral-500 mt-2">
-                                                        Klient kann erst unterschreiben, wenn der Assistent unterschrieben hat.
-                                                    </p>
-                                                )}
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div>
+                                                <p className="text-white font-medium">{data.client.fullName}</p>
+                                                <p className="text-xs text-neutral-500">
+                                                    {data.client.email || "Keine E-Mail hinterlegt"}
+                                                </p>
                                             </div>
+                                            {data.signatures.client.signed ? (
+                                                <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-900/50 text-emerald-400 text-xs font-medium">
+                                                    <Check size={14} />
+                                                    Unterschrieben
+                                                </span>
+                                            ) : (
+                                                <span className="text-neutral-500 text-xs">Nicht unterschrieben</span>
+                                            )}
+                                        </div>
+                                        {data.signatures.client.signed ? (
+                                            <button
+                                                onClick={() => handleWithdrawSignature("client")}
+                                                disabled={withdrawing === "client"}
+                                                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-900/50 border border-amber-700 text-amber-400 font-medium hover:bg-amber-900 transition-colors disabled:opacity-50"
+                                            >
+                                                {withdrawing === "client" ? (
+                                                    <Loader2 size={16} className="animate-spin" />
+                                                ) : (
+                                                    <Undo2 size={16} />
+                                                )}
+                                                Unterschrift zurückziehen
+                                            </button>
+                                        ) : data.client.email && (
+                                            <button
+                                                onClick={() => handleSendEmail("client")}
+                                                disabled={sendingEmail === "client" || !data.signatures.employee.signed}
+                                                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-neutral-700 border border-neutral-600 text-white font-medium hover:bg-neutral-600 transition-colors disabled:opacity-50"
+                                            >
+                                                {sendingEmail === "client" ? (
+                                                    <Loader2 size={16} className="animate-spin" />
+                                                ) : (
+                                                    <Mail size={16} />
+                                                )}
+                                                E-Mail anfordern
+                                            </button>
+                                        )}
+                                        {!data.signatures.employee.signed && !data.signatures.client.signed && (
+                                            <p className="text-xs text-neutral-500 mt-2">
+                                                Klient kann erst unterschreiben, wenn der Assistent unterschrieben hat.
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

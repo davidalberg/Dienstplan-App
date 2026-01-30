@@ -65,7 +65,9 @@
       "Bash(npm run test:db:reset:*)",
       "Bash(npx prisma db execute:*)",
       "Bash(node:*)",
-      "Bash(npx rg:*)"
+      "Bash(npx rg:*)",
+      "WebFetch(domain:dienstplan-app-three.vercel.app)",
+      "Bash(xargs:*)"
     ]
   }
 }
