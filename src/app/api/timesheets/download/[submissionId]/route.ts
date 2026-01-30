@@ -114,7 +114,7 @@ export async function GET(
                     absenceType: ts.absenceType
                 })),
                 {
-                    hourlyWage: employee.hourlyWage,
+                    hourlyWage: employee.hourlyWage || 0,
                     nightPremiumEnabled: employee.nightPremiumEnabled,
                     nightPremiumPercent: employee.nightPremiumPercent || 25,
                     sundayPremiumEnabled: employee.sundayPremiumEnabled,
@@ -175,14 +175,15 @@ export async function GET(
                 holidayHours: 0
             },
             signatures: {
-                employee: teamSubmission.employeeSignatures.length > 0 ? {
-                    signatureUrl: teamSubmission.employeeSignatures[0].signature,
-                    signedAt: teamSubmission.employeeSignatures[0].signedAt!
-                } : undefined,
-                client: teamSubmission.recipientSignature ? {
-                    signatureUrl: teamSubmission.recipientSignature,
-                    signedAt: teamSubmission.recipientSignedAt!
-                } : undefined
+                employeeSignatures: teamSubmission.employeeSignatures
+                    .filter(sig => sig.signedAt && sig.signature)
+                    .map(sig => ({
+                        employeeName: sig.employee.name || sig.employee.email,
+                        signature: sig.signature!,
+                        signedAt: sig.signedAt!
+                    })),
+                recipientSignature: teamSubmission.recipientSignature,
+                recipientSignedAt: teamSubmission.recipientSignedAt
             }
         })
 
