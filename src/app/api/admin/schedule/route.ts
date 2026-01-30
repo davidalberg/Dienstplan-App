@@ -115,7 +115,18 @@ export async function GET(req: NextRequest) {
                 orderBy: [{ date: "asc" }, { plannedStart: "asc" }]
             }),
             prisma.team.findMany({
-                select: { id: true, name: true },
+                where: {
+                    members: {
+                        some: {}  // Mindestens 1 Mitglied
+                    }
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    _count: {
+                        select: { members: true }
+                    }
+                },
                 orderBy: { name: "asc" }
             })
         ])
