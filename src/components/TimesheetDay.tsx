@@ -95,39 +95,39 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
     const getCurrentStatus = () => optimisticStatus || timesheet.status
 
     const getStatusColor = () => {
-        // Priorität: Krank > Urlaub > Eingesprungen (bestätigt) > Backup-Schicht (unbestätigt) > Normal
+        // Priorität: Krank > Urlaub > Backup-Schicht > Normal
         if (timesheet.absenceType === "SICK") return "bg-red-100 text-red-700"
         if (timesheet.absenceType === "VACATION") return "bg-cyan-100 text-cyan-700"
 
-        // Backup-Schicht: Grün wenn bestätigt, Orange wenn noch offen
-        const isBackupShift = timesheet.note && timesheet.note.includes("Eingesprungen")
-        if (isBackupShift && getCurrentStatus() === "CONFIRMED") return "bg-green-100 text-green-700"
+        // Backup-Schicht (neue Note-Format) - immer Orange
+        const isBackupShift = timesheet.note?.includes("Backup-Schicht anfallend")
         if (isBackupShift) return "bg-orange-100 text-orange-700"
 
         const status = getCurrentStatus()
         switch (status) {
-            case "SUBMITTED": return "bg-blue-100 text-blue-700"
-            case "CONFIRMED": return "bg-green-100 text-green-700"
-            case "CHANGED": return "bg-amber-100 text-amber-700"
-            default: return "bg-gray-100 text-gray-700"
+            case "SUBMITTED": return "bg-blue-100 text-blue-700"  // BLAU für Eingereicht
+            case "CONFIRMED":
+            case "CHANGED":  // Vereinfacht: Gleiche Farbe wie CONFIRMED
+                return "bg-green-100 text-green-700"
+            default:
+                return "bg-gray-100 text-gray-700"
         }
     }
 
     const getStatusLabel = () => {
-        // Priorität: Krank > Urlaub > Eingesprungen (bestätigt) > Backup-Schicht (unbestätigt) > Normal
+        // Priorität: Krank > Urlaub > Backup-Schicht > Normal
         if (timesheet.absenceType === "SICK") return "Krank"
         if (timesheet.absenceType === "VACATION") return "Urlaub"
 
-        // Aktivierte Backup-Schicht: "Eingesprungen" wenn bestätigt, "Einspringen erforderlich" wenn noch offen
-        const isBackupShift = timesheet.note && timesheet.note.includes("Eingesprungen")
-        if (isBackupShift && getCurrentStatus() === "CONFIRMED") return "Eingesprungen"
-        if (isBackupShift) return "Einspringen erforderlich"
+        // Backup-Schicht (neue Note-Format)
+        const isBackupShift = timesheet.note && timesheet.note.includes("Backup-Schicht anfallend")
+        if (isBackupShift) return "Backup-Schicht"
 
         const status = getCurrentStatus()
         switch (status) {
             case "SUBMITTED": return "Eingereicht"
             case "CONFIRMED": return isOptimistic ? "Wird bestätigt..." : "Bestätigt"
-            case "CHANGED": return "Geändert"
+            case "CHANGED": return "Bestätigt"  // Vereinfacht: CHANGED = Bestätigt
             default: return isOptimistic ? "Wird zurückgesetzt..." : "Geplant"
         }
     }

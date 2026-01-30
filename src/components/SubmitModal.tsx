@@ -222,6 +222,8 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
             setSignResponse(data)
             setStep("success")
             showToast("success", data.message || "Erfolgreich eingereicht!")
+
+            // Parent component handles refresh via onSuccess() in handleClose()
         } catch (err: any) {
             console.error("[SubmitModal] CATCH block - Sign Network/Fetch error:", err)
             console.error("[SubmitModal] Sign Error name:", err?.name)
