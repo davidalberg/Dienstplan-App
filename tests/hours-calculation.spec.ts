@@ -263,7 +263,7 @@ test.describe('Stundenberechnungen', () => {
                 actualStart: '08:00',
                 actualEnd: '16:00',
                 status: 'CONFIRMED',
-                note: 'Eingesprungen für Krankheit',
+                note: 'Backup-Schicht anfallend wegen Krankheit',
                 month: testDate.getMonth() + 1,
                 year: testDate.getFullYear(),
                 breakMinutes: 0

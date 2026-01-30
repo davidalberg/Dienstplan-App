@@ -44,7 +44,7 @@ test.describe('Backup-Logik (KRITISCH)', () => {
             where: {
                 employeeId: backupEmployee!.id,
                 date: testShift.date,
-                note: { contains: 'Eingesprungen' },
+                note: { contains: 'Backup-Schicht anfallend' },
             },
         })
 
@@ -66,13 +66,13 @@ test.describe('Backup-Logik (KRITISCH)', () => {
             where: {
                 employeeId: backupEmployee!.id,
                 date: testShift.date,
-                note: { contains: 'Eingesprungen' },
+                note: { contains: 'Backup-Schicht anfallend' },
             },
         })
 
         expect(backupShift).toBeTruthy()
         expect(backupShift?.status).toBe('PLANNED')
-        expect(backupShift?.note).toContain('Eingesprungen für Krankheit')
+        expect(backupShift?.note).toContain('Backup-Schicht anfallend wegen Krankheit')
 
         // Cleanup: Reset absenceType
         await prisma.timesheet.update({
@@ -108,7 +108,7 @@ test.describe('Backup-Logik (KRITISCH)', () => {
             },
         })
 
-        // Erstelle Backup-Schicht mit "Eingesprungen" Note
+        // Erstelle Backup-Schicht mit "Backup-Schicht anfallend" Note
         const backupShift = await prisma.timesheet.create({
             data: {
                 employeeId: backupEmployee!.id,
@@ -118,7 +118,7 @@ test.describe('Backup-Logik (KRITISCH)', () => {
                 month: testDate.getMonth() + 1,
                 year: testDate.getFullYear(),
                 status: 'PLANNED',
-                note: 'Eingesprungen für Krankheit',
+                note: 'Backup-Schicht anfallend wegen Krankheit',
                 breakMinutes: 0,
             },
         })
@@ -211,7 +211,7 @@ test.describe('Backup-Logik (KRITISCH)', () => {
                 month: testDate.getMonth() + 1,
                 year: testDate.getFullYear(),
                 status: 'PLANNED',
-                note: 'Eingesprungen für Krankheit',
+                note: 'Backup-Schicht anfallend wegen Krankheit',
                 breakMinutes: 0,
             },
         })
@@ -246,13 +246,13 @@ test.describe('Backup-Logik (KRITISCH)', () => {
         })
     })
 
-    test('Backup-Schicht ohne "Eingesprungen" Note wird NICHT gelöscht bei Krankheit', async ({
+    test('Backup-Schicht ohne "Backup-Schicht anfallend" Note wird NICHT gelöscht bei Krankheit', async ({
         page,
         prisma,
         testUsers,
         loginPage,
     }) => {
-        // Dieser Test verifiziert, dass normale Schichten (ohne "Eingesprungen")
+        // Dieser Test verifiziert, dass normale Schichten (ohne "Backup-Schicht anfallend")
         // bei Krankheit NICHT gelöscht werden
 
         const backupEmployee = await prisma.user.findUnique({ where: { email: testUsers.backup.email } })
@@ -269,7 +269,7 @@ test.describe('Backup-Logik (KRITISCH)', () => {
             },
         })
 
-        // Erstelle normale Schicht (OHNE "Eingesprungen" Note)
+        // Erstelle normale Schicht (OHNE "Backup-Schicht anfallend" Note)
         const normalShift = await prisma.timesheet.create({
             data: {
                 employeeId: backupEmployee!.id,
@@ -279,7 +279,7 @@ test.describe('Backup-Logik (KRITISCH)', () => {
                 month: testDate.getMonth() + 1,
                 year: testDate.getFullYear(),
                 status: 'PLANNED',
-                note: 'Normale Schicht', // KEINE "Eingesprungen" Note!
+                note: 'Normale Schicht', // KEINE "Backup-Schicht anfallend" Note!
                 breakMinutes: 0,
             },
         })

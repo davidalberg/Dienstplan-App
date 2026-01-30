@@ -60,7 +60,7 @@ test.describe('Backup-Logik (Umfassend)', () => {
                 where: {
                     employeeId: backupEmployee!.id,
                     date: tomorrow,
-                    note: { contains: 'Eingesprungen' }
+                    note: { contains: 'Backup-Schicht anfallend' }
                 }
             })
 
@@ -96,7 +96,7 @@ test.describe('Backup-Logik (Umfassend)', () => {
                 }
             })
 
-            // Erstelle Backup-Schicht (Eingesprungen)
+            // Erstelle Backup-Schicht (Backup-Schicht anfallend)
             const backupShift = await prisma.timesheet.create({
                 data: {
                     employeeId: backupEmployee!.id,
@@ -104,7 +104,7 @@ test.describe('Backup-Logik (Umfassend)', () => {
                     plannedStart: '08:00',
                     plannedEnd: '16:00',
                     status: 'PLANNED',
-                    note: 'Eingesprungen für Krankheit',
+                    note: 'Backup-Schicht anfallend wegen Krankheit',
                     month: tomorrow.getMonth() + 1,
                     year: tomorrow.getFullYear(),
                     breakMinutes: 0
@@ -172,7 +172,7 @@ test.describe('Backup-Logik (Umfassend)', () => {
                     plannedStart: '08:00',
                     plannedEnd: '16:00',
                     status: 'PLANNED',
-                    note: 'Eingesprungen für Krankheit',
+                    note: 'Backup-Schicht anfallend wegen Krankheit',
                     month: tomorrow.getMonth() + 1,
                     year: tomorrow.getFullYear(),
                     breakMinutes: 0
@@ -224,7 +224,7 @@ test.describe('Backup-Logik (Umfassend)', () => {
                     actualStart: '08:00',
                     actualEnd: '16:00',
                     status: 'CONFIRMED',
-                    note: 'Eingesprungen für Krankheit',
+                    note: 'Backup-Schicht anfallend wegen Krankheit',
                     month: tomorrow.getMonth() + 1,
                     year: tomorrow.getFullYear(),
                     breakMinutes: 0
@@ -259,7 +259,7 @@ test.describe('Backup-Logik (Umfassend)', () => {
                     actualStart: '22:00',
                     actualEnd: '06:00',
                     status: 'CONFIRMED',
-                    note: 'Eingesprungen für Krankheit',
+                    note: 'Backup-Schicht anfallend wegen Krankheit',
                     month: tomorrow.getMonth() + 1,
                     year: tomorrow.getFullYear(),
                     breakMinutes: 0
@@ -390,7 +390,7 @@ test.describe('Backup-Logik (Umfassend)', () => {
                     plannedStart: '08:00',
                     plannedEnd: '16:00',
                     status: 'PLANNED',
-                    note: 'Eingesprungen für Krankheit',
+                    note: 'Backup-Schicht anfallend wegen Krankheit',
                     month: tomorrow.getMonth() + 1,
                     year: tomorrow.getFullYear(),
                     breakMinutes: 0

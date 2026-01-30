@@ -300,7 +300,7 @@ test.describe('Business-Correctness Tests', () => {
                     actualStart: '08:00', actualEnd: '16:00',
                     status: 'CONFIRMED',
                     month: EXPORT_TEST_MONTH, year: EXPORT_TEST_YEAR, breakMinutes: 0,
-                    note: `${TEST_NOTE_PREFIX}_BACKUP Eingesprungen für Krankheit`
+                    note: `${TEST_NOTE_PREFIX}_BACKUP Backup-Schicht anfallend wegen Krankheit`
                 }
             })
 
@@ -761,7 +761,7 @@ test.describe('Business-Correctness Tests', () => {
                     actualStart: '08:00', actualEnd: '16:00',
                     status: 'CONFIRMED',
                     month: 4, year: 2026, breakMinutes: 0,
-                    note: `${TEST_NOTE_PREFIX}_BACKUP Eingesprungen für Krankheit`
+                    note: `${TEST_NOTE_PREFIX}_BACKUP Backup-Schicht anfallend wegen Krankheit`
                 }
             })
 
@@ -813,7 +813,7 @@ test.describe('Business-Correctness Tests', () => {
                     actualStart: '22:00', actualEnd: '06:00',
                     status: 'CONFIRMED',
                     month: testMonth, year: testYear, breakMinutes: 0,
-                    note: `${TEST_NOTE_PREFIX}_BACKUP Eingesprungen für Krankheit`
+                    note: `${TEST_NOTE_PREFIX}_BACKUP Backup-Schicht anfallend wegen Krankheit`
                 }
             })
 
@@ -873,7 +873,7 @@ test.describe('Business-Correctness Tests', () => {
                     actualStart: '08:00', actualEnd: '16:00',
                     status: 'CONFIRMED',
                     month: testMonth, year: testYear, breakMinutes: 0,
-                    note: `${TEST_NOTE_PREFIX}_BACKUP Eingesprungen für Krankheit`
+                    note: `${TEST_NOTE_PREFIX}_BACKUP Backup-Schicht anfallend wegen Krankheit`
                 }
             })
 
@@ -931,7 +931,7 @@ test.describe('Business-Correctness Tests', () => {
                     actualStart: '08:00', actualEnd: '16:00',
                     status: 'CONFIRMED',
                     month: testMonth, year: testYear, breakMinutes: 0,
-                    note: `${TEST_NOTE_PREFIX}_BACKUP Eingesprungen für Krankheit`
+                    note: `${TEST_NOTE_PREFIX}_BACKUP Backup-Schicht anfallend wegen Krankheit`
                 }
             })
 
@@ -958,7 +958,7 @@ test.describe('Business-Correctness Tests', () => {
 
             const testDate = createLocalDate(2026, 4, 20)
 
-            // Create backup shift with "Eingesprungen" note
+            // Create backup shift with "Backup-Schicht anfallend" note
             const backupShift = await prisma.timesheet.create({
                 data: {
                     employeeId: backupEmployee!.id,
@@ -966,7 +966,7 @@ test.describe('Business-Correctness Tests', () => {
                     plannedStart: '08:00', plannedEnd: '16:00',
                     status: 'PLANNED',
                     month: 4, year: 2026, breakMinutes: 0,
-                    note: `${TEST_NOTE_PREFIX}_BACKUP_SICK Eingesprungen für Krankheit`
+                    note: `${TEST_NOTE_PREFIX}_BACKUP_SICK Backup-Schicht anfallend wegen Krankheit`
                 }
             })
 
