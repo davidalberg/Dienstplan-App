@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
 
     // BUG-FIX: Wenn Backup-Person sich krank/Urlaub meldet → Backup-Schicht löschen
     // Die Backup-Person bekommt KEINE Krankheitsstunden für eine Schicht, die sie nur als Vertretung hatte
-    if ((absenceType === "SICK" || absenceType === "VACATION") && existing.note?.includes("Eingesprungen")) {
+    if ((absenceType === "SICK" || absenceType === "VACATION") && existing.note?.includes("Backup-Schicht anfallend")) {
         console.log(`[BACKUP SICK] Backup employee ${existing.employeeId} is ${absenceType}, deleting backup shift`)
 
         // Lösche die Backup-Schicht komplett
@@ -245,6 +245,12 @@ export async function POST(req: NextRequest) {
             })
 
             if (backupEmployee) {
+                // Hole Original-Mitarbeiter-Namen für Note
+                const originalEmployee = await prisma.user.findUnique({
+                    where: { id: existing.employeeId },
+                    select: { name: true }
+                })
+
                 // Erstelle oder aktualisiere Timesheet für Backup-Person
                 // WICHTIG: Nicht automatisch bestätigen - Backup muss selbst bestätigen
                 const backupData = {
@@ -253,7 +259,7 @@ export async function POST(req: NextRequest) {
                     breakMinutes: existing.breakMinutes || 0,
                     status: "PLANNED", // PLANNED statt CHANGED - Backup muss selbst bestätigen
                     absenceType: null, // They're working, not absent
-                    note: `Eingesprungen für ${absenceType === "SICK" ? "Krankheit" : "Urlaub"}`,
+                    note: `Backup-Schicht anfallend wegen ${absenceType === "SICK" ? "Krankheit" : "Urlaub"} von ${originalEmployee?.name || "Mitarbeiter"}`,
                     lastUpdatedBy: "SYSTEM_BACKUP_ACTIVATION",
                     teamId: backupEmployee.teamId,
                     sheetFileName: existing.sheetFileName
@@ -303,7 +309,7 @@ export async function POST(req: NextRequest) {
                 }
             })
 
-            if (backupShift && backupShift.note?.includes("Eingesprungen")) {
+            if (backupShift && backupShift.note?.includes("Backup-Schicht anfallend")) {
                 // Lösche die Backup-Schicht komplett
                 await prisma.timesheet.delete({
                     where: { id: backupShift.id }
