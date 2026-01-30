@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useActivityLog } from "@/hooks/use-admin-data"
 import {
     Activity,
@@ -13,7 +13,8 @@ import {
     Building2,
     Settings,
     Trash2,
-    RefreshCw
+    RefreshCw,
+    Database
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -31,6 +32,20 @@ interface ActivityItem {
     entityId: string | null
     entityType: string | null
     createdAt: string
+}
+
+interface OrphanedTeam {
+    id: string
+    name: string
+    clientId: string | null
+    client?: {
+        firstName: string
+        lastName: string
+    } | null
+    _count: {
+        members: number
+        timesheets: number
+    }
 }
 
 const typeIcons: Record<ActivityType, React.ReactNode> = {
@@ -64,15 +79,77 @@ const categoryLabels: Record<ActivityCategory, string> = {
 }
 
 export default function SettingsPage() {
-    const [activeTab, setActiveTab] = useState<"activity" | "system">("activity")
+    const [activeTab, setActiveTab] = useState<"activity" | "database" | "system">("activity")
     const [filterType, setFilterType] = useState<string>("")
     const [filterCategory, setFilterCategory] = useState<string>("")
+    const [orphanedTeams, setOrphanedTeams] = useState<OrphanedTeam[]>([])
+    const [dbLoading, setDbLoading] = useState(false)
+    const [stats, setStats] = useState({
+        totalTeams: 0,
+        orphanedTeams: 0,
+        teamsWithMembers: 0
+    })
 
     const { activities, total, isLoading, mutate } = useActivityLog(
         100,
         filterType || undefined,
         filterCategory || undefined
     )
+
+    useEffect(() => {
+        if (activeTab === "database") {
+            loadOrphanedTeams()
+        }
+    }, [activeTab])
+
+    const loadOrphanedTeams = async () => {
+        setDbLoading(true)
+        try {
+            const res = await fetch("/api/admin/teams/orphaned")
+            if (res.ok) {
+                const data = await res.json()
+                setOrphanedTeams(data.orphanedTeams || [])
+                setStats(data.stats)
+            } else {
+                toast.error("Fehler beim Laden der Teams")
+            }
+        } catch (err) {
+            console.error(err)
+            toast.error("Fehler beim Laden")
+        } finally {
+            setDbLoading(false)
+        }
+    }
+
+    const handleCleanupOrphaned = async () => {
+        if (!confirm(
+            `${orphanedTeams.length} verwaiste Teams wirklich löschen?\n\n` +
+            "Diese Teams haben keine Mitglieder mehr. " +
+            "Warnung: Schichten ohne Team werden zu 'Ohne Klient'."
+        )) {
+            return
+        }
+
+        setDbLoading(true)
+        try {
+            const res = await fetch("/api/admin/teams/orphaned", {
+                method: "DELETE"
+            })
+
+            if (res.ok) {
+                const data = await res.json()
+                toast.success(`${data.deletedCount} Teams gelöscht`)
+                loadOrphanedTeams()
+            } else {
+                const err = await res.json()
+                toast.error(err.error)
+            }
+        } catch {
+            toast.error("Fehler beim Löschen")
+        } finally {
+            setDbLoading(false)
+        }
+    }
 
     const handleCleanup = async () => {
         if (!confirm("Aktivitäten älter als 30 Tage löschen?")) return
@@ -144,6 +221,17 @@ export default function SettingsPage() {
                     >
                         <Activity className="w-4 h-4 inline-block mr-2" />
                         Protokoll
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("database")}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            activeTab === "database"
+                                ? "bg-violet-600 text-white"
+                                : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+                        }`}
+                    >
+                        <Database className="w-4 h-4 inline-block mr-2" />
+                        Datenbank
                     </button>
                     <button
                         onClick={() => setActiveTab("system")}
@@ -285,6 +373,108 @@ export default function SettingsPage() {
                                 {total} Aktivitäten insgesamt
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* Database Tab */}
+                {activeTab === "database" && (
+                    <div>
+                        {/* Stats Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+                                <div className="flex items-center gap-3">
+                                    <Database className="text-blue-400" size={24} />
+                                    <div>
+                                        <p className="text-neutral-400 text-sm">Teams gesamt</p>
+                                        <p className="text-white text-2xl font-bold">{stats.totalTeams}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+                                <div className="flex items-center gap-3">
+                                    <Users className="text-green-400" size={24} />
+                                    <div>
+                                        <p className="text-neutral-400 text-sm">Teams mit Mitgliedern</p>
+                                        <p className="text-white text-2xl font-bold">{stats.teamsWithMembers}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+                                <div className="flex items-center gap-3">
+                                    <AlertTriangle className="text-yellow-400" size={24} />
+                                    <div>
+                                        <p className="text-neutral-400 text-sm">Verwaiste Teams</p>
+                                        <p className="text-white text-2xl font-bold">{stats.orphanedTeams}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Orphaned Teams Section */}
+                        <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+                            <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                                        <AlertTriangle className="text-yellow-400" size={20} />
+                                        Verwaiste Teams
+                                    </h2>
+                                    <p className="text-neutral-400 text-sm mt-1">
+                                        Teams ohne Mitglieder können gelöscht werden
+                                    </p>
+                                </div>
+
+                                {orphanedTeams.length > 0 && (
+                                    <button
+                                        onClick={handleCleanupOrphaned}
+                                        disabled={dbLoading}
+                                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition flex items-center gap-2 disabled:opacity-50"
+                                    >
+                                        <Trash2 size={16} />
+                                        Alle löschen ({orphanedTeams.length})
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="divide-y divide-neutral-800">
+                                {dbLoading ? (
+                                    <div className="p-12 text-center text-neutral-500">
+                                        Lade...
+                                    </div>
+                                ) : orphanedTeams.length === 0 ? (
+                                    <div className="p-12 text-center text-neutral-500">
+                                        Keine verwaisten Teams gefunden
+                                    </div>
+                                ) : (
+                                    orphanedTeams.map((team) => (
+                                        <div
+                                            key={team.id}
+                                            className="p-4 hover:bg-neutral-800/50 transition"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-white font-medium">{team.name}</p>
+                                                    <div className="flex gap-4 mt-1">
+                                                        <span className="text-neutral-400 text-sm">
+                                                            Mitglieder: {team._count.members}
+                                                        </span>
+                                                        <span className="text-neutral-400 text-sm">
+                                                            Schichten: {team._count.timesheets}
+                                                        </span>
+                                                        {team.client && (
+                                                            <span className="text-violet-400 text-sm">
+                                                                Klient: {team.client.firstName} {team.client.lastName}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
                     </div>
                 )}
 
