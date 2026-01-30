@@ -37,11 +37,6 @@ export async function sendSignatureRequestEmail(params: SendSignatureRequestPara
         year: "numeric"
     })
 
-    // Check if multiple employees (contains "und" or comma)
-    const hasMultipleEmployees = employeeName.includes(" und ") || employeeName.includes(", ")
-    const verb = hasMultipleEmployees ? "haben" : "hat"
-    const possessivePronoun = hasMultipleEmployees ? "ihren" : "seinen"
-
     const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -58,11 +53,11 @@ export async function sendSignatureRequestEmail(params: SendSignatureRequestPara
 
     <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
         <p style="font-size: 16px; margin-bottom: 20px;">
-            Hallo ${recipientName || ""},
+            Hallo ${recipientName},
         </p>
 
         <p style="font-size: 15px; color: #4b5563;">
-            <strong>${employeeName}</strong> ${verb} ${possessivePronoun} Stundennachweis für <strong>${year}</strong> eingereicht und ${hasMultipleEmployees ? "warten" : "wartet"} auf Ihre Gegenzeichnung.
+            das Team hat den Stundennachweis für den <strong>${monthName} ${year}</strong> eingereicht.
         </p>
 
         <p style="font-size: 15px; color: #4b5563;">
@@ -99,9 +94,9 @@ export async function sendSignatureRequestEmail(params: SendSignatureRequestPara
     const textContent = `
 Stundennachweis zur Unterschrift - ${monthName} ${year}
 
-Hallo ${recipientName || ""},
+Hallo ${recipientName},
 
-${employeeName} ${verb} ${possessivePronoun} Stundennachweis für ${year} eingereicht und ${hasMultipleEmployees ? "warten" : "wartet"} auf Ihre Gegenzeichnung.
+das Team hat den Stundennachweis für den ${monthName} ${year} eingereicht.
 
 Bitte öffnen Sie den folgenden Link, um den Nachweis zu prüfen und zu unterschreiben:
 
