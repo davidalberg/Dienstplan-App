@@ -32,6 +32,7 @@ interface Shift {
     plannedEnd: string
     status: string
     note: string | null
+    absenceType: string | null
     employee: {
         id: string
         name: string
@@ -710,14 +711,20 @@ export default function SchedulePage() {
                                                                 </td>
                                                                 <td className="px-3 py-2">
                                                                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase ${
+                                                                        shift.absenceType === "SICK" ? "bg-red-900/50 text-red-400" :
+                                                                        shift.absenceType === "VACATION" ? "bg-cyan-900/50 text-cyan-400" :
                                                                         shift.status === "CONFIRMED" ? "bg-green-900/50 text-green-400" :
                                                                         shift.status === "CHANGED" ? "bg-amber-900/50 text-amber-400" :
                                                                         shift.status === "SUBMITTED" ? "bg-blue-900/50 text-blue-400" :
+                                                                        shift.status === "COMPLETED" ? "bg-emerald-900/50 text-emerald-400" :
                                                                         "bg-neutral-800 text-neutral-400"
                                                                     }`}>
-                                                                        {shift.status === "CONFIRMED" ? "Bestätigt" :
+                                                                        {shift.absenceType === "SICK" ? "Krank" :
+                                                                         shift.absenceType === "VACATION" ? "Urlaub" :
+                                                                         shift.status === "CONFIRMED" ? "Bestätigt" :
                                                                          shift.status === "CHANGED" ? "Geändert" :
-                                                                         shift.status === "SUBMITTED" ? "Eingereicht" : "Geplant"}
+                                                                         shift.status === "SUBMITTED" ? "Eingereicht" :
+                                                                         shift.status === "COMPLETED" ? "Abgeschlossen" : "Geplant"}
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-3 py-2 text-right">

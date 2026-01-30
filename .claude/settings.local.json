@@ -67,7 +67,9 @@
       "Bash(node:*)",
       "Bash(npx rg:*)",
       "WebFetch(domain:dienstplan-app-three.vercel.app)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(npx prisma studio)",
+      "Bash(npx ts-node:*)"
     ]
   }
 }
