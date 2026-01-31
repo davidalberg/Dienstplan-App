@@ -383,8 +383,7 @@ export async function GET(req: NextRequest) {
                     firstName: submission.client.firstName,
                     lastName: submission.client.lastName,
                     email: submission.client.email
-                } : null,
-                clientId: submission.clientId
+                } : null
             }
         })
 
