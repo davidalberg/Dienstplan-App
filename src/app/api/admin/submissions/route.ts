@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         const targetYear = filterYear || currentDate.getFullYear()
 
         // Parallele Abfragen für bessere Performance
-        const [teamSubmissions, allConfigs, allTimesheetsForMonth] = await Promise.all([
+        const [teamSubmissions, allConfigs, allTimesheetsForMonth, allTeamsWithClients] = await Promise.all([
             // 1. Existing TeamSubmissions
             prisma.teamSubmission.findMany({
                 orderBy: [
@@ -112,6 +112,22 @@ export async function GET(req: NextRequest) {
                                     email: true
                                 }
                             }
+                        }
+                    }
+                }
+            }),
+            // 4. All Teams with Clients (for pending dienstplaene without timesheets)
+            prisma.team.findMany({
+                select: {
+                    id: true,
+                    name: true,
+                    clientId: true,
+                    client: {
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            email: true
                         }
                     }
                 }
@@ -318,6 +334,16 @@ export async function GET(req: NextRequest) {
             }
         }
 
+        // ========== BUILD TEAM-CLIENT MAP (for pending dienstplaene without timesheets) ==========
+        const teamClientMap = new Map<string, { id: string; firstName: string; lastName: string; email: string | null }>()
+        for (const team of allTeamsWithClients) {
+            if (team.client) {
+                // Map team name (normalized) to client
+                const normalizedTeamName = team.name.toLowerCase().trim()
+                teamClientMap.set(normalizedTeamName, team.client)
+            }
+        }
+
         // ========== HELPER: Get employees for a sheetFileName/month/year ==========
         const getEmployeesForKey = (sheetFileName: string, month: number, year: number): Array<{ id: string; name: string | null; email: string }> => {
             const key = `${sheetFileName}|${month}|${year}`
@@ -331,7 +357,22 @@ export async function GET(req: NextRequest) {
         const getClientForKey = (sheetFileName: string, month: number, year: number): { id: string; firstName: string; lastName: string; email: string | null } | null => {
             const key = `${sheetFileName}|${month}|${year}`
             const entry = timesheetsByKey.get(key)
-            return entry?.client || null
+            if (entry?.client) {
+                return entry.client
+            }
+
+            // FALLBACK: Try to extract team name from sheetFileName and find client in teamClientMap
+            // Format: "Team_Jana_Scheuer_2026" or "Team_Team_Jana_Scheuer_2026_2026"
+            const teamName = extractTeamNameFromSheetFileName(sheetFileName)
+            if (teamName) {
+                const normalizedTeamName = teamName.toLowerCase().trim()
+                const client = teamClientMap.get(normalizedTeamName)
+                if (client) {
+                    return client
+                }
+            }
+
+            return null
         }
 
         const getTimesheetCountForKey = (sheetFileName: string, month: number, year: number): number => {
