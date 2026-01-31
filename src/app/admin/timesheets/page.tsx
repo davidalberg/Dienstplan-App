@@ -16,6 +16,7 @@ import { useAdminSubmissions } from "@/hooks/use-admin-data"
 import EmployeeAvatarStack from "@/components/EmployeeAvatarStack"
 import SignatureProgress from "@/components/SignatureProgress"
 import { showToast } from "@/lib/toast-utils"
+import CombinedTimesheetModal from "@/components/CombinedTimesheetModal"
 
 // German month names
 const MONTH_NAMES = [
@@ -349,11 +350,14 @@ export default function TimesheetsPage() {
         setCurrentDate(newDate)
     }
 
-    // Handlers (placeholders for now - will be implemented in next task)
+    // Open Combined Timesheet Modal
     const handleViewCombined = (submission: Submission) => {
+        if (!submission.clientId) {
+            showToast("error", "Klient-Zuordnung fehlt für diese Einreichung")
+            return
+        }
         setSelectedSubmission(submission)
         setShowCombinedModal(true)
-        showToast("info", "Combined Timesheet Modal wird im nächsten Schritt implementiert")
     }
 
     const handleDownload = async (submission: Submission) => {
@@ -376,7 +380,39 @@ export default function TimesheetsPage() {
             return
         }
 
-        showToast("info", "E-Mail-Versand wird im nächsten Schritt implementiert")
+        if (!submission.clientId) {
+            showToast("error", "Klient-Information fehlt")
+            return
+        }
+
+        // Check if all employees have signed
+        const allEmployeesSigned = submission.signedEmployees === submission.totalEmployees
+        if (!allEmployeesSigned) {
+            showToast("error", "E-Mail kann nur versendet werden, wenn alle Mitarbeiter unterschrieben haben")
+            return
+        }
+
+        try {
+            const res = await fetch("/api/admin/submissions/send-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sheetFileName: submission.sheetFileName,
+                    month: submission.month,
+                    year: submission.year,
+                    clientId: submission.clientId
+                })
+            })
+
+            if (res.ok) {
+                showToast("success", "E-Mail erfolgreich versendet")
+            } else {
+                const err = await res.json()
+                showToast("error", err.error || "Fehler beim E-Mail-Versand")
+            }
+        } catch (error) {
+            showToast("error", "Netzwerkfehler beim E-Mail-Versand")
+        }
     }
 
     return (
@@ -510,20 +546,19 @@ export default function TimesheetsPage() {
                 )}
             </div>
 
-            {/* Combined Timesheet Modal - Placeholder for next task */}
-            {showCombinedModal && selectedSubmission && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-                    <div className="bg-neutral-900 rounded-2xl shadow-2xl max-w-4xl w-full p-6">
-                        <h2 className="text-xl font-bold text-white mb-4">Combined Timesheet Modal</h2>
-                        <p className="text-neutral-400 mb-4">Wird im nächsten Schritt implementiert</p>
-                        <button
-                            onClick={() => setShowCombinedModal(false)}
-                            className="bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-700 transition-colors"
-                        >
-                            Schließen
-                        </button>
-                    </div>
-                </div>
+            {/* Combined Timesheet Modal */}
+            {selectedSubmission && selectedSubmission.clientId && (
+                <CombinedTimesheetModal
+                    isOpen={showCombinedModal}
+                    sheetFileName={selectedSubmission.sheetFileName}
+                    clientId={selectedSubmission.clientId}
+                    month={selectedSubmission.month}
+                    year={selectedSubmission.year}
+                    onClose={() => {
+                        setShowCombinedModal(false)
+                        setSelectedSubmission(null)
+                    }}
+                />
             )}
         </div>
     )
