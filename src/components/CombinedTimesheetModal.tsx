@@ -10,7 +10,8 @@ import {
     Clock,
     Download,
     FileSpreadsheet,
-    Loader2
+    Loader2,
+    Mail
 } from "lucide-react"
 import useSWR from "swr"
 import { showToast } from "@/lib/toast-utils"
@@ -119,6 +120,7 @@ export default function CombinedTimesheetModal({
     onOpenIndividual
 }: CombinedTimesheetModalProps) {
     const [downloading, setDownloading] = useState<'pdf' | 'excel' | null>(null)
+    const [sendingEmail, setSendingEmail] = useState(false)
 
     // Fetch combined timesheet data
     const { data, error, isLoading } = useSWR<CombinedTimesheetData>(
@@ -232,6 +234,39 @@ export default function CombinedTimesheetModal({
             showToast("error", "Excel-Download fehlgeschlagen")
         } finally {
             setDownloading(null)
+        }
+    }
+
+    // Handle email sending
+    const handleSendEmail = async () => {
+        if (!clientId || !data?.client) {
+            showToast("error", "Klient-Information fehlt")
+            return
+        }
+
+        setSendingEmail(true)
+        try {
+            const res = await fetch("/api/admin/submissions/send-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sheetFileName,
+                    month,
+                    year,
+                    clientId
+                })
+            })
+
+            if (res.ok) {
+                showToast("success", "E-Mail erfolgreich versendet")
+            } else {
+                const err = await res.json()
+                showToast("error", err.error || "Fehler beim E-Mail-Versand")
+            }
+        } catch (error) {
+            showToast("error", "Netzwerkfehler beim E-Mail-Versand")
+        } finally {
+            setSendingEmail(false)
         }
     }
 
@@ -493,6 +528,32 @@ export default function CombinedTimesheetModal({
                                         ))}
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* E-Mail versenden Button */}
+                            <div className="border-t border-neutral-700 pt-4 mb-4">
+                                <button
+                                    onClick={handleSendEmail}
+                                    disabled={sendingEmail || !data.signatures.employees.every(sig => sig.signed)}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:bg-neutral-700 disabled:text-neutral-500 disabled:cursor-not-allowed text-white font-medium transition"
+                                >
+                                    {sendingEmail ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin" />
+                                            Sendet...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Mail size={16} />
+                                            E-Mail an Klient senden
+                                        </>
+                                    )}
+                                </button>
+                                {!data.signatures.employees.every(sig => sig.signed) && (
+                                    <p className="text-xs text-neutral-500 mt-2 text-center">
+                                        E-Mail kann nur versendet werden, wenn alle Mitarbeiter unterschrieben haben
+                                    </p>
+                                )}
                             </div>
 
                             {/* Download Buttons */}

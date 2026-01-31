@@ -362,6 +362,7 @@ export async function GET(req: NextRequest) {
                 status: submission.status,
                 createdAt: submission.createdAt,
                 updatedAt: submission.updatedAt,
+                clientId: submission.clientId, // Include clientId for CombinedTimesheetModal
                 recipientEmail,
                 recipientName,
                 recipientSignedAt: submission.recipientSignedAt,

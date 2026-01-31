@@ -18,6 +18,7 @@ import {
     FileText
 } from "lucide-react"
 import { formatTimeRange } from "@/lib/time-utils"
+import CombinedTimesheetModal from "@/components/CombinedTimesheetModal"
 
 interface EmployeeSignature {
     employeeId: string
@@ -35,6 +36,7 @@ interface Submission {
     status: string
     createdAt?: string
     updatedAt?: string
+    clientId?: string | null // For CombinedTimesheetModal
     recipientEmail: string
     recipientName: string
     recipientSignedAt?: string | null
@@ -141,6 +143,10 @@ export default function AdminSubmissionsPage() {
     const [previewLoading, setPreviewLoading] = useState(false)
     const [previewData, setPreviewData] = useState<PreviewData | null>(null)
     const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set())
+
+    // Combined Timesheet Modal state
+    const [showCombinedModal, setShowCombinedModal] = useState(false)
+    const [selectedSubmissionForModal, setSelectedSubmissionForModal] = useState<Submission | null>(null)
 
     // Month/Year filter
     const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1)
@@ -641,7 +647,8 @@ export default function AdminSubmissionsPage() {
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation()
-                                                                    openPreviewModal(submission)
+                                                                    setSelectedSubmissionForModal(submission)
+                                                                    setShowCombinedModal(true)
                                                                 }}
                                                                 className="p-1.5 hover:bg-neutral-700 rounded text-neutral-400 hover:text-white transition-colors"
                                                                 title="Vorschau"
@@ -965,6 +972,21 @@ export default function AdminSubmissionsPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Combined Timesheet Modal */}
+            {selectedSubmissionForModal && selectedSubmissionForModal.clientId && (
+                <CombinedTimesheetModal
+                    isOpen={showCombinedModal}
+                    sheetFileName={selectedSubmissionForModal.sheetFileName}
+                    clientId={selectedSubmissionForModal.clientId}
+                    month={selectedSubmissionForModal.month}
+                    year={selectedSubmissionForModal.year}
+                    onClose={() => {
+                        setShowCombinedModal(false)
+                        setSelectedSubmissionForModal(null)
+                    }}
+                />
             )}
         </div>
     )
