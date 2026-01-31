@@ -436,6 +436,42 @@ export default function AdminSubmissionsPage() {
         })
     }
 
+    const handleDeleteSubmission = async (submission: Submission) => {
+        if (!submission.id) {
+            toast.error("Submission-ID fehlt")
+            return
+        }
+
+        const teamName = submission.employeeNames && submission.employeeNames.length > 0
+            ? submission.employeeNames.join(", ")
+            : submission.sheetFileName
+
+        if (!window.confirm(`Team-Stundennachweis "${teamName}" wirklich löschen?`)) {
+            return
+        }
+
+        setProcessing(true)
+        try {
+            const res = await fetch(`/api/admin/submissions?id=${submission.id}`, {
+                method: "DELETE"
+            })
+
+            const data = await res.json()
+
+            if (res.ok) {
+                toast.success("Stundennachweis erfolgreich gelöscht")
+                await fetchSubmissions()
+            } else {
+                toast.error(data.error || "Fehler beim Löschen")
+            }
+        } catch (error) {
+            console.error("Error deleting submission:", error)
+            toast.error("Fehler beim Löschen")
+        } finally {
+            setProcessing(false)
+        }
+    }
+
     // Format date for display
     const formatDisplayDate = (dateStr?: string) => {
         if (!dateStr) return ""
@@ -600,18 +636,31 @@ export default function AdminSubmissionsPage() {
                                                             }
                                                         </span>
 
-                                                        {/* Action buttons (on hover) */}
-                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        {/* Action buttons */}
+                                                        <div className="flex items-center gap-1">
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation()
                                                                     openPreviewModal(submission)
                                                                 }}
-                                                                className="p-1.5 hover:bg-neutral-700 rounded text-neutral-400 hover:text-white"
+                                                                className="p-1.5 hover:bg-neutral-700 rounded text-neutral-400 hover:text-white transition-colors"
                                                                 title="Vorschau"
                                                             >
                                                                 <Eye className="w-4 h-4" />
                                                             </button>
+                                                            {submission.id && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        handleDeleteSubmission(submission)
+                                                                    }}
+                                                                    disabled={processing}
+                                                                    className="p-1.5 hover:bg-neutral-700/50 rounded text-neutral-400 hover:text-red-400 transition-colors disabled:opacity-50"
+                                                                    title="Löschen"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                         </div>
 
                                                         {/* Signature badges */}

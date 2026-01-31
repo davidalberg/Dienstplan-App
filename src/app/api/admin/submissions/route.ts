@@ -583,3 +583,53 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
+
+/**
+ * DELETE /api/admin/submissions?id=<submissionId>
+ * Delete a team submission including all employee signatures
+ */
+export async function DELETE(req: NextRequest) {
+    try {
+        const session = await auth()
+        if (!session?.user || (session.user as any).role !== "ADMIN") {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
+        const { searchParams } = new URL(req.url)
+        const submissionId = searchParams.get("id")
+
+        if (!submissionId) {
+            return NextResponse.json({ error: "Submission ID required" }, { status: 400 })
+        }
+
+        // Check if submission exists
+        const submission = await prisma.teamSubmission.findUnique({
+            where: { id: submissionId },
+            include: {
+                employeeSignatures: true
+            }
+        })
+
+        if (!submission) {
+            return NextResponse.json({ error: "Submission not found" }, { status: 404 })
+        }
+
+        // Delete all employee signatures first (cascade delete)
+        await prisma.employeeSignature.deleteMany({
+            where: { teamSubmissionId: submissionId }
+        })
+
+        // Delete the team submission
+        await prisma.teamSubmission.delete({
+            where: { id: submissionId }
+        })
+
+        return NextResponse.json({
+            success: true,
+            message: `Submission ${submission.sheetFileName} gelöscht`
+        })
+    } catch (error: any) {
+        console.error("[DELETE /api/admin/submissions] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    }
+}
