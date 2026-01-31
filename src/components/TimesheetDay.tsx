@@ -122,7 +122,17 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
 
         // Backup-Schicht (neue Note-Format)
         const isBackupShift = timesheet.note && timesheet.note.includes("Backup-Schicht anfallend")
-        if (isBackupShift) return "Backup-Schicht"
+        if (isBackupShift) {
+            // Extrahiere Original-Mitarbeiter-Namen und Grund aus Note
+            // Format: "Backup-Schicht anfallend wegen Krankheit von Maria Witton"
+            const match = timesheet.note.match(/Backup-Schicht anfallend wegen (Krankheit|Urlaub) von (.+)/)
+            if (match) {
+                const reason = match[1] === "Krankheit" ? "Krank" : "Urlaub"
+                const originalEmployeeName = match[2]
+                return `Backup-Schicht (${originalEmployeeName} - ${reason})`
+            }
+            return "Backup-Schicht"
+        }
 
         const status = getCurrentStatus()
         switch (status) {
