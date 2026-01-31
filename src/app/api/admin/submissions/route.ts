@@ -4,11 +4,31 @@ import prisma from "@/lib/prisma"
 
 /**
  * Helper: Extract teamName from generated sheetFileName (if applicable)
- * Format: "Team_TeamName_Jahr"
+ * Handles various formats:
+ * - "Team_Jana_Scheuer_2026" → "Team Jana Scheuer"
+ * - "Team_Team_Jana_Scheuer_2026" → "Team Jana Scheuer"
+ * - "Team_Team_Jana_Scheuer_2026_2026" → "Team Jana Scheuer"
  */
 function extractTeamNameFromSheetFileName(sheetFileName: string): string | null {
-    const match = sheetFileName.match(/^Team_(.+)_\d{4}$/)
-    return match ? match[1].replace(/_/g, ' ') : null
+    let cleaned = sheetFileName
+
+    // Remove duplicate "Team_Team" prefix
+    if (cleaned.startsWith("Team_Team_")) {
+        cleaned = cleaned.replace("Team_Team_", "Team_")
+    }
+
+    // Replace underscores with spaces
+    cleaned = cleaned.replace(/_/g, " ")
+
+    // Remove year suffix (e.g., " 2026" or " 2026 2026")
+    cleaned = cleaned.replace(/\s+\d{4}(\s+\d{4})?$/g, "")
+
+    // Check if starts with "Team "
+    if (cleaned.toLowerCase().startsWith("team ")) {
+        return cleaned
+    }
+
+    return null
 }
 
 /**
