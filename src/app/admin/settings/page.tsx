@@ -463,6 +463,60 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
+                        {/* Fix Submission ClientIDs Section */}
+                        <div className="bg-neutral-900 border border-red-800/50 rounded-xl p-6 mb-6">
+                            <div className="flex items-start gap-4">
+                                <div className="p-3 bg-red-500/20 rounded-lg">
+                                    <AlertTriangle className="text-red-400" size={24} />
+                                </div>
+                                <div className="flex-1">
+                                    <h2 className="text-lg font-semibold text-white mb-2">
+                                        🚨 Submission Client-IDs reparieren
+                                    </h2>
+                                    <p className="text-neutral-400 text-sm mb-4">
+                                        Behebt NULL clientId in TeamSubmissions durch Zuordnung über Mitarbeiter-Teams.
+                                        <br />
+                                        <span className="text-red-400 font-semibold">🚨 KRITISCH: Führe dies aus wenn "Klient-Zuordnung fehlt für diese Einreichung" auftritt!</span>
+                                    </p>
+                                    <button
+                                        onClick={async () => {
+                                            if (!confirm('Submission Client-IDs jetzt reparieren?')) return;
+
+                                            const btn = document.activeElement as HTMLButtonElement;
+                                            btn.disabled = true;
+                                            btn.textContent = 'Repariere...';
+
+                                            try {
+                                                const res = await fetch('/api/admin/fix-submission-clientids', {
+                                                    method: 'POST',
+                                                    credentials: 'include'
+                                                });
+                                                const result = await res.json();
+
+                                                if (res.ok) {
+                                                    toast.success(`✅ ${result.results.fixed} Submission(s) repariert!`);
+                                                    if (result.results.skipped > 0) {
+                                                        toast.warning(`⚠️ ${result.results.skipped} konnten nicht repariert werden`);
+                                                    }
+                                                    setTimeout(() => window.location.reload(), 1500);
+                                                } else {
+                                                    toast.error(result.error || 'Fehler beim Reparieren');
+                                                }
+                                            } catch (err) {
+                                                toast.error('Netzwerkfehler');
+                                            } finally {
+                                                btn.disabled = false;
+                                                btn.textContent = '🚨 JETZT REPARIEREN';
+                                            }
+                                        }}
+                                        className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                                    >
+                                        🚨 JETZT REPARIEREN
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Orphaned Teams Section */}
                         <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
                             <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
