@@ -412,6 +412,57 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
+                        {/* Fix Team Names Section */}
+                        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 mb-6">
+                            <div className="flex items-start gap-4">
+                                <div className="p-3 bg-violet-500/20 rounded-lg">
+                                    <Settings className="text-violet-400" size={24} />
+                                </div>
+                                <div className="flex-1">
+                                    <h2 className="text-lg font-semibold text-white mb-2">
+                                        Team-Namen korrigieren
+                                    </h2>
+                                    <p className="text-neutral-400 text-sm mb-4">
+                                        Entfernt "Team " Präfix aus Team-Namen und löscht fehlerhafte DienstplanConfigs.
+                                        <br />
+                                        <span className="text-yellow-400">⚠️ Führe dies aus wenn "Klient-Zuordnung fehlt" Fehler auftreten!</span>
+                                    </p>
+                                    <button
+                                        onClick={async () => {
+                                            if (!confirm('Team-Namen jetzt korrigieren?')) return;
+
+                                            const btn = document.activeElement as HTMLButtonElement;
+                                            btn.disabled = true;
+                                            btn.textContent = 'Korrigiere...';
+
+                                            try {
+                                                const res = await fetch('/api/admin/fix-team-names', {
+                                                    method: 'POST',
+                                                    credentials: 'include'
+                                                });
+                                                const result = await res.json();
+
+                                                if (res.ok) {
+                                                    toast.success(`✅ ${result.results.fixed} Team-Namen korrigiert!`);
+                                                    setTimeout(() => window.location.reload(), 1500);
+                                                } else {
+                                                    toast.error(result.error || 'Fehler beim Korrigieren');
+                                                }
+                                            } catch (err) {
+                                                toast.error('Netzwerkfehler');
+                                            } finally {
+                                                btn.disabled = false;
+                                                btn.textContent = 'Jetzt korrigieren';
+                                            }
+                                        }}
+                                        className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium transition-colors"
+                                    >
+                                        🔧 Jetzt korrigieren
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Orphaned Teams Section */}
                         <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
                             <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
