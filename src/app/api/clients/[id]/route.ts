@@ -194,19 +194,24 @@ export async function DELETE(
         }
 
         if (permanent) {
-            // Permanent löschen - nur wenn keine Teams zugeordnet
-            if (existingClient.teams.length > 0) {
-                return NextResponse.json(
-                    { error: `Klient kann nicht gelöscht werden. Es sind noch ${existingClient.teams.length} Teams zugeordnet.` },
-                    { status: 400 }
-                )
+            // ✅ FIX: Permanent löschen mit CASCADE DELETE
+            // Teams werden automatisch mitgelöscht dank onDelete: Cascade im Schema
+
+            // Trenne Mitarbeiter von Teams zuerst
+            for (const team of existingClient.teams) {
+                await prisma.user.updateMany({
+                    where: { teamId: team.id },
+                    data: { teamId: null }
+                })
             }
 
+            // Klient löschen (CASCADE löscht Teams automatisch)
             await prisma.client.delete({
                 where: { id }
             })
         } else {
             // Soft delete - setze isActive auf false
+            // ⚠️ WARNUNG: Teams bleiben aktiv, aber Klient wird als inaktiv markiert
             await prisma.client.update({
                 where: { id },
                 data: { isActive: false }

@@ -52,7 +52,7 @@ model Team {
   timesheets              Timesheet[]
   members                 User[]
   submissions             MonthlySubmission[]
-  client                  Client?             @relation(fields: [clientId], references: [id])
+  client                  Client?             @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
 model Client {
