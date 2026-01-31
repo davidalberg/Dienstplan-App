@@ -56,9 +56,13 @@ export async function GET(req: NextRequest) {
                 _count: {
                     select: { timesheets: true }
                 },
+                // ✅ PERFORMANCE FIX: Only fetch absence timesheets (much smaller subset)
                 timesheets: {
                     select: {
                         absenceType: true
+                    },
+                    where: {
+                        absenceType: { not: null }  // Only fetch SICK/VACATION (10-20% of data)
                     }
                 }
             },

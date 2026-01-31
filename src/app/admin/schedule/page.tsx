@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from "date-fns"
 import { de } from "date-fns/locale"
 import { useRouter } from "next/navigation"
@@ -138,8 +138,8 @@ export default function SchedulePage() {
         }
     }, [shifts.length])
 
-    // Gruppiere Schichten nach Klient
-    const groupedShifts = () => {
+    // ✅ PERFORMANCE FIX: Memoize grouping logic (was recalculating on every render)
+    const groupedShifts = useMemo(() => {
         const groups: Record<string, { client: Client | null; shifts: Shift[] }> = {}
 
         shifts.forEach(shift => {
@@ -170,9 +170,10 @@ export default function SchedulePage() {
             const bName = `${b.client?.firstName} ${b.client?.lastName}`
             return aName.localeCompare(bName)
         })
-    }
+    }, [shifts])  // Only recalculate when shifts array changes
 
-    const toggleClientExpansion = (clientId: string) => {
+    // ✅ PERFORMANCE FIX: Memoize event handler to prevent re-renders
+    const toggleClientExpansion = useCallback((clientId: string) => {
         setExpandedClients(prev => {
             const next = new Set(prev)
             if (next.has(clientId)) {
@@ -182,7 +183,7 @@ export default function SchedulePage() {
             }
             return next
         })
-    }
+    }, [])
 
     // Modal State
     const [showModal, setShowModal] = useState(false)
@@ -336,7 +337,8 @@ export default function SchedulePage() {
         }
     }
 
-    const handleDelete = async (id: string) => {
+    // ✅ PERFORMANCE FIX: Memoize event handler
+    const handleDelete = useCallback(async (id: string) => {
         if (!confirm("Schicht wirklich löschen?")) return
 
         try {
@@ -350,7 +352,7 @@ export default function SchedulePage() {
         } catch (err) {
             showToast("error", "Netzwerkfehler")
         }
-    }
+    }, [setShifts])
 
     const handleBulkDelete = async () => {
         if (selectedShiftIds.size === 0) return
@@ -386,7 +388,8 @@ export default function SchedulePage() {
         }
     }
 
-    const toggleShiftSelection = (shiftId: string) => {
+    // ✅ PERFORMANCE FIX: Memoize event handler for checkbox performance
+    const toggleShiftSelection = useCallback((shiftId: string) => {
         setSelectedShiftIds(prev => {
             const newSet = new Set(prev)
             if (newSet.has(shiftId)) {
@@ -396,15 +399,16 @@ export default function SchedulePage() {
             }
             return newSet
         })
-    }
+    }, [])
 
-    const toggleSelectAll = () => {
+    // ✅ PERFORMANCE FIX: Memoize event handler
+    const toggleSelectAll = useCallback(() => {
         if (selectedShiftIds.size === shifts.length) {
             setSelectedShiftIds(new Set())
         } else {
             setSelectedShiftIds(new Set(shifts.map(s => s.id)))
         }
-    }
+    }, [selectedShiftIds.size, shifts])
 
     const openCreateModal = (date?: Date) => {
         setEditingShift(null)
@@ -443,7 +447,8 @@ export default function SchedulePage() {
         setShowModal(true)
     }
 
-    const openTimesheetPreview = (shift: Shift) => {
+    // ✅ PERFORMANCE FIX: Memoize event handler
+    const openTimesheetPreview = useCallback((shift: Shift) => {
         // Validierung: clientId ist REQUIRED für TimesheetDetail
         const clientId = shift.employee?.team?.client?.id
 
@@ -462,7 +467,7 @@ export default function SchedulePage() {
             clientId: clientId
         })
         setShowTimesheetDetail(true)
-    }
+    }, [])
 
     const closeTimesheetPreview = () => {
         setShowTimesheetDetail(false)
@@ -501,6 +506,18 @@ export default function SchedulePage() {
     const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"]
 
     if (!session) return null
+
+    // ✅ BLACK SCREEN FIX: Show loading spinner while data is loading
+    if (isLoading && shifts.length === 0) {
+        return (
+            <div className="admin-dark min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-violet-500 mb-4"></div>
+                    <p className="text-neutral-400 font-medium">Dienstplan wird geladen...</p>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="admin-dark min-h-screen bg-neutral-950 p-6">
@@ -605,7 +622,7 @@ export default function SchedulePage() {
                                 Keine Schichten für diesen Monat
                             </div>
                         ) : (
-                            groupedShifts().map(([clientId, group]) => {
+                            groupedShifts.map(([clientId, group]) => {
                                 const isExpanded = expandedClients.has(clientId)
                                 const clientName = group.client
                                     ? `${group.client.firstName} ${group.client.lastName}`

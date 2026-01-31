@@ -70,6 +70,8 @@ model Client {
   teams        Team[]
   employees    User[]           // Many-to-many: Assistenzkräfte die für diesen Klienten arbeiten
   submissions  TeamSubmission[] // Stundennachweise für diesen Klienten
+
+  @@index([isActive])  // ✅ PERFORMANCE FIX: Für GET /api/clients mit isActive filter
 }
 
 model Timesheet {
@@ -102,6 +104,8 @@ model Timesheet {
   @@index([month, year, employeeId])
   @@index([date, status])
   @@index([backupEmployeeId, month, year])
+  @@index([month, year, teamId])     // ✅ PERFORMANCE FIX: Für GET /api/admin/schedule mit teamId filter
+  @@index([teamId, month, year])     // ✅ PERFORMANCE FIX: Alternative für team-based queries
 }
 
 model AuditLog {
@@ -221,6 +225,7 @@ model TeamSubmission {
   @@index([signatureToken])
   @@index([status])
   @@index([clientId, month, year])
+  @@index([month, year])            // ✅ PERFORMANCE FIX: Für submissions overview ohne clientId filter
 }
 
 // NEU: Einzelne Mitarbeiter-Unterschriften innerhalb einer Team-Einreichung

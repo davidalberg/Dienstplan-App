@@ -70,7 +70,10 @@
       "Bash(xargs:*)",
       "Bash(npx prisma studio)",
       "Bash(npx ts-node:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)"
     ]
   }
 }

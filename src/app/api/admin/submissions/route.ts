@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { getAllEmployeesInDienstplan } from "@/lib/team-submission-utils"
+
+/**
+ * Helper: Extract teamName from generated sheetFileName (if applicable)
+ * Format: "Team_TeamName_Jahr"
+ */
+function extractTeamNameFromSheetFileName(sheetFileName: string): string | null {
+    const match = sheetFileName.match(/^Team_(.+)_\d{4}$/)
+    return match ? match[1].replace(/_/g, ' ') : null
+}
 
 /**
  * GET /api/admin/submissions
@@ -14,6 +22,11 @@ import { getAllEmployeesInDienstplan } from "@/lib/team-submission-utils"
  * Sources for pendingDienstplaene:
  * 1. DienstplanConfig entries without a submission for the target month
  * 2. Teams/clients that have timesheets in the month but no DienstplanConfig or submission
+ *
+ * OPTIMIZED: Uses batch-loading pattern to avoid N+1 queries
+ * - Single batch query for all timesheets across all submissions
+ * - In-memory grouping by sheetFileName
+ * - Reduces 100+ queries to 4-5 queries total
  */
 export async function GET(req: NextRequest) {
     try {
@@ -105,129 +118,312 @@ export async function GET(req: NextRequest) {
             })
         ])
 
-        // For each submission, get total employee count
-        const submissionsWithProgress = await Promise.all(
-            teamSubmissions.map(async (submission) => {
-                const allEmployees = await getAllEmployeesInDienstplan(
-                    submission.sheetFileName,
-                    submission.month,
-                    submission.year
-                )
+        // ========== BATCH-LOADING: Collect all unique sheetFileName/month/year combinations ==========
+        // This replaces the N+1 calls to getAllEmployeesInDienstplan()
 
-                // Get recipient info from dienstplanConfig or client
-                const recipientEmail = submission.dienstplanConfig?.assistantRecipientEmail || submission.client?.email || null
-                const recipientName = submission.dienstplanConfig?.assistantRecipientName ||
-                    (submission.client ? `${submission.client.firstName} ${submission.client.lastName}` : null)
+        // Collect all sheetFileNames from teamSubmissions (across all months/years)
+        const submissionKeys = teamSubmissions.map(s => ({
+            sheetFileName: s.sheetFileName,
+            month: s.month,
+            year: s.year
+        }))
 
-                return {
-                    id: submission.id,
-                    sheetFileName: submission.sheetFileName,
-                    employeeNames: allEmployees.map(emp => emp.name).filter(Boolean), // Array of employee names
-                    month: submission.month,
-                    year: submission.year,
-                    status: submission.status,
-                    createdAt: submission.createdAt,
-                    updatedAt: submission.updatedAt,
-                    recipientEmail,
-                    recipientName,
-                    recipientSignedAt: submission.recipientSignedAt,
-                    manuallyReleasedAt: submission.manuallyReleasedAt,
-                    manuallyReleasedBy: submission.manuallyReleasedBy,
-                    releaseNote: submission.releaseNote,
-                    pdfUrl: submission.pdfUrl,
-                    totalEmployees: allEmployees.length,
-                    signedEmployees: submission.employeeSignatures.length,
-                    employeeSignatures: submission.employeeSignatures.map(sig => ({
-                        employeeId: sig.employeeId,
-                        employeeName: sig.employee.name,
-                        employeeEmail: sig.employee.email,
-                        signedAt: sig.signedAt
-                    })),
-                    client: submission.client ? {
-                        id: submission.client.id,
-                        firstName: submission.client.firstName,
-                        lastName: submission.client.lastName,
-                        email: submission.client.email
-                    } : null,
-                    clientId: submission.clientId
-                }
-            })
-        )
-
-        // Find configs that don't have a TeamSubmission for the target month/year
+        // Also collect from pending configs for target month
         const submittedSheetFileNames = new Set(
             teamSubmissions
                 .filter(s => s.month === targetMonth && s.year === targetYear)
                 .map(s => s.sheetFileName)
         )
 
-        const pendingDienstplaene = await Promise.all(
-            allConfigs
-                .filter(config => !submittedSheetFileNames.has(config.sheetFileName))
-                .map(async (config) => {
-                    // Get employee count for this Dienstplan
-                    const allEmployees = await getAllEmployeesInDienstplan(
-                        config.sheetFileName,
-                        targetMonth,
-                        targetYear
-                    )
+        const pendingConfigKeys = allConfigs
+            .filter(config => !submittedSheetFileNames.has(config.sheetFileName))
+            .map(config => ({
+                sheetFileName: config.sheetFileName,
+                month: targetMonth,
+                year: targetYear
+            }))
 
-                    // Get client info from timesheets in this Dienstplan
-                    let client = null
-                    let clientId = null
-                    let timesheetCount = 0
+        // Combine all keys and deduplicate
+        const allKeys = [...submissionKeys, ...pendingConfigKeys]
+        const uniqueKeySet = new Map<string, { sheetFileName: string; month: number; year: number }>()
+        for (const key of allKeys) {
+            const keyString = `${key.sheetFileName}|${key.month}|${key.year}`
+            if (!uniqueKeySet.has(keyString)) {
+                uniqueKeySet.set(keyString, key)
+            }
+        }
 
-                    if (allEmployees.length > 0) {
-                        // Get first employee's team -> client
-                        const employee = await prisma.user.findUnique({
-                            where: { id: allEmployees[0].id },
-                            include: {
-                                team: {
-                                    include: {
-                                        client: true
-                                    }
+        // Build OR conditions for batch query
+        const uniqueKeys = Array.from(uniqueKeySet.values())
+
+        // Single batch query: Get all timesheets for all submissions at once
+        let batchedTimesheets: Array<{
+            sheetFileName: string | null
+            month: number
+            year: number
+            employeeId: string
+            teamId: string | null
+            employee: { id: string; name: string | null; email: string } | null
+            team: {
+                id: string
+                name: string
+                client: { id: string; firstName: string; lastName: string; email: string | null } | null
+            } | null
+        }> = []
+
+        if (uniqueKeys.length > 0) {
+            // For performance, we query by month/year ranges and filter in memory
+            // This avoids massive OR conditions
+            const monthYearCombos = new Map<string, { month: number; year: number }>()
+            for (const key of uniqueKeys) {
+                const combo = `${key.month}|${key.year}`
+                if (!monthYearCombos.has(combo)) {
+                    monthYearCombos.set(combo, { month: key.month, year: key.year })
+                }
+            }
+
+            // Query all timesheets for all month/year combinations
+            const orConditions = Array.from(monthYearCombos.values()).map(combo => ({
+                month: combo.month,
+                year: combo.year
+            }))
+
+            batchedTimesheets = await prisma.timesheet.findMany({
+                where: {
+                    OR: orConditions
+                },
+                select: {
+                    sheetFileName: true,
+                    month: true,
+                    year: true,
+                    employeeId: true,
+                    teamId: true,
+                    employee: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true
+                        }
+                    },
+                    team: {
+                        select: {
+                            id: true,
+                            name: true,
+                            client: {
+                                select: {
+                                    id: true,
+                                    firstName: true,
+                                    lastName: true,
+                                    email: true
                                 }
                             }
-                        })
-
-                        if (employee?.team?.client) {
-                            client = {
-                                id: employee.team.client.id,
-                                firstName: employee.team.client.firstName,
-                                lastName: employee.team.client.lastName,
-                                email: employee.team.client.email
-                            }
-                            clientId = employee.team.client.id
                         }
-
-                        // Count timesheets for this Dienstplan
-                        timesheetCount = await prisma.timesheet.count({
-                            where: {
-                                sheetFileName: config.sheetFileName,
-                                month: targetMonth,
-                                year: targetYear
-                            }
-                        })
                     }
+                }
+            })
+        }
 
-                    return {
-                        id: null, // No submission yet
-                        sheetFileName: config.sheetFileName,
-                        employeeNames: allEmployees.map(emp => emp.name).filter(Boolean), // Array of employee names
-                        month: targetMonth,
-                        year: targetYear,
-                        status: "NOT_STARTED",
-                        recipientEmail: config.assistantRecipientEmail,
-                        recipientName: config.assistantRecipientName,
-                        totalEmployees: allEmployees.length,
-                        signedEmployees: 0,
-                        employeeSignatures: [],
-                        client,
-                        clientId,
-                        timesheetCount
-                    }
+        // ========== GROUP TIMESHEETS BY sheetFileName/month/year ==========
+        // Map key: "sheetFileName|month|year" -> employees Map + client info + count
+        const timesheetsByKey = new Map<string, {
+            employees: Map<string, { id: string; name: string | null; email: string }>
+            client: { id: string; firstName: string; lastName: string; email: string | null } | null
+            count: number
+        }>()
+
+        // Also track teams by name for legacy sheetFileName fallback
+        const teamsByName = new Map<string, string>() // teamName -> teamId
+
+        for (const ts of batchedTimesheets) {
+            // Track teams for fallback
+            if (ts.team) {
+                teamsByName.set(ts.team.name.toLowerCase(), ts.team.id)
+            }
+
+            // Skip if no sheetFileName (will handle in fallback)
+            if (!ts.sheetFileName) continue
+
+            const key = `${ts.sheetFileName}|${ts.month}|${ts.year}`
+
+            let entry = timesheetsByKey.get(key)
+            if (!entry) {
+                entry = {
+                    employees: new Map(),
+                    client: null,
+                    count: 0
+                }
+                timesheetsByKey.set(key, entry)
+            }
+
+            // Add employee (deduplicated by Map key)
+            if (ts.employee) {
+                entry.employees.set(ts.employee.id, {
+                    id: ts.employee.id,
+                    name: ts.employee.name,
+                    email: ts.employee.email
                 })
-        )
+            }
+
+            // Track first client found
+            if (!entry.client && ts.team?.client) {
+                entry.client = ts.team.client
+            }
+
+            entry.count++
+        }
+
+        // ========== FALLBACK: Handle legacy "Team_*_Year" sheetFileNames ==========
+        // For sheetFileNames that have no timesheets, check if they're generated team names
+        for (const key of uniqueKeys) {
+            const mapKey = `${key.sheetFileName}|${key.month}|${key.year}`
+            if (!timesheetsByKey.has(mapKey) || timesheetsByKey.get(mapKey)!.employees.size === 0) {
+                const teamName = extractTeamNameFromSheetFileName(key.sheetFileName)
+                if (teamName) {
+                    // Find matching team
+                    const teamId = teamsByName.get(teamName.toLowerCase())
+                    if (teamId) {
+                        // Look for legacy timesheets with this teamId and null sheetFileName
+                        const legacyTimesheets = batchedTimesheets.filter(
+                            ts => ts.teamId === teamId &&
+                                  ts.month === key.month &&
+                                  ts.year === key.year &&
+                                  !ts.sheetFileName
+                        )
+
+                        if (legacyTimesheets.length > 0) {
+                            const entry = {
+                                employees: new Map<string, { id: string; name: string | null; email: string }>(),
+                                client: null as { id: string; firstName: string; lastName: string; email: string | null } | null,
+                                count: 0
+                            }
+
+                            for (const ts of legacyTimesheets) {
+                                if (ts.employee) {
+                                    entry.employees.set(ts.employee.id, {
+                                        id: ts.employee.id,
+                                        name: ts.employee.name,
+                                        email: ts.employee.email
+                                    })
+                                }
+                                if (!entry.client && ts.team?.client) {
+                                    entry.client = ts.team.client
+                                }
+                                entry.count++
+                            }
+
+                            timesheetsByKey.set(mapKey, entry)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ========== HELPER: Get employees for a sheetFileName/month/year ==========
+        const getEmployeesForKey = (sheetFileName: string, month: number, year: number): Array<{ id: string; name: string | null; email: string }> => {
+            const key = `${sheetFileName}|${month}|${year}`
+            const entry = timesheetsByKey.get(key)
+            if (!entry) return []
+            return Array.from(entry.employees.values()).sort((a, b) =>
+                (a.name || '').localeCompare(b.name || '', 'de')
+            )
+        }
+
+        const getClientForKey = (sheetFileName: string, month: number, year: number): { id: string; firstName: string; lastName: string; email: string | null } | null => {
+            const key = `${sheetFileName}|${month}|${year}`
+            const entry = timesheetsByKey.get(key)
+            return entry?.client || null
+        }
+
+        const getTimesheetCountForKey = (sheetFileName: string, month: number, year: number): number => {
+            const key = `${sheetFileName}|${month}|${year}`
+            const entry = timesheetsByKey.get(key)
+            return entry?.count || 0
+        }
+
+        // ========== BUILD SUBMISSIONS RESPONSE (no more N+1!) ==========
+        const submissionsWithProgress = teamSubmissions.map((submission) => {
+            const allEmployees = getEmployeesForKey(
+                submission.sheetFileName,
+                submission.month,
+                submission.year
+            )
+
+            // Get recipient info from dienstplanConfig or client
+            const recipientEmail = submission.dienstplanConfig?.assistantRecipientEmail || submission.client?.email || null
+            const recipientName = submission.dienstplanConfig?.assistantRecipientName ||
+                (submission.client ? `${submission.client.firstName} ${submission.client.lastName}` : null)
+
+            return {
+                id: submission.id,
+                sheetFileName: submission.sheetFileName,
+                employeeNames: allEmployees.map(emp => emp.name).filter(Boolean), // Array of employee names
+                month: submission.month,
+                year: submission.year,
+                status: submission.status,
+                createdAt: submission.createdAt,
+                updatedAt: submission.updatedAt,
+                recipientEmail,
+                recipientName,
+                recipientSignedAt: submission.recipientSignedAt,
+                manuallyReleasedAt: submission.manuallyReleasedAt,
+                manuallyReleasedBy: submission.manuallyReleasedBy,
+                releaseNote: submission.releaseNote,
+                pdfUrl: submission.pdfUrl,
+                totalEmployees: allEmployees.length,
+                signedEmployees: submission.employeeSignatures.length,
+                employeeSignatures: submission.employeeSignatures.map(sig => ({
+                    employeeId: sig.employeeId,
+                    employeeName: sig.employee.name,
+                    employeeEmail: sig.employee.email,
+                    signedAt: sig.signedAt
+                })),
+                client: submission.client ? {
+                    id: submission.client.id,
+                    firstName: submission.client.firstName,
+                    lastName: submission.client.lastName,
+                    email: submission.client.email
+                } : null,
+                clientId: submission.clientId
+            }
+        })
+
+        // ========== BUILD PENDING DIENSTPLAENE (no more N+1!) ==========
+        const pendingDienstplaene = allConfigs
+            .filter(config => !submittedSheetFileNames.has(config.sheetFileName))
+            .map((config) => {
+                // Get employee count for this Dienstplan (from pre-loaded data)
+                const allEmployees = getEmployeesForKey(
+                    config.sheetFileName,
+                    targetMonth,
+                    targetYear
+                )
+
+                // Get client info (from pre-loaded data)
+                const client = getClientForKey(config.sheetFileName, targetMonth, targetYear)
+                const timesheetCount = getTimesheetCountForKey(config.sheetFileName, targetMonth, targetYear)
+
+                return {
+                    id: null, // No submission yet
+                    sheetFileName: config.sheetFileName,
+                    employeeNames: allEmployees.map(emp => emp.name).filter(Boolean), // Array of employee names
+                    month: targetMonth,
+                    year: targetYear,
+                    status: "NOT_STARTED",
+                    recipientEmail: config.assistantRecipientEmail,
+                    recipientName: config.assistantRecipientName,
+                    totalEmployees: allEmployees.length,
+                    signedEmployees: 0,
+                    employeeSignatures: [],
+                    client: client ? {
+                        id: client.id,
+                        firstName: client.firstName,
+                        lastName: client.lastName,
+                        email: client.email
+                    } : null,
+                    clientId: client?.id || null,
+                    timesheetCount
+                }
+            })
 
         // Filter out Dienstpläne with 0 employees (no timesheets for this month)
         const pendingFromConfigs = pendingDienstplaene.filter(d => d.totalEmployees > 0)
