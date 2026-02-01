@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
                     sheetFileName,
                     month,
                     year,
-                    status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED"] }
+                    status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
                 },
                 orderBy: { date: "asc" },
                 select: {
