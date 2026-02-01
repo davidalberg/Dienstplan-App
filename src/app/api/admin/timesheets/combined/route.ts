@@ -275,6 +275,15 @@ export async function GET(req: NextRequest) {
             }
         })
 
+        // Build flat timesheets array with employee info
+        const flatTimesheets = employeesData.flatMap(employee =>
+            employee.timesheets.map(ts => ({
+                ...ts,
+                employeeId: employee.id,
+                employeeName: employee.name
+            }))
+        )
+
         // Build employee signature data
         const signatureMap = new Map<string, {
             signed: boolean
@@ -328,7 +337,15 @@ export async function GET(req: NextRequest) {
             sheetFileName,
             month,
             year,
-            employees: employeesData,
+            // Employees without nested timesheets (just stats)
+            employees: employeesData.map(emp => ({
+                id: emp.id,
+                name: emp.name,
+                email: emp.email,
+                stats: emp.stats
+            })),
+            // Flat timesheets array with employeeId and employeeName
+            timesheets: flatTimesheets,
             totalHours: Math.round(totalHoursAllEmployees * 100) / 100,
             submission: submission ? {
                 id: submission.id,
