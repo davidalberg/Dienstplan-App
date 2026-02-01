@@ -29,7 +29,7 @@ export async function getEmployeesInDienstplan(
             sheetFileName,
             month,
             year,
-            status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED"] }
+            status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
         },
         select: {
             employeeId: true
@@ -56,7 +56,7 @@ export async function getEmployeesInDienstplan(
                         month,
                         year,
                         sheetFileName: null, // Nur Legacy-Daten
-                        status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED"] }
+                        status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
                     },
                     select: {
                         employeeId: true

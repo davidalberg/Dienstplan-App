@@ -312,7 +312,7 @@ export function aggregateMonthlyData(
 
         // Nur tatsächlich gearbeitete Stunden zählen (nicht Abwesenheiten)
         // FIX: Fallback auf planned times für bestätigte Dienste
-        const isConfirmed = ['CONFIRMED', 'CHANGED', 'SUBMITTED'].includes(ts.status)
+        const isConfirmed = ['CONFIRMED', 'CHANGED', 'SUBMITTED', 'COMPLETED'].includes(ts.status)
 
         if (isConfirmed && !ts.absenceType) {
             // Verwende actual wenn vorhanden, sonst planned
