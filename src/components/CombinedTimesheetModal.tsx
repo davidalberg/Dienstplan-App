@@ -83,14 +83,6 @@ interface CombinedTimesheetData {
     }
 }
 
-interface GroupedTimesheet {
-    date: string
-    formattedDate: string
-    weekday: string
-    isNewDate: boolean
-    timesheets: Timesheet[]
-}
-
 // Avatar component
 function Avatar({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
     const colors = [
@@ -132,37 +124,14 @@ export default function CombinedTimesheetModal({
 
     const monthName = `${MONTH_NAMES[month - 1]} ${year}`
 
-    // Group timesheets chronologically by date
-    const groupedTimesheets = useMemo((): GroupedTimesheet[] => {
+    // Sort timesheets chronologically by date
+    const sortedTimesheets = useMemo((): Timesheet[] => {
         if (!data) return []
 
         // Sort all timesheets by date
-        const sorted = [...data.timesheets].sort((a, b) =>
+        return [...data.timesheets].sort((a, b) =>
             new Date(a.date).getTime() - new Date(b.date).getTime()
         )
-
-        // Group by date
-        const groups: GroupedTimesheet[] = []
-        let currentDate = ''
-
-        sorted.forEach(ts => {
-            const isNewDate = ts.date !== currentDate
-
-            if (isNewDate) {
-                currentDate = ts.date
-                groups.push({
-                    date: ts.date,
-                    formattedDate: ts.formattedDate,
-                    weekday: ts.weekday,
-                    isNewDate: true,
-                    timesheets: [ts]
-                })
-            } else {
-                groups[groups.length - 1].timesheets.push(ts)
-            }
-        })
-
-        return groups
     }, [data])
 
     // Format date for display
@@ -353,61 +322,49 @@ export default function CombinedTimesheetModal({
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-neutral-700">
-                                        {groupedTimesheets.length === 0 && (
+                                        {sortedTimesheets.length === 0 && (
                                             <tr>
                                                 <td colSpan={6} className="px-3 py-8 text-center text-neutral-500">
                                                     Keine Schichten für diesen Zeitraum
                                                 </td>
                                             </tr>
                                         )}
-                                        {groupedTimesheets.map((group, groupIdx) => (
-                                            <>
-                                                {/* Date Header Row */}
-                                                <tr key={`header-${groupIdx}`} className="bg-neutral-800/50">
-                                                    <td colSpan={6} className="px-3 py-2 text-xs font-semibold text-neutral-300">
-                                                        {group.formattedDate} {group.weekday}
-                                                    </td>
-                                                </tr>
-
-                                                {/* Employee Rows for this date */}
-                                                {group.timesheets.map((ts) => (
-                                                    <tr key={ts.id} className="hover:bg-neutral-800/30 transition-colors">
-                                                        <td className="px-3 py-2 text-neutral-400 text-xs">
-                                                            {/* Empty - date shown in header */}
-                                                        </td>
-                                                        <td className="px-3 py-2">
-                                                            <button
-                                                                onClick={() => handleOpenIndividual(ts.employeeId)}
-                                                                className="text-white hover:text-violet-400 transition font-medium text-left"
-                                                            >
-                                                                {ts.employeeName}
-                                                            </button>
-                                                        </td>
-                                                        <td className="px-3 py-2 text-neutral-400">
-                                                            {ts.plannedStart && ts.plannedEnd
-                                                                ? `${ts.plannedStart} - ${ts.plannedEnd}`
+                                        {sortedTimesheets.map((ts) => (
+                                            <tr key={ts.id} className="hover:bg-neutral-800/30 transition-colors">
+                                                <td className="px-3 py-2 text-neutral-400 text-xs whitespace-nowrap">
+                                                    {ts.formattedDate}
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <button
+                                                        onClick={() => handleOpenIndividual(ts.employeeId)}
+                                                        className="text-white hover:text-violet-400 transition font-medium text-left"
+                                                    >
+                                                        {ts.employeeName}
+                                                    </button>
+                                                </td>
+                                                <td className="px-3 py-2 text-neutral-400 whitespace-nowrap">
+                                                    {ts.plannedStart && ts.plannedEnd
+                                                        ? `${ts.plannedStart} - ${ts.plannedEnd}`
+                                                        : '-'
+                                                    }
+                                                </td>
+                                                <td className="px-3 py-2 text-neutral-400 whitespace-nowrap">
+                                                    {ts.actualStart && ts.actualEnd
+                                                        ? `${ts.actualStart} - ${ts.actualEnd}`
+                                                        : ts.absenceType === "SICK"
+                                                            ? "Krank"
+                                                            : ts.absenceType === "VACATION"
+                                                                ? "Urlaub"
                                                                 : '-'
-                                                            }
-                                                        </td>
-                                                        <td className="px-3 py-2 text-neutral-400">
-                                                            {ts.actualStart && ts.actualEnd
-                                                                ? `${ts.actualStart} - ${ts.actualEnd}`
-                                                                : ts.absenceType === "SICK"
-                                                                    ? "Krank"
-                                                                    : ts.absenceType === "VACATION"
-                                                                        ? "Urlaub"
-                                                                        : '-'
-                                                            }
-                                                        </td>
-                                                        <td className="px-3 py-2 text-right text-white font-medium">
-                                                            {ts.absenceType ? '-' : `${ts.hours.toFixed(2)}h`}
-                                                        </td>
-                                                        <td className="px-3 py-2 text-neutral-400 text-xs truncate max-w-xs">
-                                                            {ts.note || '-'}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </>
+                                                    }
+                                                </td>
+                                                <td className="px-3 py-2 text-right text-white font-medium">
+                                                    {ts.absenceType ? '-' : `${ts.hours.toFixed(2)}h`}
+                                                </td>
+                                                <td className="px-3 py-2 text-neutral-400 text-xs truncate max-w-xs">
+                                                    {ts.note || '-'}
+                                                </td>
+                                            </tr>
                                         ))}
                                     </tbody>
                                 </table>

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { sendSignatureRequestEmail, sendEmployeeConfirmationEmail, sendEmployeeSignatureEmail } from "@/lib/email"
+import { sendSignatureRequestEmail } from "@/lib/email"
 import { randomBytes } from "crypto"
+import { getEmployeesInDienstplan } from "@/lib/team-submission-utils"
 
 /**
  * POST /api/admin/submissions/send-email
- * Send signature request email to employee or client
+ * Send signature request email to client (Assistenznehmer)
+ *
+ * Supports two modes:
+ * 1. Combined mode (new): { sheetFileName, clientId, month, year }
+ * 2. Legacy mode: { employeeId, clientId, month, year, type: "client" }
  */
 export async function POST(req: NextRequest) {
     const session = await auth()
@@ -15,31 +20,38 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { employeeId, clientId, month, year, type } = body
+    const { employeeId, clientId, month, year, type, sheetFileName } = body
 
-    if (!employeeId || !clientId || !month || !year || !type) {
+    // Validate required parameters
+    if (!clientId || !month || !year) {
         return NextResponse.json({
-            error: "employeeId, clientId, month, year und type sind erforderlich"
+            error: "clientId, month und year sind erforderlich"
         }, { status: 400 })
     }
 
-    if (type !== "employee" && type !== "client") {
+    // Determine mode: Combined (sheetFileName) or Legacy (employeeId + type)
+    const isCombinedMode = !!sheetFileName
+    const isLegacyMode = !!employeeId && !!type
+
+    if (!isCombinedMode && !isLegacyMode) {
         return NextResponse.json({
-            error: "type muss 'employee' oder 'client' sein"
+            error: "Entweder sheetFileName oder (employeeId + type) sind erforderlich"
+        }, { status: 400 })
+    }
+
+    // Legacy mode validation
+    if (isLegacyMode && type !== "client") {
+        if (type === "employee") {
+            return NextResponse.json({
+                error: "Mitarbeiter-E-Mails sind deaktiviert. Mitarbeiter unterschreiben direkt im System."
+            }, { status: 400 })
+        }
+        return NextResponse.json({
+            error: "type muss 'client' sein"
         }, { status: 400 })
     }
 
     try {
-        // Load employee
-        const employee = await prisma.user.findUnique({
-            where: { id: employeeId },
-            select: { id: true, name: true, email: true }
-        })
-
-        if (!employee) {
-            return NextResponse.json({ error: "Mitarbeiter nicht gefunden" }, { status: 404 })
-        }
-
         // Load client
         const client = await prisma.client.findUnique({
             where: { id: clientId },
@@ -50,14 +62,38 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Klient nicht gefunden" }, { status: 404 })
         }
 
+        if (!client.email) {
+            return NextResponse.json({
+                error: "Fuer diesen Klienten ist keine E-Mail-Adresse hinterlegt"
+            }, { status: 400 })
+        }
+
         const clientName = `${client.firstName} ${client.lastName}`
 
+        // Determine the sheetFileName to use
+        let targetSheetFileName = sheetFileName
+
+        if (!targetSheetFileName && employeeId) {
+            // Legacy mode: Find sheetFileName from employee's timesheets
+            const sampleTimesheet = await prisma.timesheet.findFirst({
+                where: {
+                    employeeId,
+                    month,
+                    year
+                },
+                select: { sheetFileName: true }
+            })
+            targetSheetFileName = sampleTimesheet?.sheetFileName || clientName
+        }
+
         // Find existing TeamSubmission or create one
-        let teamSubmission = await prisma.teamSubmission.findFirst({
+        let teamSubmission = await prisma.teamSubmission.findUnique({
             where: {
-                clientId,
-                month,
-                year
+                sheetFileName_month_year: {
+                    sheetFileName: targetSheetFileName,
+                    month,
+                    year
+                }
             },
             include: {
                 employeeSignatures: {
@@ -69,27 +105,35 @@ export async function POST(req: NextRequest) {
         })
 
         if (!teamSubmission) {
+            // Try finding by clientId as fallback (legacy data)
+            teamSubmission = await prisma.teamSubmission.findFirst({
+                where: {
+                    clientId,
+                    month,
+                    year
+                },
+                include: {
+                    employeeSignatures: {
+                        include: {
+                            employee: { select: { id: true, name: true, email: true } }
+                        }
+                    }
+                }
+            })
+        }
+
+        if (!teamSubmission) {
             // Create new TeamSubmission
             const signatureToken = randomBytes(32).toString("hex")
             const tokenExpiresAt = new Date()
             tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 14) // 14 days validity
-
-            // Find the sheetFileName from timesheets
-            const sampleTimesheet = await prisma.timesheet.findFirst({
-                where: {
-                    employeeId,
-                    month,
-                    year
-                },
-                select: { sheetFileName: true }
-            })
 
             teamSubmission = await prisma.teamSubmission.create({
                 data: {
                     month,
                     year,
                     clientId,
-                    sheetFileName: sampleTimesheet?.sheetFileName || clientName,
+                    sheetFileName: targetSheetFileName,
                     signatureToken,
                     tokenExpiresAt,
                     status: "PENDING_EMPLOYEES"
@@ -104,77 +148,82 @@ export async function POST(req: NextRequest) {
             })
         }
 
-        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+        // Get all employee IDs for this dienstplan
+        const allEmployeeIds = await getEmployeesInDienstplan(
+            teamSubmission.sheetFileName,
+            month,
+            year
+        )
 
-        if (type === "employee") {
-            // Mitarbeiter-E-Mails sind deaktiviert.
-            // Mitarbeiter unterschreiben direkt im System ueber ihr Dashboard.
+        // Check if all employees have signed (signature !== null)
+        const signedEmployeeIds = teamSubmission.employeeSignatures
+            .filter(sig => sig.signature !== null)
+            .map(sig => sig.employeeId)
+
+        const allSigned = allEmployeeIds.length > 0 &&
+            allEmployeeIds.every(empId => signedEmployeeIds.includes(empId))
+
+        if (!allSigned) {
             return NextResponse.json({
-                error: "Mitarbeiter-E-Mails sind deaktiviert. Mitarbeiter unterschreiben direkt im System."
+                error: "Nicht alle Mitarbeiter haben unterschrieben. Der Klient kann erst unterschreiben, wenn alle Mitarbeiter unterschrieben haben.",
+                signedCount: signedEmployeeIds.length,
+                totalCount: allEmployeeIds.length
             }, { status: 400 })
-        } else {
-            // Send email to client (Assistenznehmer)
-            if (!client.email) {
-                return NextResponse.json({
-                    error: "Für diesen Klienten ist keine E-Mail-Adresse hinterlegt"
-                }, { status: 400 })
-            }
+        }
 
-            // Check if all employees have signed
-            const allEmployeeIds = await prisma.timesheet.findMany({
-                where: {
-                    month,
-                    year,
-                    sheetFileName: teamSubmission.sheetFileName
-                },
-                select: { employeeId: true },
-                distinct: ['employeeId']
-            })
-
-            // Pruefe ob Mitarbeiter tatsaechlich unterschrieben haben (signature !== null)
-            const signedEmployeeIds = teamSubmission.employeeSignatures
-                .filter(sig => sig.signature !== null) // Nur wenn Signatur vorhanden
-                .map(sig => sig.employeeId)
-            const allSigned = allEmployeeIds.every(e => signedEmployeeIds.includes(e.employeeId))
-
-            if (!allSigned) {
-                return NextResponse.json({
-                    error: "Nicht alle Mitarbeiter haben unterschrieben. Der Klient kann erst unterschreiben, wenn alle Mitarbeiter unterschrieben haben.",
-                    signedCount: signedEmployeeIds.length,
-                    totalCount: allEmployeeIds.length
-                }, { status: 400 })
-            }
-
-            // Update status to PENDING_RECIPIENT if still in PENDING_EMPLOYEES
-            if (teamSubmission.status === "PENDING_EMPLOYEES") {
-                await prisma.teamSubmission.update({
-                    where: { id: teamSubmission.id },
-                    data: { status: "PENDING_RECIPIENT" }
-                })
-            }
-
-            // Build employee name list for email
-            const employeeNames = teamSubmission.employeeSignatures.map(sig =>
-                sig.employee.name || sig.employee.email
-            )
-
-            const signatureUrl = `${baseUrl}/sign/${teamSubmission.signatureToken}`
-
-            await sendSignatureRequestEmail({
-                recipientEmail: client.email,
-                recipientName: clientName,
-                employeeName: employeeNames.length === 1 ? employeeNames[0] : `Team (${employeeNames.length} Mitarbeiter)`,
-                month,
-                year,
-                signatureUrl,
-                expiresAt: teamSubmission.tokenExpiresAt
-            })
-
-            return NextResponse.json({
-                success: true,
-                message: `E-Mail an ${clientName} gesendet`
+        // Update status to PENDING_RECIPIENT if still in PENDING_EMPLOYEES
+        if (teamSubmission.status === "PENDING_EMPLOYEES") {
+            await prisma.teamSubmission.update({
+                where: { id: teamSubmission.id },
+                data: { status: "PENDING_RECIPIENT" }
             })
         }
+
+        // Ensure signature token exists and is valid
+        let signatureToken = teamSubmission.signatureToken
+        if (!signatureToken || (teamSubmission.tokenExpiresAt && teamSubmission.tokenExpiresAt < new Date())) {
+            // Generate new token if missing or expired
+            signatureToken = randomBytes(32).toString("hex")
+            const tokenExpiresAt = new Date()
+            tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 14)
+
+            await prisma.teamSubmission.update({
+                where: { id: teamSubmission.id },
+                data: {
+                    signatureToken,
+                    tokenExpiresAt
+                }
+            })
+        }
+
+        // Build employee name list for email
+        const employeeNames = teamSubmission.employeeSignatures
+            .filter(sig => sig.signature !== null)
+            .map(sig => sig.employee.name || sig.employee.email)
+
+        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+        const signatureUrl = `${baseUrl}/sign/${signatureToken}`
+
+        // Get token expiry date
+        const expiresAt = teamSubmission.tokenExpiresAt || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+
+        await sendSignatureRequestEmail({
+            recipientEmail: client.email,
+            recipientName: clientName,
+            employeeName: employeeNames.length === 1
+                ? employeeNames[0]
+                : `Team (${employeeNames.length} Mitarbeiter)`,
+            month,
+            year,
+            signatureUrl,
+            expiresAt
+        })
+
+        return NextResponse.json({
+            success: true,
+            message: `E-Mail an ${clientName} gesendet`
+        })
+
     } catch (error: any) {
         console.error("[POST /api/admin/submissions/send-email] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
