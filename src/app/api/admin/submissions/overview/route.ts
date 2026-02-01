@@ -71,7 +71,6 @@ export async function GET(req: NextRequest) {
                 plannedEnd: true,
                 actualStart: true,
                 actualEnd: true,
-                breakMinutes: true,
                 status: true,
                 absenceType: true,
                 // Team mit Client-Zuordnung laden
@@ -214,7 +213,7 @@ export async function GET(req: NextRequest) {
                     if (start && end && !ts.absenceType) {
                         const minutes = calculateMinutesBetween(start, end)
                         if (minutes !== null) {
-                            totalMinutes += minutes - (ts.breakMinutes || 0)
+                            totalMinutes += minutes
                         }
                     }
 

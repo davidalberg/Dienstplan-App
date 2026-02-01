@@ -118,6 +118,7 @@ export default function CombinedTimesheetModal({
     const [downloading, setDownloading] = useState<'pdf' | 'excel' | null>(null)
     const [sendingEmail, setSendingEmail] = useState(false)
     const [resetting, setResetting] = useState(false)
+    const [exportTemplate, setExportTemplate] = useState<"standard" | "datev" | "simple">("standard")
 
     // Fetch combined timesheet data
     const { data, error, isLoading, mutate } = useSWR<CombinedTimesheetData>(
@@ -160,7 +161,7 @@ export default function CombinedTimesheetModal({
         setDownloading('pdf')
         try {
             const res = await fetch(
-                `/api/admin/timesheets/combined/export?sheetFileName=${encodeURIComponent(sheetFileName)}&clientId=${clientId}&month=${month}&year=${year}&format=pdf`
+                `/api/admin/timesheets/combined/export?sheetFileName=${encodeURIComponent(sheetFileName)}&clientId=${clientId}&month=${month}&year=${year}&format=pdf&template=${exportTemplate}`
             )
 
             if (!res.ok) throw new Error("Download fehlgeschlagen")
@@ -188,7 +189,7 @@ export default function CombinedTimesheetModal({
         setDownloading('excel')
         try {
             const res = await fetch(
-                `/api/admin/timesheets/combined/export?sheetFileName=${encodeURIComponent(sheetFileName)}&clientId=${clientId}&month=${month}&year=${year}&format=xlsx`
+                `/api/admin/timesheets/combined/export?sheetFileName=${encodeURIComponent(sheetFileName)}&clientId=${clientId}&month=${month}&year=${year}&format=xlsx&template=${exportTemplate}`
             )
 
             if (!res.ok) throw new Error("Download fehlgeschlagen")
@@ -197,7 +198,7 @@ export default function CombinedTimesheetModal({
             const url = window.URL.createObjectURL(blob)
             const a = document.createElement("a")
             a.href = url
-            a.download = `${sheetFileName}_${month}_${year}.xlsx`
+            a.download = `${sheetFileName}_${month}_${year}_${exportTemplate}.xlsx`
             document.body.appendChild(a)
             a.click()
             window.URL.revokeObjectURL(url)
@@ -206,6 +207,34 @@ export default function CombinedTimesheetModal({
             showToast("success", "Excel-Download gestartet")
         } catch (err) {
             showToast("error", "Excel-Download fehlgeschlagen")
+        } finally {
+            setDownloading(null)
+        }
+    }
+
+    // Handle CSV download (for DATEV template)
+    const handleDownloadCSV = async () => {
+        setDownloading('excel') // Reuse excel state
+        try {
+            const res = await fetch(
+                `/api/admin/timesheets/combined/export?sheetFileName=${encodeURIComponent(sheetFileName)}&clientId=${clientId}&month=${month}&year=${year}&format=csv&template=${exportTemplate}`
+            )
+
+            if (!res.ok) throw new Error("Download fehlgeschlagen")
+
+            const blob = await res.blob()
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `${sheetFileName}_${month}_${year}_${exportTemplate}.csv`
+            document.body.appendChild(a)
+            a.click()
+            window.URL.revokeObjectURL(url)
+            document.body.removeChild(a)
+
+            showToast("success", "CSV-Download gestartet")
+        } catch (err) {
+            showToast("error", "CSV-Download fehlgeschlagen")
         } finally {
             setDownloading(null)
         }
@@ -600,8 +629,32 @@ export default function CombinedTimesheetModal({
                                 </div>
                             )}
 
+                            {/* Template Selector */}
+                            <div className="pt-4 border-t border-neutral-800">
+                                <label className="block text-xs font-medium text-neutral-400 mb-2">
+                                    Export-Vorlage
+                                </label>
+                                <select
+                                    value={exportTemplate}
+                                    onChange={(e) => setExportTemplate(e.target.value as "standard" | "datev" | "simple")}
+                                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                                >
+                                    <option value="standard">Standard (alle Details)</option>
+                                    <option value="datev">DATEV-kompatibel</option>
+                                    <option value="simple">Einfach (nur Stunden)</option>
+                                </select>
+                                <p className="text-xs text-neutral-500 mt-1">
+                                    {exportTemplate === "standard" && "Vollstaendiger Export mit allen Zeitangaben (Excel/CSV)"}
+                                    {exportTemplate === "datev" && "CSV-Format fuer DATEV-Import (ISO-8859-1)"}
+                                    {exportTemplate === "simple" && "Nur Datum, Mitarbeiter und Stunden (Excel/CSV)"}
+                                </p>
+                                <p className="text-xs text-neutral-400 mt-1">
+                                    PDF nutzt immer das Standard-Layout.
+                                </p>
+                            </div>
+
                             {/* Download Buttons */}
-                            <div className="flex gap-2 pt-4 border-t border-neutral-800">
+                            <div className="flex gap-2 pt-4">
                                 <button
                                     onClick={handleDownloadPDF}
                                     disabled={downloading !== null}
@@ -615,18 +668,33 @@ export default function CombinedTimesheetModal({
                                     PDF
                                 </button>
 
-                                <button
-                                    onClick={handleDownloadExcel}
-                                    disabled={downloading !== null}
-                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white rounded-lg transition-colors disabled:cursor-not-allowed"
-                                >
-                                    {downloading === 'excel' ? (
-                                        <Loader2 size={16} className="animate-spin" />
-                                    ) : (
-                                        <FileSpreadsheet size={16} />
-                                    )}
-                                    Excel
-                                </button>
+                                {exportTemplate === "datev" ? (
+                                    <button
+                                        onClick={handleDownloadCSV}
+                                        disabled={downloading !== null}
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white rounded-lg transition-colors disabled:cursor-not-allowed"
+                                    >
+                                        {downloading === 'excel' ? (
+                                            <Loader2 size={16} className="animate-spin" />
+                                        ) : (
+                                            <FileSpreadsheet size={16} />
+                                        )}
+                                        CSV
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={handleDownloadExcel}
+                                        disabled={downloading !== null}
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white rounded-lg transition-colors disabled:cursor-not-allowed"
+                                    >
+                                        {downloading === 'excel' ? (
+                                            <Loader2 size={16} className="animate-spin" />
+                                        ) : (
+                                            <FileSpreadsheet size={16} />
+                                        )}
+                                        Excel
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

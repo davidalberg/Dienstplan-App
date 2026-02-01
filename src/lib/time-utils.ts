@@ -120,13 +120,12 @@ export function formatTimeRange(start: string | null | undefined, end: string | 
 
 /**
  * Calculate total hours from a list of timesheets with actual times
- * @param timesheets Array of timesheet objects with actualStart, actualEnd, and breakMinutes
+ * @param timesheets Array of timesheet objects with actualStart and actualEnd
  * @returns Total hours as decimal string
  */
 export function calculateTotalHoursFromTimesheets(timesheets: Array<{
     actualStart?: string | null
     actualEnd?: string | null
-    breakMinutes?: number | null
 }>): string {
     let totalMinutes = 0
 
@@ -134,9 +133,7 @@ export function calculateTotalHoursFromTimesheets(timesheets: Array<{
         if (ts.actualStart && ts.actualEnd) {
             const minutes = calculateMinutesBetween(ts.actualStart, ts.actualEnd)
             if (minutes !== null) {
-                // Subtract break minutes from total
-                const breakMins = ts.breakMinutes || 0
-                totalMinutes += Math.max(0, minutes - breakMins)
+                totalMinutes += minutes
             }
         }
     }

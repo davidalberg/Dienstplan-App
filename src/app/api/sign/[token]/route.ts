@@ -325,7 +325,6 @@ export async function POST(
                 absenceType: ts.absenceType,
                 note: ts.note,
                 status: ts.status,
-                breakMinutes: ts.breakMinutes,
                 employeeName: ts.employee.name || ts.employee.email
             })),
             stats: {

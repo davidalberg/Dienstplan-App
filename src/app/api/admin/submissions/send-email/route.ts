@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { sendSignatureRequestEmail } from "@/lib/email"
+import { sendSignatureRequestEmail, isEmailServiceConfigured } from "@/lib/email"
 import { randomBytes } from "crypto"
 import { getEmployeesInDienstplan } from "@/lib/team-submission-utils"
 
@@ -21,6 +21,14 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const { employeeId, clientId, month, year, type, sheetFileName } = body
+
+    // Validate RESEND_API_KEY is configured
+    if (!isEmailServiceConfigured()) {
+        console.error("[POST /api/admin/submissions/send-email] RESEND_API_KEY is not configured")
+        return NextResponse.json({
+            error: "E-Mail-Service nicht konfiguriert. Bitte RESEND_API_KEY in Vercel setzen."
+        }, { status: 500 })
+    }
 
     // Validate required parameters
     if (!clientId || !month || !year) {
@@ -64,7 +72,7 @@ export async function POST(req: NextRequest) {
 
         if (!client.email) {
             return NextResponse.json({
-                error: "Fuer diesen Klienten ist keine E-Mail-Adresse hinterlegt"
+                error: "Für diesen Klienten ist keine E-Mail-Adresse hinterlegt"
             }, { status: 400 })
         }
 

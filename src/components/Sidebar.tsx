@@ -13,7 +13,8 @@ import {
     ChevronLeft,
     ChevronRight,
     LogOut,
-    Search
+    Search,
+    UserCog
 } from "lucide-react"
 
 interface NavItem {
@@ -35,13 +36,14 @@ export function Sidebar({ onExportClick }: SidebarProps) {
 
     const mainNavItems: NavItem[] = [
         { icon: Calendar, label: "Kalender", href: "/admin/schedule" },
+        { icon: Users, label: "Team-Übersicht", href: "/admin/team-overview" },
         { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
+        { icon: UserCog, label: "Assistenten", href: "/admin/assistants" },
     ]
 
     const secondaryNavItems: NavItem[] = [
         { icon: Settings, label: "Einstellungen", href: "/admin/settings" },
         { icon: FileText, label: "Stundennachweise", href: "/admin/timesheets" },
-        { icon: Users, label: "Assistenten", href: "/admin/assistants" },
     ]
 
     const isActive = (href?: string) => {

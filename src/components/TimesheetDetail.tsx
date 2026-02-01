@@ -25,7 +25,6 @@ interface Timesheet {
     plannedEnd: string | null
     actualStart: string | null
     actualEnd: string | null
-    breakMinutes: number
     note: string | null
     status: string
     absenceType: string | null

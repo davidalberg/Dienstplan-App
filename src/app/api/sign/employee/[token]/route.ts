@@ -81,8 +81,7 @@ export async function GET(
                 actualEnd: true,
                 absenceType: true,
                 note: true,
-                status: true,
-                breakMinutes: true
+                status: true
             }
         })
 

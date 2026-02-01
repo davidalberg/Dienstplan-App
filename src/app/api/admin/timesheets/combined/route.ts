@@ -28,7 +28,6 @@ interface TimesheetResponse {
     plannedEnd: string | null
     actualStart: string | null
     actualEnd: string | null
-    breakMinutes: number
     hours: number
     note: string | null
     absenceType: string | null
@@ -182,7 +181,6 @@ export async function GET(req: NextRequest) {
                     plannedEnd: true,
                     actualStart: true,
                     actualEnd: true,
-                    breakMinutes: true,
                     note: true,
                     status: true,
                     absenceType: true,
@@ -218,13 +216,10 @@ export async function GET(req: NextRequest) {
                 // Calculate hours only for non-absence entries
                 if (start && end && !ts.absenceType) {
                     const minutes = calculateMinutesBetween(start, end)
-                    if (minutes !== null) {
-                        const netMinutes = minutes - (ts.breakMinutes || 0)
-                        if (netMinutes > 0) {
-                            totalMinutes += netMinutes
-                            hours = Math.round(netMinutes / 60 * 100) / 100
-                            workDays++
-                        }
+                    if (minutes !== null && minutes > 0) {
+                        totalMinutes += minutes
+                        hours = Math.round(minutes / 60 * 100) / 100
+                        workDays++
                     }
                 }
 
@@ -250,7 +245,6 @@ export async function GET(req: NextRequest) {
                     plannedEnd: ts.plannedEnd,
                     actualStart: ts.actualStart,
                     actualEnd: ts.actualEnd,
-                    breakMinutes: ts.breakMinutes || 0,
                     hours,
                     note: ts.note,
                     absenceType: ts.absenceType,

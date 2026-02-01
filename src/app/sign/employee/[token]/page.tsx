@@ -29,7 +29,6 @@ interface TimesheetEntry {
     absenceType: string | null
     note: string | null
     status: string
-    breakMinutes: number
 }
 
 interface SignatureProgress {

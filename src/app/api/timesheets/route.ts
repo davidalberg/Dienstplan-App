@@ -8,7 +8,6 @@ const timesheetUpdateSchema = z.object({
     date: z.string().optional(),
     actualStart: z.string().nullable().optional(),
     actualEnd: z.string().nullable().optional(),
-    breakMinutes: z.number().int().min(0).max(240).optional(), // Added .int() validation
     note: z.string().max(500).optional(),
     absenceType: z.union([
         z.enum(["SICK", "VACATION"]),
@@ -144,7 +143,7 @@ export async function POST(req: NextRequest) {
         const validated = timesheetUpdateSchema.safeParse(body)
         if (!validated.success) return NextResponse.json({ error: validated.error }, { status: 400 })
 
-        const { id, actualStart, actualEnd, breakMinutes, note, absenceType, action } = validated.data
+        const { id, actualStart, actualEnd, note, absenceType, action } = validated.data
         const user = session.user as any
 
     const existing = await prisma.timesheet.findUnique({
@@ -193,7 +192,6 @@ export async function POST(req: NextRequest) {
     let updateData: any = {
         actualStart,
         actualEnd,
-        breakMinutes,
         note,
         absenceType: absenceType || null,
         lastUpdatedBy: user.email,
@@ -256,7 +254,6 @@ export async function POST(req: NextRequest) {
                 const backupData = {
                     actualStart: null, // Keine Ist-Zeiten - Mitarbeiter muss selbst bestätigen
                     actualEnd: null,
-                    breakMinutes: existing.breakMinutes || 0,
                     status: "PLANNED", // PLANNED statt CHANGED - Backup muss selbst bestätigen
                     absenceType: null, // They're working, not absent
                     note: `Backup-Schicht anfallend wegen ${absenceType === "SICK" ? "Krankheit" : "Urlaub"} von ${originalEmployee?.name || "Mitarbeiter"}`,

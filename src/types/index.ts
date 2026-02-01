@@ -67,7 +67,6 @@ export interface Timesheet {
     plannedEnd: string | null
     actualStart: string | null
     actualEnd: string | null
-    breakMinutes: number
     note: string | null
     absenceType: AbsenceType
     status: TimesheetStatus

@@ -110,7 +110,6 @@ export async function GET(
                     date: ts.date,
                     actualStart: ts.actualStart,
                     actualEnd: ts.actualEnd,
-                    breakMinutes: ts.breakMinutes || 0,
                     absenceType: ts.absenceType
                 })),
                 {
@@ -153,7 +152,6 @@ export async function GET(
             absenceType: ts.absenceType,
             note: ts.note,
             status: ts.status,
-            breakMinutes: ts.breakMinutes || 0,
             employeeName: ts.employee.name || ts.employee.email
         }))
 

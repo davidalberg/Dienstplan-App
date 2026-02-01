@@ -8,16 +8,25 @@ import { de } from "date-fns/locale"
 import { calculateMinutesBetween } from "@/lib/time-utils"
 import { generateCombinedTeamPdf } from "@/lib/pdf-generator"
 import { getEmployeesInDienstplan } from "@/lib/team-submission-utils"
+import { getTemplateByIdOrDefault, getNestedValue } from "@/lib/export-templates"
 
 /**
  * Zod Schema for query parameter validation
+ */
+/**
+ * Valid template IDs for export
+ * - standard: Full detail export (default)
+ * - datev: DATEV-compatible format for German accounting software
+ * - simple: Minimal export (Date, Employee, Hours only)
+ * - custom: All fields for custom processing
  */
 const QueryParamsSchema = z.object({
     sheetFileName: z.string().min(1, "sheetFileName ist erforderlich"),
     month: z.coerce.number().int().min(1).max(12),
     year: z.coerce.number().int().min(2020).max(2030),
     clientId: z.string().min(1, "clientId ist erforderlich"),
-    format: z.enum(["pdf", "xlsx", "csv"]).default("pdf")
+    format: z.enum(["pdf", "xlsx", "csv"]).default("pdf"),
+    template: z.enum(["standard", "datev", "simple", "custom"]).default("standard")
 })
 
 /**
@@ -47,7 +56,8 @@ export async function GET(req: NextRequest) {
         month: searchParams.get("month") || "",
         year: searchParams.get("year") || "",
         clientId: searchParams.get("clientId") || "",
-        format: searchParams.get("format") || "pdf"
+        format: searchParams.get("format") || "pdf",
+        template: searchParams.get("template") || "standard" // NEW: Template parameter
     }
 
     const validationResult = QueryParamsSchema.safeParse(rawParams)
@@ -58,7 +68,10 @@ export async function GET(req: NextRequest) {
         }, { status: 400 })
     }
 
-    const { sheetFileName, month, year, clientId, format: exportFormat } = validationResult.data
+    const { sheetFileName, month, year, clientId, format: exportFormat, template: templateId } = validationResult.data
+
+    // Load export template
+    const exportTemplate = getTemplateByIdOrDefault(templateId)
 
     try {
         // Parallel fetch: Client data, TeamSubmission, and employee IDs
@@ -148,7 +161,6 @@ export async function GET(req: NextRequest) {
                     plannedEnd: true,
                     actualStart: true,
                     actualEnd: true,
-                    breakMinutes: true,
                     note: true,
                     status: true,
                     absenceType: true,
@@ -181,7 +193,6 @@ export async function GET(req: NextRequest) {
             plannedEnd: string | null
             actualStart: string | null
             actualEnd: string | null
-            breakMinutes: number
             hours: number
             note: string | null
             absenceType: string | null
@@ -217,22 +228,16 @@ export async function GET(req: NextRequest) {
             // Calculate ACTUAL hours only for non-absence entries
             if (start && end && !ts.absenceType) {
                 const minutes = calculateMinutesBetween(start, end)
-                if (minutes !== null) {
-                    const netMinutes = minutes - (ts.breakMinutes || 0)
-                    if (netMinutes > 0) {
-                        hours = Math.round(netMinutes / 60 * 100) / 100
-                    }
+                if (minutes !== null && minutes > 0) {
+                    hours = Math.round(minutes / 60 * 100) / 100
                 }
             }
 
             // Calculate PLANNED hours separately (for comparison)
             if (ts.plannedStart && ts.plannedEnd && !ts.absenceType) {
                 const plannedMinutes = calculateMinutesBetween(ts.plannedStart, ts.plannedEnd)
-                if (plannedMinutes !== null) {
-                    const netPlannedMinutes = plannedMinutes - (ts.breakMinutes || 0)
-                    if (netPlannedMinutes > 0) {
-                        plannedHours = Math.round(netPlannedMinutes / 60 * 100) / 100
-                    }
+                if (plannedMinutes !== null && plannedMinutes > 0) {
+                    plannedHours = Math.round(plannedMinutes / 60 * 100) / 100
                 }
             }
 
@@ -270,7 +275,6 @@ export async function GET(req: NextRequest) {
                 plannedEnd: ts.plannedEnd,
                 actualStart: ts.actualStart,
                 actualEnd: ts.actualEnd,
-                breakMinutes: ts.breakMinutes || 0,
                 hours,
                 note: ts.note,
                 absenceType: ts.absenceType,
@@ -287,10 +291,14 @@ export async function GET(req: NextRequest) {
         const filename = `Stundennachweis_${sheetFileName.replace(/\s+/g, "_")}_${month}_${year}`
 
         // =========================================================================
-        // CSV Export
+        // CSV Export (with Template Support)
         // =========================================================================
         if (exportFormat === "csv") {
-            const csvHeader = "Datum,Wochentag,Mitarbeiter,Geplant Start,Geplant Ende,Tatsaechlich Start,Tatsaechlich Ende,Stunden,Bemerkung\n"
+            // Use template columns
+            const template = exportTemplate.format === "csv" ? exportTemplate : getTemplateByIdOrDefault("standard")
+
+            // Build CSV header
+            const csvHeader = template.columns.map(col => col.header).join(",") + "\n"
 
             // Sort by date, then by employee name
             const sortedTimesheets = [...processedTimesheets].sort((a, b) => {
@@ -299,28 +307,69 @@ export async function GET(req: NextRequest) {
                 return a.employeeName.localeCompare(b.employeeName)
             })
 
+            // Build CSV rows using template
             const csvRows = sortedTimesheets.map(ts => {
-                const hoursStr = ts.absenceType
-                    ? (ts.absenceType === "SICK" ? "Krank" : "Urlaub")
-                    : ts.hours.toFixed(2)
-                return `${ts.formattedDate},${ts.weekday},"${ts.employeeName}",${ts.plannedStart || "-"},${ts.plannedEnd || "-"},${ts.actualStart || "-"},${ts.actualEnd || "-"},${hoursStr},"${(ts.note || "").replace(/"/g, '""')}"`
+                return template.columns.map(col => {
+                    let value = getNestedValue(ts, col.field)
+
+                    // Apply transformation if defined
+                    if (col.transform) {
+                        value = col.transform(value, ts)
+                    }
+
+                    // Escape CSV values
+                    const strValue = value?.toString() || ""
+                    if (strValue.includes(",") || strValue.includes('"') || strValue.includes("\n")) {
+                        return `"${strValue.replace(/"/g, '""')}"`
+                    }
+                    return strValue
+                }).join(",")
             }).join("\n")
 
-            const csvFooter = `\nGesamtstunden,,,,,,,${totalHours.toFixed(2)},`
+            // Add footer with total hours - use field-based lookup instead of index-based
+            const decimalSeparator = template.options.decimalSeparator
+            const totalHoursStr = totalHours.toFixed(2).replace(".", decimalSeparator)
+            const csvHoursColumnIndex = template.columns.findIndex(col => col.field === "hours")
+
+            // Build footer row with proper column placement
+            const csvFooterCells = template.columns.map((col, i) => {
+                if (i === 0) return "Gesamtstunden"
+                if (i === csvHoursColumnIndex) return totalHoursStr
+                return ""
+            })
+            const csvFooter = `\n${csvFooterCells.join(",")}`
+
             const csvContent = csvHeader + csvRows + csvFooter
 
-            return new NextResponse(csvContent, {
+            // Determine encoding
+            const encoding = template.options.encoding
+            const contentType = encoding === "ISO-8859-1"
+                ? "text/csv; charset=ISO-8859-1"
+                : "text/csv; charset=utf-8"
+
+            // For ISO-8859-1, convert string to Uint8Array (Buffer extends Uint8Array)
+            let csvBody: BodyInit = csvContent
+            if (encoding === "ISO-8859-1") {
+                // Convert to Uint8Array for NextResponse compatibility
+                const buffer = Buffer.from(csvContent, "latin1")
+                csvBody = new Uint8Array(buffer)
+            }
+
+            return new NextResponse(csvBody, {
                 headers: {
-                    "Content-Type": "text/csv; charset=utf-8",
-                    "Content-Disposition": `attachment; filename="${filename}.csv"`,
+                    "Content-Type": contentType,
+                    "Content-Disposition": `attachment; filename="${filename}_${templateId}.csv"`,
                 },
             })
         }
 
         // =========================================================================
-        // Excel Export
+        // Excel Export (with Template Support)
         // =========================================================================
         if (exportFormat === "xlsx") {
+            // Use template (prefer xlsx templates, fallback to standard)
+            const template = exportTemplate.format === "xlsx" ? exportTemplate : getTemplateByIdOrDefault("standard")
+
             // Sort by date, then by employee name
             const sortedTimesheets = [...processedTimesheets].sort((a, b) => {
                 const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -328,78 +377,90 @@ export async function GET(req: NextRequest) {
                 return a.employeeName.localeCompare(b.employeeName)
             })
 
-            const excelData = sortedTimesheets.map(ts => ({
-                "Datum": ts.formattedDate,
-                "Wochentag": ts.weekday,
-                "Mitarbeiter": ts.employeeName,
-                "Geplant Start": ts.plannedStart || "-",
-                "Geplant Ende": ts.plannedEnd || "-",
-                "Tatsaechlich Start": ts.actualStart || "-",
-                "Tatsaechlich Ende": ts.actualEnd || "-",
-                "Stunden": ts.absenceType
-                    ? (ts.absenceType === "SICK" ? "Krank" : "Urlaub")
-                    : ts.hours,
-                "Bemerkung": ts.note || ""
-            }))
+            // Build Excel data using template
+            const excelData: any[] = sortedTimesheets.map(ts => {
+                const row: any = {}
+                for (const col of template.columns) {
+                    let value = getNestedValue(ts, col.field)
 
-            // Add totals row
-            excelData.push({
-                "Datum": "Gesamtstunden",
-                "Wochentag": "",
-                "Mitarbeiter": "",
-                "Geplant Start": "",
-                "Geplant Ende": "",
-                "Tatsaechlich Start": "",
-                "Tatsaechlich Ende": "",
-                "Stunden": totalHours,
-                "Bemerkung": ""
+                    // Apply transformation if defined
+                    if (col.transform) {
+                        value = col.transform(value, ts)
+                    }
+
+                    row[col.header] = value
+                }
+                return row
             })
 
-            // Add employee breakdown
-            excelData.push({
-                "Datum": "",
-                "Wochentag": "",
-                "Mitarbeiter": "",
-                "Geplant Start": "",
-                "Geplant Ende": "",
-                "Tatsaechlich Start": "",
-                "Tatsaechlich Ende": "",
-                "Stunden": "",
-                "Bemerkung": ""
-            })
+            // Add totals row - use field-based lookup instead of index-based
+            const totalsRow: any = {}
+            const hoursColumnIndex = template.columns.findIndex(col => col.field === "hours")
+
+            for (let i = 0; i < template.columns.length; i++) {
+                const col = template.columns[i]
+                if (i === 0) {
+                    // First column always gets the label
+                    totalsRow[col.header] = "Gesamtstunden"
+                } else if (i === hoursColumnIndex) {
+                    // Hours column gets the total - use index match for safety
+                    totalsRow[col.header] = totalHours
+                } else {
+                    totalsRow[col.header] = ""
+                }
+            }
+            excelData.push(totalsRow)
+
+            // Add empty row
+            const emptyRow: any = {}
+            for (const col of template.columns) {
+                emptyRow[col.header] = ""
+            }
+            excelData.push(emptyRow)
+
+            // Add employee breakdown - use field-based lookup instead of index-based
+            const noteColumnIndex = template.columns.findIndex(col => col.field === "note")
 
             for (const emp of employees) {
                 const stats = employeeStatsMap.get(emp.id)
                 if (stats) {
-                    excelData.push({
-                        "Datum": `${emp.name || "Unbekannt"}:`,
-                        "Wochentag": "",
-                        "Mitarbeiter": "",
-                        "Geplant Start": "",
-                        "Geplant Ende": "",
-                        "Tatsaechlich Start": "",
-                        "Tatsaechlich Ende": "",
-                        "Stunden": stats.totalHours,
-                        "Bemerkung": `${stats.sickDays} Krank, ${stats.vacationDays} Urlaub`
-                    })
+                    const empRow: any = {}
+                    for (let i = 0; i < template.columns.length; i++) {
+                        const col = template.columns[i]
+                        if (i === 0) {
+                            // First column gets employee name
+                            empRow[col.header] = `${emp.name || "Unbekannt"}:`
+                        } else if (i === hoursColumnIndex) {
+                            // Hours column gets employee total hours
+                            empRow[col.header] = stats.totalHours
+                        } else if (noteColumnIndex !== -1 && i === noteColumnIndex) {
+                            // If note column exists, put sick/vacation info there
+                            empRow[col.header] = `${stats.sickDays} Krank, ${stats.vacationDays} Urlaub`
+                        } else if (noteColumnIndex === -1 && i === template.columns.length - 1) {
+                            // Fallback: If no note column, use last column for sick/vacation info
+                            // But only if it's not the hours column (to avoid overwriting)
+                            if (i !== hoursColumnIndex) {
+                                empRow[col.header] = `${stats.sickDays} Krank, ${stats.vacationDays} Urlaub`
+                            } else {
+                                empRow[col.header] = stats.totalHours
+                            }
+                        } else {
+                            empRow[col.header] = ""
+                        }
+                    }
+                    excelData.push(empRow)
                 }
             }
 
             const wb = XLSX.utils.book_new()
             const ws = XLSX.utils.json_to_sheet(excelData)
 
-            // Column widths
-            ws['!cols'] = [
-                { wch: 12 },  // Datum
-                { wch: 10 },  // Wochentag
-                { wch: 20 },  // Mitarbeiter
-                { wch: 12 },  // Geplant Start
-                { wch: 12 },  // Geplant Ende
-                { wch: 14 },  // Tatsaechlich Start
-                { wch: 14 },  // Tatsaechlich Ende
-                { wch: 10 },  // Stunden
-                { wch: 30 }   // Bemerkung
-            ]
+            // Column widths - dynamic based on template columns
+            ws['!cols'] = template.columns.map(col => {
+                // Estimate width based on header length
+                const headerLength = col.header.length
+                return { wch: Math.max(headerLength + 2, 10) }
+            })
 
             XLSX.utils.book_append_sheet(wb, ws, `${month}_${year}`)
             const excelBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" })
@@ -407,7 +468,7 @@ export async function GET(req: NextRequest) {
             return new NextResponse(excelBuffer, {
                 headers: {
                     "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    "Content-Disposition": `attachment; filename="${filename}.xlsx"`,
+                    "Content-Disposition": `attachment; filename="${filename}_${templateId}.xlsx"`,
                 },
             })
         }
@@ -472,7 +533,6 @@ export async function GET(req: NextRequest) {
             plannedEnd: ts.plannedEnd,
             actualStart: ts.actualStart,
             actualEnd: ts.actualEnd,
-            breakMinutes: ts.breakMinutes,
             absenceType: ts.absenceType,
             note: ts.note,
             status: ts.status,

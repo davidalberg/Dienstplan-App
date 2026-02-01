@@ -8,10 +8,18 @@ const MONTH_NAMES = [
 // Initialize Resend client
 function getResendClient() {
     if (!process.env.RESEND_API_KEY) {
-        throw new Error("Email configuration missing. Please set RESEND_API_KEY environment variable.")
+        throw new Error("E-Mail-Service nicht konfiguriert. Bitte RESEND_API_KEY in den Umgebungsvariablen setzen.")
     }
 
     return new Resend(process.env.RESEND_API_KEY)
+}
+
+/**
+ * Check if email service is configured
+ * Use this to validate before attempting to send emails
+ */
+export function isEmailServiceConfigured(): boolean {
+    return !!process.env.RESEND_API_KEY
 }
 
 interface SendSignatureRequestParams {
@@ -631,11 +639,11 @@ export async function sendEmployeeSignatureEmail(params: SendEmployeeSignatureEm
         </p>
 
         <p style="font-size: 15px; color: #4b5563;">
-            Dein Stundennachweis fuer <strong>${monthName} ${year}</strong> bei <strong>${clientName}</strong> ist zur Unterschrift bereit.
+            Dein Stundennachweis für <strong>${monthName} ${year}</strong> bei <strong>${clientName}</strong> ist zur Unterschrift bereit.
         </p>
 
         <p style="font-size: 15px; color: #4b5563;">
-            Bitte klicke auf den folgenden Button, um deine Stunden zu pruefen und zu unterschreiben:
+            Bitte klicke auf den folgenden Button, um deine Stunden zu prüfen und zu unterschreiben:
         </p>
 
         <div style="text-align: center; margin: 30px 0;">
@@ -646,7 +654,7 @@ export async function sendEmployeeSignatureEmail(params: SendEmployeeSignatureEm
 
         <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0;">
             <p style="margin: 0; color: #92400e; font-size: 14px;">
-                <strong>Hinweis:</strong> Dieser Link ist bis zum <strong>${expiresFormatted}</strong> gueltig.
+                <strong>Hinweis:</strong> Dieser Link ist bis zum <strong>${expiresFormatted}</strong> gültig.
             </p>
         </div>
 
@@ -670,15 +678,15 @@ Stundennachweis zur Unterschrift - ${sheetFileName} - ${monthName} ${year}
 
 Hallo ${employeeName},
 
-Dein Stundennachweis fuer ${monthName} ${year} bei ${clientName} ist zur Unterschrift bereit.
+Dein Stundennachweis für ${monthName} ${year} bei ${clientName} ist zur Unterschrift bereit.
 
-Bitte oeffne den folgenden Link, um deine Stunden zu pruefen und zu unterschreiben:
+Bitte öffne den folgenden Link, um deine Stunden zu prüfen und zu unterschreiben:
 
 ${signatureUrl}
 
-Hinweis: Dieser Link ist bis zum ${expiresFormatted} gueltig.
+Hinweis: Dieser Link ist bis zum ${expiresFormatted} gültig.
 
-Mit freundlichen Gruessen,
+Mit freundlichen Grüßen,
 Dienstplan App
 `
 

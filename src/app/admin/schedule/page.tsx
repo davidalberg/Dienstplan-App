@@ -18,12 +18,20 @@ import {
     X,
     Save,
     ExternalLink,
-    Eye
+    Eye,
+    RotateCcw,
+    AlertTriangle,
+    Info,
+    Copy
 } from "lucide-react"
 import { showToast } from "@/lib/toast-utils"
 import { formatTimeRange } from "@/lib/time-utils"
 import { useAdminSchedule } from "@/hooks/use-admin-data"
 import TimesheetDetail from "@/components/TimesheetDetail"
+import DuplicateShiftModal from "@/components/DuplicateShiftModal"
+import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
+import { toast } from "sonner"
 
 interface Shift {
     id: string
@@ -100,6 +108,9 @@ export default function SchedulePage() {
 
     // Bulk-Delete State
     const [selectedShiftIds, setSelectedShiftIds] = useState<Set<string>>(new Set())
+
+    // Undo Queue für gelöschte Schichten
+    const [deletedShifts, setDeletedShifts] = useState<Array<{ id: string; shift: Shift; timeout: NodeJS.Timeout }>>([])
 
     // Sync SWR data to local state
     useEffect(() => {
@@ -213,10 +224,114 @@ export default function SchedulePage() {
         clientId: string
     } | null>(null)
 
+    // Duplicate Shift Modal State
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+    const [shiftToDuplicate, setShiftToDuplicate] = useState<Shift | null>(null)
+
+    // Keyboard Shortcuts Help Modal State
+    const [showShortcutsHelp, setShowShortcutsHelp] = useState(false)
+    const [hasSeenShortcutsTip, setHasSeenShortcutsTip] = useState(false)
+
+    // Smart Defaults State
+    const [suggestedTimes, setSuggestedTimes] = useState<{
+        start: string
+        end: string
+        confidence: number
+    } | null>(null)
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+
+    // Conflict Validation State
+    interface Conflict {
+        type: string
+        message: string
+        severity: "error" | "warning"
+    }
+    const [conflicts, setConflicts] = useState<Conflict[]>([])
+    const [validating, setValidating] = useState(false)
+
     // Alte fetchData-Funktion durch mutate() ersetzen
     const fetchData = () => mutate()
 
-    const handleCreateOrUpdate = async () => {
+    // Feature 1: Load smart time defaults when employee selected
+    const loadSmartDefaults = async (employeeId: string) => {
+        if (!employeeId || editingShift) return // Nur bei Neuanlage
+
+        setLoadingSuggestions(true)
+        try {
+            const res = await fetch(`/api/admin/employees/${employeeId}/recent-shifts`)
+            if (res.ok) {
+                const data = await res.json()
+                if (data.confidence > 0.5) { // Nur wenn >50% Confidence
+                    setSuggestedTimes({
+                        start: data.suggestedStart,
+                        end: data.suggestedEnd,
+                        confidence: data.confidence
+                    })
+                    // Auto-apply suggestions
+                    setFormData(prev => ({
+                        ...prev,
+                        plannedStart: data.suggestedStart,
+                        plannedEnd: data.suggestedEnd
+                    }))
+                } else {
+                    setSuggestedTimes(null)
+                }
+            }
+        } catch (error) {
+            console.error("Error loading smart defaults:", error)
+        } finally {
+            setLoadingSuggestions(false)
+        }
+    }
+
+    // Feature 2: Validate shift for conflicts (debounced)
+    const validateShift = useCallback(async () => {
+        if (!formData.employeeId || !formData.date || !formData.plannedStart || !formData.plannedEnd) {
+            setConflicts([])
+            return
+        }
+
+        setValidating(true)
+        try {
+            const res = await fetch("/api/admin/schedule/validate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employeeId: formData.employeeId,
+                    date: formData.date,
+                    plannedStart: formData.plannedStart,
+                    plannedEnd: formData.plannedEnd,
+                    backupEmployeeId: formData.backupEmployeeId || undefined,
+                    excludeShiftId: editingShift?.id || undefined
+                })
+            })
+
+            if (res.ok) {
+                const data = await res.json()
+                setConflicts(data.conflicts || [])
+            } else {
+                setConflicts([])
+            }
+        } catch (error) {
+            console.error("Error validating shift:", error)
+            setConflicts([])
+        } finally {
+            setValidating(false)
+        }
+    }, [formData.employeeId, formData.date, formData.plannedStart, formData.plannedEnd, formData.backupEmployeeId, editingShift?.id])
+
+    // Debounced validation effect
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (showModal && selectedClientId) {
+                validateShift()
+            }
+        }, 300)
+
+        return () => clearTimeout(timer)
+    }, [showModal, selectedClientId, validateShift])
+
+    const handleCreateOrUpdate = useCallback(async () => {
         // Frontend-Validierung
         if (!formData.employeeId) {
             showToast("error", "Bitte waehlen Sie einen Mitarbeiter aus")
@@ -339,24 +454,90 @@ export default function SchedulePage() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [editingShift, formData, loading, fetchData])
 
-    // ✅ PERFORMANCE FIX: Memoize event handler
-    const handleDelete = useCallback(async (id: string) => {
-        if (!confirm("Schicht wirklich löschen?")) return
+    // Cleanup-Funktion für Undo-Queue
+    useEffect(() => {
+        return () => {
+            // Cleanup timeouts bei Komponenten-Unmount
+            deletedShifts.forEach(({ timeout }) => clearTimeout(timeout))
+        }
+    }, [deletedShifts])
 
+    // Undo-Handler
+    const handleUndo = useCallback((id: string) => {
+        const deletedItem = deletedShifts.find(item => item.id === id)
+        if (!deletedItem) return
+
+        // Clear timeout
+        clearTimeout(deletedItem.timeout)
+
+        // Remove from deleted queue
+        setDeletedShifts(prev => prev.filter(item => item.id !== id))
+
+        // Restore shift in UI
+        setShifts(prev => [...prev, deletedItem.shift])
+
+        showToast("success", "Schicht wiederhergestellt")
+    }, [deletedShifts])
+
+    // Commit-Delete: Tatsächlich löschen nach Timeout
+    const commitDelete = useCallback(async (id: string) => {
         try {
             const res = await fetch(`/api/admin/schedule?id=${id}`, { method: "DELETE" })
+
             if (res.ok) {
-                showToast("success", "Schicht gelöscht")
-                setShifts(prev => prev.filter(s => s.id !== id))
+                // Remove from deleted queue
+                setDeletedShifts(prev => prev.filter(item => item.id !== id))
+
+                // Revalidate SWR cache
+                mutate()
             } else {
+                // Rollback bei Fehler
+                const deletedItem = deletedShifts.find(item => item.id === id)
+                if (deletedItem) {
+                    setShifts(prev => [...prev, deletedItem.shift])
+                    setDeletedShifts(prev => prev.filter(item => item.id !== id))
+                }
                 showToast("error", "Fehler beim Löschen")
             }
         } catch (err) {
+            // Rollback bei Fehler
+            const deletedItem = deletedShifts.find(item => item.id === id)
+            if (deletedItem) {
+                setShifts(prev => [...prev, deletedItem.shift])
+                setDeletedShifts(prev => prev.filter(item => item.id !== id))
+            }
             showToast("error", "Netzwerkfehler")
         }
-    }, [setShifts])
+    }, [deletedShifts, mutate])
+
+    // ✅ PERFORMANCE FIX: Memoize event handler with Undo functionality
+    const handleDelete = useCallback((id: string) => {
+        const shiftToDelete = shifts.find(s => s.id === id)
+        if (!shiftToDelete) return
+
+        // Optimistic removal from UI
+        setShifts(prev => prev.filter(s => s.id !== id))
+
+        // Schedule commit-delete after 5 seconds
+        const timeout = setTimeout(() => {
+            commitDelete(id)
+        }, 5000)
+
+        // Add to deleted queue
+        setDeletedShifts(prev => [...prev, { id, shift: shiftToDelete, timeout }])
+
+        // Show undo toast using sonner's action feature
+        toast.warning("Schicht gelöscht", {
+            duration: 5000,
+            icon: "⚠",
+            action: {
+                label: "Rückgängig",
+                onClick: () => handleUndo(id)
+            }
+        })
+    }, [shifts, commitDelete, handleUndo])
 
     const handleBulkDelete = async () => {
         if (selectedShiftIds.size === 0) return
@@ -417,6 +598,8 @@ export default function SchedulePage() {
     const openCreateModal = (date?: Date) => {
         setEditingShift(null)
         setSelectedClientId("")
+        setSuggestedTimes(null) // Reset suggestions
+        setConflicts([]) // Reset conflicts
         setFormData({
             employeeId: "",
             date: date ? format(date, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
@@ -433,6 +616,8 @@ export default function SchedulePage() {
 
     const openEditModal = (shift: Shift) => {
         setEditingShift(shift)
+        setSuggestedTimes(null) // No suggestions in edit mode
+        setConflicts([]) // Reset conflicts
         // Beim Bearbeiten ist der Client bereits implizit gewählt (durch den Mitarbeiter)
         const employee = employees.find(e => e.id === shift.employee.id)
         const selectedClient = clients.find(c => c.employees.some(e => e.id === shift.employee.id))
@@ -484,6 +669,92 @@ export default function SchedulePage() {
         const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1)
         setCurrentDate(newDate)
     }
+
+    // Duplicate Shift Handler
+    const openDuplicateModal = (shift: Shift) => {
+        setShiftToDuplicate(shift)
+        setShowDuplicateModal(true)
+    }
+
+    const closeDuplicateModal = () => {
+        setShowDuplicateModal(false)
+        setShiftToDuplicate(null)
+    }
+
+    const handleDuplicateShift = async (targetDate: string) => {
+        if (!shiftToDuplicate) return
+
+        try {
+            const res = await fetch("/api/admin/schedule", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employeeId: shiftToDuplicate.employee.id,
+                    date: targetDate,
+                    plannedStart: shiftToDuplicate.plannedStart,
+                    plannedEnd: shiftToDuplicate.plannedEnd,
+                    backupEmployeeId: shiftToDuplicate.backupEmployee?.id || null,
+                    note: shiftToDuplicate.note || null
+                })
+            })
+
+            if (res.ok) {
+                showToast("success", "Schicht erfolgreich dupliziert")
+                fetchData()
+            } else {
+                const data = await res.json()
+                showToast("error", data.error || "Fehler beim Duplizieren")
+            }
+        } catch (error) {
+            console.error("Duplicate shift error:", error)
+            showToast("error", "Netzwerkfehler beim Duplizieren")
+        }
+    }
+
+    // Keyboard Shortcuts Handlers
+    const handleCloseModal = useCallback(() => {
+        if (showModal) {
+            setShowModal(false)
+        } else if (showShortcutsHelp) {
+            setShowShortcutsHelp(false)
+        } else if (showDuplicateModal) {
+            closeDuplicateModal()
+        } else if (showTimesheetDetail) {
+            closeTimesheetPreview()
+        }
+    }, [showModal, showShortcutsHelp, showDuplicateModal, showTimesheetDetail])
+
+    const handleSaveShortcut = useCallback(() => {
+        if (showModal) {
+            handleCreateOrUpdate()
+        }
+    }, [showModal, handleCreateOrUpdate])
+
+    // Initialize keyboard shortcuts
+    useKeyboardShortcuts({
+        onNewShift: () => !showModal && openCreateModal(),
+        onEscape: handleCloseModal,
+        onSave: handleSaveShortcut,
+        onPrevMonth: () => !showModal && navigateMonth(-1),
+        onNextMonth: () => !showModal && navigateMonth(1),
+        onListView: () => !showModal && setViewMode("list"),
+        onCalendarView: () => !showModal && setViewMode("calendar"),
+        onHelp: () => setShowShortcutsHelp(true)
+    }, true)
+
+    // Show shortcuts tip on first visit
+    useEffect(() => {
+        const hasSeenTip = localStorage.getItem("hasSeenShortcutsTip")
+        if (!hasSeenTip) {
+            setTimeout(() => {
+                showToast("info", "Drücke '?' für Tastenkombinationen")
+                localStorage.setItem("hasSeenShortcutsTip", "true")
+                setHasSeenShortcutsTip(true)
+            }, 1500)
+        } else {
+            setHasSeenShortcutsTip(true)
+        }
+    }, [])
 
     const toggleRepeatDay = (day: number) => {
         setFormData(prev => ({
@@ -761,14 +1032,26 @@ export default function SchedulePage() {
                                                                             <Eye size={14} />
                                                                         </button>
                                                                         <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                openDuplicateModal(shift)
+                                                                            }}
+                                                                            className="p-1.5 text-neutral-500 hover:text-green-400 hover:bg-green-900/30 rounded transition"
+                                                                            title="Schicht duplizieren"
+                                                                        >
+                                                                            <Copy size={14} />
+                                                                        </button>
+                                                                        <button
                                                                             onClick={() => openEditModal(shift)}
                                                                             className="p-1.5 text-neutral-500 hover:text-blue-400 hover:bg-blue-900/30 rounded transition"
+                                                                            title="Schicht bearbeiten"
                                                                         >
                                                                             <Edit2 size={14} />
                                                                         </button>
                                                                         <button
                                                                             onClick={() => handleDelete(shift.id)}
                                                                             className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-900/30 rounded transition"
+                                                                            title="Schicht löschen"
                                                                         >
                                                                             <Trash2 size={14} />
                                                                         </button>
@@ -930,7 +1213,13 @@ export default function SchedulePage() {
                                             </label>
                                             <select
                                                 value={formData.employeeId}
-                                                onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+                                                onChange={(e) => {
+                                                    const newEmployeeId = e.target.value
+                                                    setFormData({ ...formData, employeeId: newEmployeeId })
+                                                    if (newEmployeeId && !editingShift) {
+                                                        loadSmartDefaults(newEmployeeId)
+                                                    }
+                                                }}
                                                 disabled={!!editingShift}
                                                 className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 disabled:opacity-50 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
                                             >
@@ -952,6 +1241,18 @@ export default function SchedulePage() {
                                                 <p className="text-xs text-amber-400 mt-1">
                                                     Diesem Klienten sind noch keine Mitarbeiter zugeordnet.
                                                 </p>
+                                            )}
+                                            {loadingSuggestions && (
+                                                <div className="flex items-center gap-2 mt-2 text-xs text-neutral-500">
+                                                    <div className="animate-spin rounded-full h-3 w-3 border-b border-violet-500"></div>
+                                                    Lade Zeitvorschläge...
+                                                </div>
+                                            )}
+                                            {suggestedTimes && !loadingSuggestions && (
+                                                <div className="flex items-center gap-2 mt-2 p-2 bg-blue-900/20 border border-blue-700 rounded text-xs text-blue-300">
+                                                    <Info size={14} />
+                                                    Vorgeschlagene Zeiten basierend auf Historie ({Math.round(suggestedTimes.confidence * 100)}% Übereinstimmung)
+                                                </div>
                                             )}
                                         </div>
 
@@ -994,6 +1295,31 @@ export default function SchedulePage() {
                                                 />
                                             </div>
                                         </div>
+
+                                        {/* Conflict Warnings */}
+                                        {validating && (
+                                            <div className="flex items-center gap-2 p-2 bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-400">
+                                                <div className="animate-spin rounded-full h-3 w-3 border-b border-violet-500"></div>
+                                                Prüfe auf Konflikte...
+                                            </div>
+                                        )}
+                                        {!validating && conflicts.length > 0 && (
+                                            <div className="space-y-2">
+                                                {conflicts.map((conflict, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        className={`flex items-start gap-2 p-2 border rounded text-sm ${
+                                                            conflict.severity === "error"
+                                                                ? "bg-red-900/20 border-red-700 text-red-400"
+                                                                : "bg-amber-900/20 border-amber-700 text-amber-400"
+                                                        }`}
+                                                    >
+                                                        <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                                                        <span>{conflict.message}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
 
                                         {/* Backup */}
                                         <div>
@@ -1131,6 +1457,20 @@ export default function SchedulePage() {
                         year={year}
                         onClose={closeTimesheetPreview}
                     />
+                )}
+
+                {/* Duplicate Shift Modal */}
+                {showDuplicateModal && shiftToDuplicate && (
+                    <DuplicateShiftModal
+                        shift={shiftToDuplicate}
+                        onClose={closeDuplicateModal}
+                        onDuplicate={handleDuplicateShift}
+                    />
+                )}
+
+                {/* Keyboard Shortcuts Help Modal */}
+                {showShortcutsHelp && (
+                    <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
                 )}
             </div>
         </div>

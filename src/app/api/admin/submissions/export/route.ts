@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
             if (start && end && !ts.absenceType) {
                 const minutes = calculateMinutesBetween(start, end)
                 if (minutes !== null) {
-                    hours = Math.round((minutes - (ts.breakMinutes || 0)) / 60 * 10) / 10
+                    hours = Math.round(minutes / 60 * 10) / 10
                 }
             }
 
@@ -185,7 +185,6 @@ export async function GET(req: NextRequest) {
                 absenceType: ts.absenceType,
                 note: ts.note,
                 status: ts.status,
-                breakMinutes: ts.breakMinutes || 0,
                 employeeName: employee.name || undefined
             }))
 

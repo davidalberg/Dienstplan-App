@@ -96,7 +96,6 @@ export async function GET(req: NextRequest) {
                 plannedEnd: true,
                 actualStart: true,
                 actualEnd: true,
-                breakMinutes: true,
                 note: true,
                 status: true,
                 absenceType: true
@@ -158,9 +157,8 @@ export async function GET(req: NextRequest) {
             if (start && end && !ts.absenceType) {
                 const minutes = calculateMinutesBetween(start, end)
                 if (minutes !== null) {
-                    const netMinutes = minutes - (ts.breakMinutes || 0)
-                    totalMinutes += netMinutes
-                    hours = Math.round(netMinutes / 60 * 10) / 10
+                    totalMinutes += minutes
+                    hours = Math.round(minutes / 60 * 10) / 10
                 }
             }
 

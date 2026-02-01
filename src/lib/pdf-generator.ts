@@ -12,8 +12,7 @@ interface TimesheetEntry {
     absenceType: string | null
     note: string | null
     status: string
-    breakMinutes: number
-    employeeName?: string // NEW: For multi-employee PDFs
+    employeeName?: string // For multi-employee PDFs
 }
 
 interface MonthlyStats {
@@ -526,22 +525,6 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
     return doc.output("arraybuffer")
 }
 
-export function generatePdfDataUrl(options: GeneratePdfOptions): string {
-    const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-    })
-
-    // Re-use the same generation logic but return data URL
-    const arrayBuffer = generateTimesheetPdf(options)
-    const blob = new Blob([arrayBuffer], { type: "application/pdf" })
-
-    // For data URL we need to regenerate using the doc's built-in method
-    // This is a simplified approach - the full PDF is generated in generateTimesheetPdf
-    return doc.output("dataurlstring")
-}
-
 // ============================================================================
 // COMBINED TEAM PDF GENERATION
 // ============================================================================
@@ -558,7 +541,6 @@ interface CombinedTimesheetEntry {
     plannedEnd: string | null
     actualStart: string | null
     actualEnd: string | null
-    breakMinutes: number
     absenceType: string | null
     note: string | null
     status: string
