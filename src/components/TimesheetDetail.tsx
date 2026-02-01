@@ -345,8 +345,8 @@ export default function TimesheetDetail({
                                         </tbody>
                                     </table>
 
-                                    {/* Unterschriften */}
-                                    <div className="flex justify-between mt-8">
+                                    {/* Unterschrift (nur Mitarbeiter) */}
+                                    <div className="mt-8">
                                         <div className="w-[45%]">
                                             <div className="border-b border-black h-16 mb-1">
                                                 {data.signatures.employee.signature && (
@@ -361,23 +361,6 @@ export default function TimesheetDetail({
                                             {data.signatures.employee.signedAt && (
                                                 <p className="text-[10px] text-gray-500">
                                                     {format(new Date(data.signatures.employee.signedAt), "dd.MM.yyyy HH:mm", { locale: de })}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="w-[45%]">
-                                            <div className="border-b border-black h-16 mb-1">
-                                                {data.signatures.client.signature && (
-                                                    <img
-                                                        src={data.signatures.client.signature}
-                                                        alt="Unterschrift"
-                                                        className="h-full object-contain"
-                                                    />
-                                                )}
-                                            </div>
-                                            <p className="text-xs">Unterschrift: {data.client.fullName}</p>
-                                            {data.signatures.client.signedAt && (
-                                                <p className="text-[10px] text-gray-500">
-                                                    {format(new Date(data.signatures.client.signedAt), "dd.MM.yyyy HH:mm", { locale: de })}
                                                 </p>
                                             )}
                                         </div>
@@ -462,12 +445,12 @@ export default function TimesheetDetail({
                                 </div>
                             </div>
 
-                            {/* Unterschriften-Card */}
+                            {/* Unterschriften-Card (nur Mitarbeiter) */}
                             <div className="rounded-xl bg-neutral-800 border border-neutral-700">
                                 <div className="p-4 border-b border-neutral-700">
-                                    <h3 className="text-sm font-medium text-neutral-400">Unterschriften</h3>
+                                    <h3 className="text-sm font-medium text-neutral-400">Mitarbeiter-Unterschrift</h3>
                                 </div>
-                                <div className="p-4 space-y-4">
+                                <div className="p-4">
                                     {/* Assistent */}
                                     <div>
                                         <div className="flex items-center justify-between mb-2">
@@ -485,66 +468,47 @@ export default function TimesheetDetail({
                                             )}
                                         </div>
                                         {data.signatures.employee.signed && (
-                                            <button
-                                                onClick={() => handleWithdrawSignature("employee")}
-                                                disabled={withdrawing === "employee"}
-                                                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-900/50 border border-amber-700 text-amber-400 font-medium hover:bg-amber-900 transition-colors disabled:opacity-50"
-                                            >
-                                                {withdrawing === "employee" ? (
-                                                    <Loader2 size={16} className="animate-spin" />
-                                                ) : (
-                                                    <Undo2 size={16} />
+                                            <>
+                                                <button
+                                                    onClick={() => handleWithdrawSignature("employee")}
+                                                    disabled={withdrawing === "employee" || data.signatures.client.signed}
+                                                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-900/50 border border-amber-700 text-amber-400 font-medium hover:bg-amber-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {withdrawing === "employee" ? (
+                                                        <Loader2 size={16} className="animate-spin" />
+                                                    ) : (
+                                                        <Undo2 size={16} />
+                                                    )}
+                                                    Unterschrift zurückziehen
+                                                </button>
+                                                {data.signatures.client.signed && (
+                                                    <p className="text-xs text-neutral-500 mt-2">
+                                                        Monat fertig - Unterschrift kann nicht mehr zurückgezogen werden
+                                                    </p>
                                                 )}
-                                                Unterschrift zurückziehen
-                                            </button>
+                                            </>
                                         )}
-                                    </div>
-
-                                    {/* Klient */}
-                                    <div>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div>
-                                                <p className="text-white font-medium">{data.client.fullName}</p>
-                                                <p className="text-xs text-neutral-500">
-                                                    {data.client.email || "Keine E-Mail hinterlegt"}
-                                                </p>
-                                            </div>
-                                            {data.signatures.client.signed ? (
-                                                <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-900/50 text-emerald-400 text-xs font-medium">
-                                                    <Check size={14} />
-                                                    Unterschrieben
-                                                </span>
-                                            ) : (
-                                                <span className="text-neutral-500 text-xs">Nicht unterschrieben</span>
-                                            )}
-                                        </div>
-                                        {data.signatures.client.signed ? (
-                                            <button
-                                                onClick={() => handleWithdrawSignature("client")}
-                                                disabled={withdrawing === "client"}
-                                                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-900/50 border border-amber-700 text-amber-400 font-medium hover:bg-amber-900 transition-colors disabled:opacity-50"
-                                            >
-                                                {withdrawing === "client" ? (
-                                                    <Loader2 size={16} className="animate-spin" />
-                                                ) : (
-                                                    <Undo2 size={16} />
-                                                )}
-                                                Unterschrift zurückziehen
-                                            </button>
-                                        ) : (
-                                            <div className="w-full px-4 py-3 rounded-lg bg-neutral-800/50 border border-neutral-700">
-                                                <p className="text-neutral-400 text-sm text-center">
-                                                    {data.signatures.employee.signed
-                                                        ? "Der Klient wurde per E-Mail benachrichtigt."
-                                                        : "Wartet auf Mitarbeiter-Unterschrift"}
-                                                </p>
-                                            </div>
-                                        )}
-                                        {!data.signatures.employee.signed && !data.signatures.client.signed && (
+                                        {!data.signatures.employee.signed && (
                                             <p className="text-xs text-neutral-500 mt-2">
-                                                Klient kann erst unterschreiben, wenn der Assistent unterschrieben hat.
+                                                Mitarbeiter muss den Stundennachweis unterschreiben.
                                             </p>
                                         )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Info: Klient-Unterschrift */}
+                            <div className="rounded-xl bg-blue-900/20 border border-blue-700/50 p-4">
+                                <div className="flex items-start gap-3">
+                                    <AlertCircle className="text-blue-400 flex-shrink-0 mt-0.5" size={18} />
+                                    <div>
+                                        <p className="text-blue-400 text-sm font-medium mb-1">
+                                            Klient-Unterschrift über Gesamtstundennachweis
+                                        </p>
+                                        <p className="text-neutral-400 text-xs leading-relaxed">
+                                            Der Klient unterschreibt zentral über den kombinierten Stundennachweis des gesamten Teams.
+                                            Die Unterschrift wird automatisch angefordert, wenn alle Mitarbeiter unterschrieben haben.
+                                        </p>
                                     </div>
                                 </div>
                             </div>
