@@ -6,12 +6,15 @@ const fetcher = (url: string) => fetch(url).then(res => {
     return res.json()
 })
 
-// SWR configuration for admin pages
+// SWR configuration for admin pages - Optimized for fast navigation
 const swrConfig = {
-    revalidateOnFocus: false,    // ✅ PERFORMANCE FIX: Don't refetch on focus (use cache)
-    revalidateOnReconnect: true, // Refetch on reconnect (good for offline scenarios)
-    dedupingInterval: 30000,     // ✅ PERFORMANCE FIX: 30s deduping for instant navigation
-    revalidateIfStale: true,     // ✅ NEW: Use cache first, then revalidate in background
+    revalidateOnFocus: false,       // Don't refetch when window regains focus
+    revalidateOnReconnect: true,    // Refetch on network reconnect
+    dedupingInterval: 5000,         // 5s deduplication window (down from 30s for faster updates)
+    revalidateIfStale: false,       // Use cache first, don't revalidate stale data automatically
+    focusThrottleInterval: 60000,   // Only allow focus revalidation every 60s
+    errorRetryInterval: 5000,       // Retry failed requests after 5s
+    errorRetryCount: 3,             // Max 3 retries for failed requests
 }
 
 // Dashboard / Timesheets

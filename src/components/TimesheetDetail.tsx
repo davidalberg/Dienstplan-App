@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
-import { ChevronLeft, Download, Trash2, Mail, Check, X, Loader2, Undo2 } from "lucide-react"
+import { ChevronLeft, Download, Trash2, Mail, Check, X, Loader2, Undo2, AlertCircle } from "lucide-react"
 import useSWR from "swr"
 import { showToast } from "@/lib/toast-utils"
 
@@ -88,7 +88,6 @@ export default function TimesheetDetail({
     onDelete
 }: TimesheetDetailProps) {
     const signaturesEnabled = true // Immer aktiviert - kein Toggle mehr
-    const [sendingEmail, setSendingEmail] = useState<string | null>(null)
     const [showDownloadMenu, setShowDownloadMenu] = useState(false)
     const [withdrawing, setWithdrawing] = useState<string | null>(null)
 
@@ -127,35 +126,6 @@ export default function TimesheetDetail({
             showToast("success", "Download gestartet")
         } catch (err) {
             showToast("error", "Download fehlgeschlagen")
-        }
-    }
-
-    const handleSendEmail = async (type: "employee" | "client") => {
-        setSendingEmail(type)
-        try {
-            const res = await fetch("/api/admin/submissions/send-email", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    employeeId,
-                    clientId,
-                    month,
-                    year,
-                    type
-                })
-            })
-
-            if (!res.ok) {
-                const error = await res.json()
-                throw new Error(error.error || "E-Mail konnte nicht gesendet werden")
-            }
-
-            showToast("success", "E-Mail wurde gesendet")
-            mutate()
-        } catch (err: any) {
-            showToast("error", err.message || "E-Mail konnte nicht gesendet werden")
-        } finally {
-            setSendingEmail(null)
         }
     }
 
@@ -244,16 +214,49 @@ export default function TimesheetDetail({
     }
 
     if (error || !data) {
+        // Determine error message based on error type
+        let errorTitle = "Fehler beim Laden der Daten"
+        let errorMessage = "Die Stundennachweis-Daten konnten nicht geladen werden."
+        let errorHint = null
+
+        if (error?.message?.includes("404") || error?.message?.includes("not found")) {
+            errorTitle = "Klient nicht gefunden"
+            errorMessage = "Der zugeordnete Klient wurde nicht gefunden."
+            errorHint = "Bitte stelle sicher, dass der Mitarbeiter einem Team mit Klient zugeordnet ist."
+        } else if (!clientId) {
+            errorTitle = "Klient-Zuordnung fehlt"
+            errorMessage = "Dieser Mitarbeiter hat keine Klient-Zuordnung."
+            errorHint = "Gehe zu Einstellungen → Datenbank → 'Submission Client-IDs reparieren' um dies zu beheben."
+        }
+
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-                <div className="rounded-xl bg-neutral-900 border border-neutral-700 p-6 max-w-md">
-                    <p className="text-red-400 mb-4">Fehler beim Laden der Daten</p>
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 rounded-lg bg-neutral-800 text-white hover:bg-neutral-700"
-                    >
-                        Schließen
-                    </button>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+                <div
+                    className="rounded-xl bg-neutral-900 border border-red-800/50 p-6 max-w-md"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-start gap-3 mb-4">
+                        <div className="p-2 bg-red-500/20 rounded-lg">
+                            <AlertCircle className="w-6 h-6 text-red-400" />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="text-lg font-semibold text-white mb-1">{errorTitle}</h3>
+                            <p className="text-neutral-400 text-sm">{errorMessage}</p>
+                            {errorHint && (
+                                <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                                    <p className="text-yellow-400 text-xs">{errorHint}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 transition"
+                        >
+                            Schließen
+                        </button>
+                    </div>
                 </div>
             </div>
         )
@@ -528,19 +531,14 @@ export default function TimesheetDetail({
                                                 )}
                                                 Unterschrift zurückziehen
                                             </button>
-                                        ) : data.client.email && (
-                                            <button
-                                                onClick={() => handleSendEmail("client")}
-                                                disabled={sendingEmail === "client" || !data.signatures.employee.signed}
-                                                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-neutral-700 border border-neutral-600 text-white font-medium hover:bg-neutral-600 transition-colors disabled:opacity-50"
-                                            >
-                                                {sendingEmail === "client" ? (
-                                                    <Loader2 size={16} className="animate-spin" />
-                                                ) : (
-                                                    <Mail size={16} />
-                                                )}
-                                                E-Mail anfordern
-                                            </button>
+                                        ) : (
+                                            <div className="w-full px-4 py-3 rounded-lg bg-neutral-800/50 border border-neutral-700">
+                                                <p className="text-neutral-400 text-sm text-center">
+                                                    {data.signatures.employee.signed
+                                                        ? "Der Klient wurde per E-Mail benachrichtigt."
+                                                        : "Wartet auf Mitarbeiter-Unterschrift"}
+                                                </p>
+                                            </div>
                                         )}
                                         {!data.signatures.employee.signed && !data.signatures.client.signed && (
                                             <p className="text-xs text-neutral-500 mt-2">

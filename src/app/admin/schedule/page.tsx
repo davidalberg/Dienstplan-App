@@ -117,9 +117,13 @@ export default function SchedulePage() {
                 if (res.ok) {
                     const data = await res.json()
                     setClients(data.clients || [])
+                } else {
+                    console.error("Fehler beim Laden der Klienten: HTTP", res.status)
+                    showToast("error", "Klienten konnten nicht geladen werden")
                 }
             } catch (err) {
                 console.error("Fehler beim Laden der Klienten:", err)
+                showToast("error", "Netzwerkfehler beim Laden der Klienten")
             }
         }
         loadClients()
