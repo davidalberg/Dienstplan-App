@@ -65,8 +65,12 @@ export async function GET(req: NextRequest) {
 
         // Parallele Abfragen für bessere Performance
         const [teamSubmissions, allConfigs, allTimesheetsForMonth, allTeamsWithClients] = await Promise.all([
-            // 1. Existing TeamSubmissions
+            // 1. Existing TeamSubmissions - ONLY for target month/year
             prisma.teamSubmission.findMany({
+                where: {
+                    month: targetMonth,
+                    year: targetYear
+                },
                 orderBy: [
                     { year: "desc" },
                     { month: "desc" },

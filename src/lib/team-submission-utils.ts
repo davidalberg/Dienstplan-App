@@ -23,11 +23,13 @@ export async function getEmployeesInDienstplan(
     year: number
 ): Promise<string[]> {
     // Primaer: Suche nach sheetFileName
+    // Match status filter used in combined/route.ts for consistency
     let timesheets = await prisma.timesheet.findMany({
         where: {
             sheetFileName,
             month,
-            year
+            year,
+            status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED"] }
         },
         select: {
             employeeId: true
@@ -53,7 +55,8 @@ export async function getEmployeesInDienstplan(
                         teamId: team.id,
                         month,
                         year,
-                        sheetFileName: null // Nur Legacy-Daten
+                        sheetFileName: null, // Nur Legacy-Daten
+                        status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED"] }
                     },
                     select: {
                         employeeId: true
