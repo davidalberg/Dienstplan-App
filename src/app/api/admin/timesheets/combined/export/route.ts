@@ -15,18 +15,16 @@ import { getTemplateByIdOrDefault, getNestedValue } from "@/lib/export-templates
  */
 /**
  * Valid template IDs for export
- * - standard: Full detail export (default)
- * - datev: DATEV-compatible format for German accounting software
- * - simple: Minimal export (Date, Employee, Hours only)
- * - custom: All fields for custom processing
+ * - standard: Full detail export (default) - all details with signatures
+ * - invoice: DSGVO-compliant invoice format - anonymized employees, no employee signatures
  */
 const QueryParamsSchema = z.object({
     sheetFileName: z.string().min(1, "sheetFileName ist erforderlich"),
     month: z.coerce.number().int().min(1).max(12),
     year: z.coerce.number().int().min(2020).max(2030),
     clientId: z.string().min(1, "clientId ist erforderlich"),
-    format: z.enum(["pdf", "xlsx", "csv"]).default("pdf"),
-    template: z.enum(["standard", "datev", "simple", "custom"]).default("standard")
+    format: z.enum(["pdf", "xlsx"]).default("pdf"),
+    template: z.enum(["standard", "invoice"]).default("standard")
 })
 
 /**
@@ -175,10 +173,18 @@ export async function GET(req: NextRequest) {
             }, { status: 404 })
         }
 
-        // Create employee name map
+        // Helper function to anonymize employee names (only first letter)
+        const anonymizeName = (name: string): string => {
+            if (templateId !== "invoice") return name
+            const firstChar = name.trim().charAt(0).toUpperCase()
+            return firstChar || "?"
+        }
+
+        // Create employee name map (anonymized if invoice template)
         const employeeNameMap = new Map<string, string>()
         for (const emp of employees) {
-            employeeNameMap.set(emp.id, emp.name || "Unbekannt")
+            const fullName = emp.name || "Unbekannt"
+            employeeNameMap.set(emp.id, anonymizeName(fullName))
         }
 
         // Process timesheets and calculate hours
@@ -291,79 +297,6 @@ export async function GET(req: NextRequest) {
         const filename = `Stundennachweis_${sheetFileName.replace(/\s+/g, "_")}_${month}_${year}`
 
         // =========================================================================
-        // CSV Export (with Template Support)
-        // =========================================================================
-        if (exportFormat === "csv") {
-            // Use template columns
-            const template = exportTemplate.format === "csv" ? exportTemplate : getTemplateByIdOrDefault("standard")
-
-            // Build CSV header
-            const csvHeader = template.columns.map(col => col.header).join(",") + "\n"
-
-            // Sort by date, then by employee name
-            const sortedTimesheets = [...processedTimesheets].sort((a, b) => {
-                const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
-                if (dateCompare !== 0) return dateCompare
-                return a.employeeName.localeCompare(b.employeeName)
-            })
-
-            // Build CSV rows using template
-            const csvRows = sortedTimesheets.map(ts => {
-                return template.columns.map(col => {
-                    let value = getNestedValue(ts, col.field)
-
-                    // Apply transformation if defined
-                    if (col.transform) {
-                        value = col.transform(value, ts)
-                    }
-
-                    // Escape CSV values
-                    const strValue = value?.toString() || ""
-                    if (strValue.includes(",") || strValue.includes('"') || strValue.includes("\n")) {
-                        return `"${strValue.replace(/"/g, '""')}"`
-                    }
-                    return strValue
-                }).join(",")
-            }).join("\n")
-
-            // Add footer with total hours - use field-based lookup instead of index-based
-            const decimalSeparator = template.options.decimalSeparator
-            const totalHoursStr = totalHours.toFixed(2).replace(".", decimalSeparator)
-            const csvHoursColumnIndex = template.columns.findIndex(col => col.field === "hours")
-
-            // Build footer row with proper column placement
-            const csvFooterCells = template.columns.map((col, i) => {
-                if (i === 0) return "Gesamtstunden"
-                if (i === csvHoursColumnIndex) return totalHoursStr
-                return ""
-            })
-            const csvFooter = `\n${csvFooterCells.join(",")}`
-
-            const csvContent = csvHeader + csvRows + csvFooter
-
-            // Determine encoding
-            const encoding = template.options.encoding
-            const contentType = encoding === "ISO-8859-1"
-                ? "text/csv; charset=ISO-8859-1"
-                : "text/csv; charset=utf-8"
-
-            // For ISO-8859-1, convert string to Uint8Array (Buffer extends Uint8Array)
-            let csvBody: BodyInit = csvContent
-            if (encoding === "ISO-8859-1") {
-                // Convert to Uint8Array for NextResponse compatibility
-                const buffer = Buffer.from(csvContent, "latin1")
-                csvBody = new Uint8Array(buffer)
-            }
-
-            return new NextResponse(csvBody, {
-                headers: {
-                    "Content-Type": contentType,
-                    "Content-Disposition": `attachment; filename="${filename}_${templateId}.csv"`,
-                },
-            })
-        }
-
-        // =========================================================================
         // Excel Export (with Template Support)
         // =========================================================================
         if (exportFormat === "xlsx") {
@@ -425,18 +358,19 @@ export async function GET(req: NextRequest) {
                 const stats = employeeStatsMap.get(emp.id)
                 if (stats) {
                     const empRow: any = {}
+                    const displayName = anonymizeName(emp.name || "Unbekannt")
                     for (let i = 0; i < template.columns.length; i++) {
                         const col = template.columns[i]
                         if (i === 0) {
-                            // First column gets employee name
-                            empRow[col.header] = `${emp.name || "Unbekannt"}:`
+                            // First column gets employee name (anonymized if invoice)
+                            empRow[col.header] = `${displayName}:`
                         } else if (i === hoursColumnIndex) {
                             // Hours column gets employee total hours
                             empRow[col.header] = stats.totalHours
-                        } else if (noteColumnIndex !== -1 && i === noteColumnIndex) {
-                            // If note column exists, put sick/vacation info there
+                        } else if (templateId !== "invoice" && noteColumnIndex !== -1 && i === noteColumnIndex) {
+                            // If note column exists and NOT invoice, put sick/vacation info there
                             empRow[col.header] = `${stats.sickDays} Krank, ${stats.vacationDays} Urlaub`
-                        } else if (noteColumnIndex === -1 && i === template.columns.length - 1) {
+                        } else if (templateId !== "invoice" && noteColumnIndex === -1 && i === template.columns.length - 1) {
                             // Fallback: If no note column, use last column for sick/vacation info
                             // But only if it's not the hours column (to avoid overwriting)
                             if (i !== hoursColumnIndex) {
@@ -550,7 +484,8 @@ export async function GET(req: NextRequest) {
             signatures: {
                 employees: employeeSignatures,
                 client: clientSignature
-            }
+            },
+            isInvoice: templateId === "invoice"
         })
 
         return new NextResponse(pdfBuffer, {

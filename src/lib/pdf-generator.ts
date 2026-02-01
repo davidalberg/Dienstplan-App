@@ -584,6 +584,8 @@ interface GenerateCombinedPdfOptions {
             signedAt: Date | null
         }
     }
+    /** If true, generates DSGVO-compliant invoice PDF (anonymized employees, no employee signatures) */
+    isInvoice?: boolean
 }
 
 /**
@@ -603,8 +605,17 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
         timesheets,
         employeeStats,
         totalHours,
-        signatures
+        signatures,
+        isInvoice = false
     } = options
+
+    // Helper function to anonymize employee names (only first letter of first name)
+    const anonymizeName = (name: string): string => {
+        if (!isInvoice) return name
+        // Get first letter of first name only (e.g., "Najra Fejzovic" -> "N")
+        const firstChar = name.trim().charAt(0).toUpperCase()
+        return firstChar || "?"
+    }
 
     const doc = new jsPDF({
         orientation: "portrait",
@@ -705,7 +716,7 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
 
         tableData.push([
             `${dayName} ${dateStr}`,
-            ts.employeeName,
+            anonymizeName(ts.employeeName),
             plannedStr,
             actualStr,
             hoursStr,
@@ -809,9 +820,15 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
     doc.setFont("helvetica", "normal")
 
     for (const empStat of employeeStats) {
-        const sickText = empStat.sickDays === 1 ? "Krankheitstag" : "Krankheitstage"
-        const vacationText = empStat.vacationDays === 1 ? "Urlaubstag" : "Urlaubstage"
-        const line = `- ${empStat.employeeName}:  ${empStat.totalHours.toFixed(2)} Std. (${empStat.sickDays} ${sickText}, ${empStat.vacationDays} ${vacationText})`
+        let line: string
+        if (isInvoice) {
+            // DSGVO-compliant: anonymized name, no sick/vacation days
+            line = `- ${anonymizeName(empStat.employeeName)}:  ${empStat.totalHours.toFixed(2)} Std.`
+        } else {
+            const sickText = empStat.sickDays === 1 ? "Krankheitstag" : "Krankheitstage"
+            const vacationText = empStat.vacationDays === 1 ? "Urlaubstag" : "Urlaubstage"
+            line = `- ${empStat.employeeName}:  ${empStat.totalHours.toFixed(2)} Std. (${empStat.sickDays} ${sickText}, ${empStat.vacationDays} ${vacationText})`
+        }
         doc.text(line, margin + 5, yPos)
         yPos += 5
     }
@@ -837,94 +854,97 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
     doc.text("UNTERSCHRIFTEN", margin, yPos)
     yPos += 8
 
-    // Employee signatures section
-    doc.setFontSize(10)
-    doc.text("Mitarbeiter:", margin, yPos)
-    yPos += 8
-
     const signatureBoxWidth = 50
     const signatureBoxHeight = 25
     const signatureGap = 10
-    const signaturesPerRow = Math.floor((pageWidth - 2 * margin + signatureGap) / (signatureBoxWidth + signatureGap))
 
-    let xPos = margin
-    let rowCount = 0
+    // Employee signatures section - only show if NOT invoice (DSGVO compliance)
+    if (!isInvoice) {
+        doc.setFontSize(10)
+        doc.text("Mitarbeiter:", margin, yPos)
+        yPos += 8
 
-    for (const empSig of signatures.employees) {
-        // Check if we need a new row or page
-        if (rowCount >= signaturesPerRow) {
-            xPos = margin
-            yPos += signatureBoxHeight + 15
-            rowCount = 0
+        const signaturesPerRow = Math.floor((pageWidth - 2 * margin + signatureGap) / (signatureBoxWidth + signatureGap))
+
+        let xPos = margin
+        let rowCount = 0
+
+        for (const empSig of signatures.employees) {
+            // Check if we need a new row or page
+            if (rowCount >= signaturesPerRow) {
+                xPos = margin
+                yPos += signatureBoxHeight + 15
+                rowCount = 0
+            }
+
+            // Check if we need a new page
+            if (yPos + signatureBoxHeight + 15 > pageHeight - 30) {
+                doc.addPage()
+                yPos = margin
+                xPos = margin
+                rowCount = 0
+
+                // Re-add section header on new page
+                doc.setFontSize(10)
+                doc.setFont("helvetica", "bold")
+                doc.text("Mitarbeiter (Fortsetzung):", margin, yPos)
+                yPos += 8
+            }
+
+            // Draw signature box
+            doc.setLineWidth(0.3)
+            doc.rect(xPos, yPos, signatureBoxWidth, signatureBoxHeight)
+
+            // Add signature image if available
+            if (empSig.signature) {
+                try {
+                    doc.addImage(
+                        empSig.signature,
+                        "PNG",
+                        xPos + 2,
+                        yPos + 2,
+                        signatureBoxWidth - 4,
+                        signatureBoxHeight - 4
+                    )
+                } catch (error) {
+                    console.error("Error adding employee signature:", error)
+                }
+            }
+
+            // Employee name and date below signature
+            doc.setFontSize(8)
+            doc.setFont("helvetica", "normal")
+            const signedDateStr = format(new Date(empSig.signedAt), "dd.MM.yyyy", { locale: de })
+            doc.text(
+                empSig.employeeName,
+                xPos + signatureBoxWidth / 2,
+                yPos + signatureBoxHeight + 4,
+                { align: "center" }
+            )
+            doc.text(
+                signedDateStr,
+                xPos + signatureBoxWidth / 2,
+                yPos + signatureBoxHeight + 8,
+                { align: "center" }
+            )
+
+            xPos += signatureBoxWidth + signatureGap
+            rowCount++
         }
 
-        // Check if we need a new page
-        if (yPos + signatureBoxHeight + 15 > pageHeight - 30) {
+        // Move down after employee signatures
+        if (rowCount > 0) {
+            yPos += signatureBoxHeight + 15
+        }
+
+        // Check if we need a new page for client signature
+        if (yPos > pageHeight - 60) {
             doc.addPage()
             yPos = margin
-            xPos = margin
-            rowCount = 0
-
-            // Re-add section header on new page
-            doc.setFontSize(10)
-            doc.setFont("helvetica", "bold")
-            doc.text("Mitarbeiter (Fortsetzung):", margin, yPos)
-            yPos += 8
         }
 
-        // Draw signature box
-        doc.setLineWidth(0.3)
-        doc.rect(xPos, yPos, signatureBoxWidth, signatureBoxHeight)
-
-        // Add signature image if available
-        if (empSig.signature) {
-            try {
-                doc.addImage(
-                    empSig.signature,
-                    "PNG",
-                    xPos + 2,
-                    yPos + 2,
-                    signatureBoxWidth - 4,
-                    signatureBoxHeight - 4
-                )
-            } catch (error) {
-                console.error("Error adding employee signature:", error)
-            }
-        }
-
-        // Employee name and date below signature
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "normal")
-        const signedDateStr = format(new Date(empSig.signedAt), "dd.MM.yyyy", { locale: de })
-        doc.text(
-            empSig.employeeName,
-            xPos + signatureBoxWidth / 2,
-            yPos + signatureBoxHeight + 4,
-            { align: "center" }
-        )
-        doc.text(
-            signedDateStr,
-            xPos + signatureBoxWidth / 2,
-            yPos + signatureBoxHeight + 8,
-            { align: "center" }
-        )
-
-        xPos += signatureBoxWidth + signatureGap
-        rowCount++
+        yPos += 5
     }
-
-    // Move down after employee signatures
-    if (rowCount > 0) {
-        yPos += signatureBoxHeight + 15
-    }
-
-    // Check if we need a new page for client signature
-    if (yPos > pageHeight - 60) {
-        doc.addPage()
-        yPos = margin
-    }
-
-    yPos += 5
 
     // Client signature section
     doc.setFontSize(10)
