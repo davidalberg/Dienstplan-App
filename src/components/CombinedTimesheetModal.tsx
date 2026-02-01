@@ -11,7 +11,8 @@ import {
     Download,
     FileSpreadsheet,
     Loader2,
-    Mail
+    Mail,
+    RotateCcw
 } from "lucide-react"
 import useSWR from "swr"
 import { showToast } from "@/lib/toast-utils"
@@ -116,9 +117,10 @@ export default function CombinedTimesheetModal({
 }: CombinedTimesheetModalProps) {
     const [downloading, setDownloading] = useState<'pdf' | 'excel' | null>(null)
     const [sendingEmail, setSendingEmail] = useState(false)
+    const [resetting, setResetting] = useState(false)
 
     // Fetch combined timesheet data
-    const { data, error, isLoading } = useSWR<CombinedTimesheetData>(
+    const { data, error, isLoading, mutate } = useSWR<CombinedTimesheetData>(
         isOpen
             ? `/api/admin/timesheets/combined?sheetFileName=${encodeURIComponent(sheetFileName)}&clientId=${clientId}&month=${month}&year=${year}`
             : null,
@@ -239,6 +241,62 @@ export default function CombinedTimesheetModal({
             showToast("error", "Netzwerkfehler beim E-Mail-Versand")
         } finally {
             setSendingEmail(false)
+        }
+    }
+
+    // Handle reset (withdraw all signatures)
+    const handleReset = async () => {
+        if (!clientId || !data) {
+            showToast("error", "Daten nicht verfügbar")
+            return
+        }
+
+        // Check if there are any signatures to reset
+        const hasSignatures = data.signatures.employees.some(sig => sig.signed) || data.signatures.client.signed
+
+        if (!hasSignatures) {
+            showToast("info", "Keine Unterschriften vorhanden")
+            return
+        }
+
+        // Confirmation dialog
+        const confirmMessage =
+            "Möchten Sie den Stundennachweis wirklich zurücksetzen?\n\n" +
+            "Folgende Aktionen werden durchgeführt:\n" +
+            "• Alle Mitarbeiter-Unterschriften werden entfernt\n" +
+            "• Klient-Unterschrift wird entfernt\n" +
+            "• Mitarbeiter können Zeiten neu bearbeiten und einreichen\n" +
+            "• Nach erneuter Mitarbeiter-Unterschrift wird E-Mail an Klient gesendet\n\n" +
+            "Dieser Vorgang kann nicht rückgängig gemacht werden."
+
+        if (!confirm(confirmMessage)) {
+            return
+        }
+
+        setResetting(true)
+        try {
+            const res = await fetch("/api/admin/submissions/reset", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    clientId,
+                    month,
+                    year
+                })
+            })
+
+            if (res.ok) {
+                showToast("success", "Stundennachweis erfolgreich zurückgesetzt")
+                // Refresh data
+                mutate()
+            } else {
+                const err = await res.json()
+                showToast("error", err.error || "Fehler beim Zurücksetzen")
+            }
+        } catch (error) {
+            showToast("error", "Netzwerkfehler beim Zurücksetzen")
+        } finally {
+            setResetting(false)
         }
     }
 
@@ -515,6 +573,32 @@ export default function CombinedTimesheetModal({
                                     </p>
                                 )}
                             </div>
+
+                            {/* Reset Button */}
+                            {(data.signatures.employees.some(sig => sig.signed) || data.signatures.client.signed) && (
+                                <div className="border-t border-neutral-700 pt-4 mb-4">
+                                    <button
+                                        onClick={handleReset}
+                                        disabled={resetting}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-900/50 border border-amber-700 text-amber-400 font-medium hover:bg-amber-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {resetting ? (
+                                            <>
+                                                <Loader2 size={16} className="animate-spin" />
+                                                Wird zurückgesetzt...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <RotateCcw size={16} />
+                                                Stundennachweis zurücksetzen
+                                            </>
+                                        )}
+                                    </button>
+                                    <p className="text-xs text-neutral-500 mt-2 text-center">
+                                        Entfernt alle Unterschriften und ermöglicht erneute Bearbeitung
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Download Buttons */}
                             <div className="flex gap-2 pt-4 border-t border-neutral-800">
