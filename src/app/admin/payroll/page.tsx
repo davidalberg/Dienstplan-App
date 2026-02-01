@@ -34,6 +34,7 @@ interface PayrollItem {
     sundayHours: number
     holidayHours: number
     backupDays: number
+    backupHours: number  // NEU: Eingesprungene Stunden
     sickPeriods: string
     sickHours: number
     vacationDays: number
@@ -298,7 +299,16 @@ export default function PayrollPage() {
                                                 {item.holidayHours > 0 ? `${item.holidayHours.toFixed(2)}h` : "-"}
                                             </td>
                                             <td className="px-4 py-3 text-right text-emerald-400">
-                                                {item.backupDays > 0 ? `${item.backupDays} Tage` : "-"}
+                                                {item.backupDays > 0 || (item.backupHours && item.backupHours > 0) ? (
+                                                    <div>
+                                                        <span>{item.backupDays} Tage</span>
+                                                        {item.backupHours && item.backupHours > 0 && (
+                                                            <span className="text-xs text-neutral-400 ml-1">
+                                                                ({item.backupHours.toFixed(1)}h)
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : "-"}
                                             </td>
                                             <td className="px-4 py-3">
                                                 {item.sickPeriods ? (

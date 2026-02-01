@@ -5,12 +5,7 @@ import prisma from "@/lib/prisma"
 import * as XLSX from "xlsx"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
-import {
-    calculateTotalHours,
-    calculateNightHours,
-    isSundayDate,
-    isNRWHoliday
-} from "@/lib/premium-calculator"
+import { aggregateMonthlyData } from "@/lib/premium-calculator"
 
 /**
  * Query parameter validation
@@ -86,77 +81,41 @@ export async function GET(req: NextRequest) {
 
             // Skip employees with no activity
             if (employeeTimesheets.length === 0) {
-                // Also check if they appear as backup
-                const asBackup = timesheets.filter(ts =>
-                    ts.backupEmployeeId === employee.id &&
-                    (ts.absenceType === "SICK" || ts.absenceType === "VACATION")
-                )
+                // Also check if they appear as backup (ANY backup, not just SICK/VACATION)
+                const asBackup = timesheets.filter(ts => ts.backupEmployeeId === employee.id)
                 if (asBackup.length === 0) continue
             }
 
-            // Calculate worked hours and premiums
-            let totalHours = 0
-            let nightHours = 0
-            let sundayHours = 0
-            let holidayHours = 0
+            // Nutze aggregateMonthlyData für konsistente Berechnung (inkl. Backup-Stunden)
+            const aggregated = aggregateMonthlyData(
+                employeeTimesheets,
+                {
+                    id: employee.id,
+                    hourlyWage: employee.hourlyWage || 0,
+                    nightPremiumEnabled: employee.nightPremiumEnabled,
+                    nightPremiumPercent: employee.nightPremiumPercent,
+                    sundayPremiumEnabled: employee.sundayPremiumEnabled,
+                    sundayPremiumPercent: employee.sundayPremiumPercent,
+                    holidayPremiumEnabled: employee.holidayPremiumEnabled,
+                    holidayPremiumPercent: employee.holidayPremiumPercent
+                },
+                timesheets  // ALLE Timesheets für Backup-Suche
+            )
 
-            // Track sick periods
-            const sickDates: Date[] = []
-            let sickHours = 0
-
-            // Track vacation
-            const vacationDates: Date[] = []
-            let vacationHours = 0
-
-            employeeTimesheets.forEach(ts => {
-                const date = new Date(ts.date)
-                const start = ts.actualStart || ts.plannedStart
-                const end = ts.actualEnd || ts.plannedEnd
-
-                if (ts.absenceType === "SICK") {
-                    sickDates.push(date)
-                    if (start && end) {
-                        sickHours += calculateTotalHours(start, end)
-                    }
-                } else if (ts.absenceType === "VACATION") {
-                    vacationDates.push(date)
-                    if (start && end) {
-                        vacationHours += calculateTotalHours(start, end)
-                    }
-                } else if (start && end) {
-                    // Regular work
-                    const hours = calculateTotalHours(start, end)
-                    totalHours += hours
-
-                    // Night premium (23:00-06:00)
-                    if (employee.nightPremiumEnabled) {
-                        nightHours += calculateNightHours(start, end, date)
-                    }
-
-                    // Sunday premium
-                    if (employee.sundayPremiumEnabled && isSundayDate(date)) {
-                        sundayHours += hours
-                    }
-
-                    // Holiday premium
-                    if (employee.holidayPremiumEnabled && isNRWHoliday(date)) {
-                        holidayHours += hours
-                    }
-                }
-            })
-
-            // Count backup days
+            // Backup-Tage separat zählen (ALLE Einträge, nicht nur bei Abwesenheit)
             const backupDays = timesheets.filter(ts =>
-                ts.backupEmployeeId === employee.id &&
-                (ts.absenceType === "SICK" || ts.absenceType === "VACATION")
+                ts.backupEmployeeId === employee.id
             ).length
 
             // Skip if no activity at all
-            if (totalHours === 0 && sickHours === 0 && vacationHours === 0 && backupDays === 0) {
+            if (aggregated.totalHours === 0 && aggregated.sickHours === 0 && aggregated.vacationHours === 0 && backupDays === 0) {
                 continue
             }
 
-            // Format sick periods
+            // Krankheitszeiträume formatieren
+            const sickDates = employeeTimesheets
+                .filter(ts => ts.absenceType === "SICK")
+                .map(ts => new Date(ts.date))
             const sickPeriods = formatDatePeriods(sickDates)
 
             // Get client name via team
@@ -175,7 +134,7 @@ export async function GET(req: NextRequest) {
                 ? format(employee.exitDate, "dd.MM.yyyy", { locale: de })
                 : ""
 
-            // Build row with 16 columns (A-P)
+            // Build row with 17 columns (A-Q) - neue Spalte für Backup-Stunden
             excelData.push({
                 "ID": employee.id,
                 "Klientname": clientName,
@@ -183,15 +142,16 @@ export async function GET(req: NextRequest) {
                 "Eintrittsdatum": entryDateStr,
                 "Austrittsdatum": exitDateStr,
                 "Stundenlohn": employee.hourlyWage || 0,
-                "Gesamtstunden": Math.round(totalHours * 100) / 100,
-                "Nachtzuschlag-Std": Math.round(nightHours * 100) / 100,
-                "Sonntagszuschlag-Std": Math.round(sundayHours * 100) / 100,
-                "Feiertagszuschlag-Std": Math.round(holidayHours * 100) / 100,
-                "Bereitschaftstage": backupDays,
+                "Gesamtstunden": aggregated.totalHours,      // INKL. Backup-Stunden!
+                "Nachtzuschlag-Std": aggregated.nightHours,  // INKL. Backup-Nachtstunden!
+                "Sonntagszuschlag-Std": aggregated.sundayHours,   // INKL. Backup-Sonntagsstunden!
+                "Feiertagszuschlag-Std": aggregated.holidayHours, // INKL. Backup-Feiertagsstunden!
+                "Bereitschaftstage": backupDays,              // Alle Bereitschaftstage
+                "Eingesprungen-Std": aggregated.backupHours,  // NEU: Eingesprungene Stunden
                 "Krank von-bis": sickPeriods,
-                "Krankstunden": Math.round(sickHours * 100) / 100,
-                "Urlaubstage": vacationDates.length,
-                "Urlaubsstunden": Math.round(vacationHours * 100) / 100,
+                "Krankstunden": aggregated.sickHours,
+                "Urlaubstage": aggregated.vacationDays,
+                "Urlaubsstunden": aggregated.vacationHours,
                 "Fahrtkosten": travelCostDisplay
             })
         }
@@ -200,7 +160,7 @@ export async function GET(req: NextRequest) {
         const wb = XLSX.utils.book_new()
         const ws = XLSX.utils.json_to_sheet(excelData)
 
-        // Set column widths
+        // Set column widths (17 columns A-Q)
         ws['!cols'] = [
             { wch: 28 },  // A: ID
             { wch: 20 },  // B: Klientname
@@ -213,11 +173,12 @@ export async function GET(req: NextRequest) {
             { wch: 20 },  // I: Sonntagszuschlag-Std
             { wch: 20 },  // J: Feiertagszuschlag-Std
             { wch: 16 },  // K: Bereitschaftstage
-            { wch: 28 },  // L: Krank von-bis
-            { wch: 14 },  // M: Krankstunden
-            { wch: 12 },  // N: Urlaubstage
-            { wch: 14 },  // O: Urlaubsstunden
-            { wch: 12 }   // P: Fahrtkosten
+            { wch: 16 },  // L: Eingesprungen-Std (NEU)
+            { wch: 28 },  // M: Krank von-bis
+            { wch: 14 },  // N: Krankstunden
+            { wch: 12 },  // O: Urlaubstage
+            { wch: 14 },  // P: Urlaubsstunden
+            { wch: 12 }   // Q: Fahrtkosten
         ]
 
         // German month name for filename

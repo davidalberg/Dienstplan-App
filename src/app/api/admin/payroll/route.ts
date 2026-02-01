@@ -2,12 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import {
-    calculateTotalHours,
-    calculateNightHours,
-    isSundayDate,
-    isNRWHoliday
-} from "@/lib/premium-calculator"
+import { aggregateMonthlyData } from "@/lib/premium-calculator"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
 
@@ -82,64 +77,31 @@ export async function GET(req: NextRequest) {
             // Get employee's timesheets
             const employeeTimesheets = timesheets.filter(ts => ts.employeeId === employee.id)
 
-            // Calculate worked hours and premiums
-            let totalHours = 0
-            let nightHours = 0
-            let sundayHours = 0
-            let holidayHours = 0
+            // Nutze aggregateMonthlyData für konsistente Berechnung (inkl. Backup-Stunden)
+            const aggregated = aggregateMonthlyData(
+                employeeTimesheets,
+                {
+                    id: employee.id,
+                    hourlyWage: employee.hourlyWage || 0,
+                    nightPremiumEnabled: employee.nightPremiumEnabled,
+                    nightPremiumPercent: employee.nightPremiumPercent,
+                    sundayPremiumEnabled: employee.sundayPremiumEnabled,
+                    sundayPremiumPercent: employee.sundayPremiumPercent,
+                    holidayPremiumEnabled: employee.holidayPremiumEnabled,
+                    holidayPremiumPercent: employee.holidayPremiumPercent
+                },
+                timesheets  // ALLE Timesheets für Backup-Suche
+            )
 
-            // Track sick periods
-            const sickDates: Date[] = []
-            let sickHours = 0
-
-            // Track vacation
-            const vacationDates: Date[] = []
-            let vacationHours = 0
-
-            employeeTimesheets.forEach(ts => {
-                const date = new Date(ts.date)
-                const start = ts.actualStart || ts.plannedStart
-                const end = ts.actualEnd || ts.plannedEnd
-
-                if (ts.absenceType === "SICK") {
-                    sickDates.push(date)
-                    if (start && end) {
-                        sickHours += calculateTotalHours(start, end)
-                    }
-                } else if (ts.absenceType === "VACATION") {
-                    vacationDates.push(date)
-                    if (start && end) {
-                        vacationHours += calculateTotalHours(start, end)
-                    }
-                } else if (start && end) {
-                    // Regular work
-                    const hours = calculateTotalHours(start, end)
-                    totalHours += hours
-
-                    // Night premium (23:00-06:00)
-                    if (employee.nightPremiumEnabled) {
-                        nightHours += calculateNightHours(start, end, date)
-                    }
-
-                    // Sunday premium
-                    if (employee.sundayPremiumEnabled && isSundayDate(date)) {
-                        sundayHours += hours
-                    }
-
-                    // Holiday premium
-                    if (employee.holidayPremiumEnabled && isNRWHoliday(date)) {
-                        holidayHours += hours
-                    }
-                }
-            })
-
-            // Count backup days (where this employee was assigned as backup for someone else)
+            // Backup-Tage separat zählen (ALLE Einträge, nicht nur bei Abwesenheit)
             const backupDays = timesheets.filter(ts =>
-                ts.backupEmployeeId === employee.id &&
-                (ts.absenceType === "SICK" || ts.absenceType === "VACATION")
+                ts.backupEmployeeId === employee.id
             ).length
 
-            // Format sick periods (group consecutive dates)
+            // Krankheitszeiträume formatieren
+            const sickDates = employeeTimesheets
+                .filter(ts => ts.absenceType === "SICK")
+                .map(ts => new Date(ts.date))
             const sickPeriods = formatDatePeriods(sickDates)
 
             // Get client name via team
@@ -157,15 +119,16 @@ export async function GET(req: NextRequest) {
                 entryDate: employee.entryDate,
                 exitDate: employee.exitDate,
                 hourlyWage: employee.hourlyWage || 0,
-                totalHours: Math.round(totalHours * 100) / 100,
-                nightHours: Math.round(nightHours * 100) / 100,
-                sundayHours: Math.round(sundayHours * 100) / 100,
-                holidayHours: Math.round(holidayHours * 100) / 100,
-                backupDays,
+                totalHours: aggregated.totalHours,      // INKL. Backup-Stunden!
+                nightHours: aggregated.nightHours,      // INKL. Backup-Nachtstunden!
+                sundayHours: aggregated.sundayHours,    // INKL. Backup-Sonntagsstunden!
+                holidayHours: aggregated.holidayHours,  // INKL. Backup-Feiertagsstunden!
+                backupDays,                             // Alle Bereitschaftstage
+                backupHours: aggregated.backupHours,    // NEU: Eingesprungene Stunden
                 sickPeriods,
-                sickHours: Math.round(sickHours * 100) / 100,
-                vacationDays: vacationDates.length,
-                vacationHours: Math.round(vacationHours * 100) / 100,
+                sickHours: aggregated.sickHours,
+                vacationDays: aggregated.vacationDays,
+                vacationHours: aggregated.vacationHours,
                 travelCostType: travelCostDisplay
             }
         })
