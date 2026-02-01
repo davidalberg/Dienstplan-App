@@ -191,6 +191,7 @@ export async function GET(req: NextRequest) {
         const processedTimesheets: ProcessedTimesheet[] = []
         const employeeStatsMap = new Map<string, {
             totalHours: number
+            plannedHours: number
             sickDays: number
             vacationDays: number
             workDays: number
@@ -200,6 +201,7 @@ export async function GET(req: NextRequest) {
         for (const emp of employees) {
             employeeStatsMap.set(emp.id, {
                 totalHours: 0,
+                plannedHours: 0,
                 sickDays: 0,
                 vacationDays: 0,
                 workDays: 0
@@ -210,14 +212,26 @@ export async function GET(req: NextRequest) {
             const start = ts.actualStart || ts.plannedStart
             const end = ts.actualEnd || ts.plannedEnd
             let hours = 0
+            let plannedHours = 0
 
-            // Calculate hours only for non-absence entries
+            // Calculate ACTUAL hours only for non-absence entries
             if (start && end && !ts.absenceType) {
                 const minutes = calculateMinutesBetween(start, end)
                 if (minutes !== null) {
                     const netMinutes = minutes - (ts.breakMinutes || 0)
                     if (netMinutes > 0) {
                         hours = Math.round(netMinutes / 60 * 100) / 100
+                    }
+                }
+            }
+
+            // Calculate PLANNED hours separately (for comparison)
+            if (ts.plannedStart && ts.plannedEnd && !ts.absenceType) {
+                const plannedMinutes = calculateMinutesBetween(ts.plannedStart, ts.plannedEnd)
+                if (plannedMinutes !== null) {
+                    const netPlannedMinutes = plannedMinutes - (ts.breakMinutes || 0)
+                    if (netPlannedMinutes > 0) {
+                        plannedHours = Math.round(netPlannedMinutes / 60 * 100) / 100
                     }
                 }
             }
@@ -229,9 +243,14 @@ export async function GET(req: NextRequest) {
                     stats.sickDays++
                 } else if (ts.absenceType === "VACATION") {
                     stats.vacationDays++
-                } else if (hours > 0) {
-                    stats.totalHours += hours
-                    stats.workDays++
+                } else {
+                    if (hours > 0) {
+                        stats.totalHours += hours
+                        stats.workDays++
+                    }
+                    if (plannedHours > 0) {
+                        stats.plannedHours += plannedHours
+                    }
                 }
             }
 
@@ -401,6 +420,7 @@ export async function GET(req: NextRequest) {
         const employeeStats = employees.map(emp => {
             const stats = employeeStatsMap.get(emp.id) || {
                 totalHours: 0,
+                plannedHours: 0,
                 sickDays: 0,
                 vacationDays: 0,
                 workDays: 0
@@ -409,6 +429,7 @@ export async function GET(req: NextRequest) {
                 employeeId: emp.id,
                 employeeName: emp.name || "Unbekannt",
                 totalHours: Math.round(stats.totalHours * 100) / 100,
+                plannedHours: Math.round(stats.plannedHours * 100) / 100,
                 sickDays: stats.sickDays,
                 vacationDays: stats.vacationDays,
                 workDays: stats.workDays

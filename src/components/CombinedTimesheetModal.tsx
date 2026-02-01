@@ -16,7 +16,10 @@ import {
 import useSWR from "swr"
 import { showToast } from "@/lib/toast-utils"
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+const fetcher = (url: string) => fetch(url).then(res => {
+    if (!res.ok) throw new Error(`API Error: ${res.status}`)
+    return res.json()
+})
 
 // German month names
 const MONTH_NAMES = [
@@ -126,7 +129,7 @@ export default function CombinedTimesheetModal({
 
     // Sort timesheets chronologically by date
     const sortedTimesheets = useMemo((): Timesheet[] => {
-        if (!data) return []
+        if (!data || !data.timesheets) return []
 
         // Sort all timesheets by date
         return [...data.timesheets].sort((a, b) =>

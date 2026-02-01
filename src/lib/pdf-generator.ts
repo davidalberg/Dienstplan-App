@@ -266,17 +266,38 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
     doc.setFontSize(10)
     doc.setFont("helvetica", "normal")
 
-    const summaryData = [
+    const summaryData: [string, string][] = [
         ["Geplante Stunden:", `${stats.plannedHours.toFixed(2)} Std.`],
         ["Tatsächliche Stunden:", `${stats.totalHours.toFixed(2)} Std.`],
         ["Differenz:", `${(stats.totalHours - stats.plannedHours) >= 0 ? "+" : ""}${(stats.totalHours - stats.plannedHours).toFixed(2)} Std.`],
-        ["", ""],
-        ["Krankheitstage:", `${stats.sickDays} Tage (${stats.sickHours.toFixed(2)} Std.)`],
-        ["Urlaubstage:", `${stats.vacationDays} Tage (${stats.vacationHours.toFixed(2)} Std.)`],
-        ["Nachtstunden:", `${stats.nightHours.toFixed(2)} Std.`],
-        ["Sonntagsstunden:", `${stats.sundayHours.toFixed(2)} Std.`],
-        ["Feiertagsstunden:", `${stats.holidayHours.toFixed(2)} Std.`],
     ]
+
+    // Only add absence types if they have values > 0
+    const hasAbsences = stats.sickDays > 0 || stats.vacationDays > 0
+    if (hasAbsences) {
+        summaryData.push(["", ""])  // Separator
+        if (stats.sickDays > 0) {
+            summaryData.push(["Krankheitstage:", `${stats.sickDays} Tage (${stats.sickHours.toFixed(2)} Std.)`])
+        }
+        if (stats.vacationDays > 0) {
+            summaryData.push(["Urlaubstage:", `${stats.vacationDays} Tage (${stats.vacationHours.toFixed(2)} Std.)`])
+        }
+    }
+
+    // Only add bonus hours if they have values > 0
+    const hasBonusHours = stats.nightHours > 0 || stats.sundayHours > 0 || stats.holidayHours > 0
+    if (hasBonusHours) {
+        summaryData.push(["", ""])  // Separator
+        if (stats.nightHours > 0) {
+            summaryData.push(["Nachtstunden:", `${stats.nightHours.toFixed(2)} Std.`])
+        }
+        if (stats.sundayHours > 0) {
+            summaryData.push(["Sonntagsstunden:", `${stats.sundayHours.toFixed(2)} Std.`])
+        }
+        if (stats.holidayHours > 0) {
+            summaryData.push(["Feiertagsstunden:", `${stats.holidayHours.toFixed(2)} Std.`])
+        }
+    }
 
     for (const [label, value] of summaryData) {
         if (label === "") {
@@ -551,6 +572,7 @@ interface EmployeeStats {
     employeeId: string
     employeeName: string
     totalHours: number
+    plannedHours: number
     sickDays: number
     vacationDays: number
     workDays: number
@@ -612,6 +634,9 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
     const pageHeight = doc.internal.pageSize.getHeight()
     const margin = 15
     let yPos = margin
+
+    // Calculate total planned hours from employee stats
+    const totalPlannedHours = employeeStats.reduce((sum, emp) => sum + emp.plannedHours, 0)
 
     // -------------------------------------------------------------------------
     // HEADER SECTION
@@ -772,6 +797,32 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
     doc.text("ZUSAMMENFASSUNG", margin, yPos)
     yPos += 8
 
+    // Overall planned vs. actual hours (like single-employee PDF)
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "bold")
+    doc.text("Geplante Stunden:", margin, yPos)
+    doc.setFont("helvetica", "normal")
+    doc.text(`${totalPlannedHours.toFixed(2)} Std.`, margin + 50, yPos)
+    yPos += 5
+
+    doc.setFont("helvetica", "bold")
+    doc.text("Tatsächliche Stunden:", margin, yPos)
+    doc.setFont("helvetica", "normal")
+    doc.text(`${totalHours.toFixed(2)} Std.`, margin + 50, yPos)
+    yPos += 5
+
+    doc.setFont("helvetica", "bold")
+    doc.text("Differenz:", margin, yPos)
+    doc.setFont("helvetica", "normal")
+    const diff = totalHours - totalPlannedHours
+    doc.text(`${diff >= 0 ? "+" : ""}${diff.toFixed(2)} Std.`, margin + 50, yPos)
+    yPos += 8
+
+    // Separator line
+    doc.setLineWidth(0.3)
+    doc.line(margin, yPos, pageWidth - margin, yPos)
+    yPos += 6
+
     // Per-employee breakdown
     doc.setFontSize(10)
     doc.setFont("helvetica", "bold")
@@ -789,17 +840,7 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
         yPos += 5
     }
 
-    // Separator line
     yPos += 2
-    doc.setLineWidth(0.3)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 6
-
-    // Total
-    doc.setFontSize(10)
-    doc.setFont("helvetica", "bold")
-    doc.text(`Gesamt:      ${totalHours.toFixed(2)} Std.`, margin, yPos)
-    yPos += 10
 
     // -------------------------------------------------------------------------
     // SIGNATURES SECTION
