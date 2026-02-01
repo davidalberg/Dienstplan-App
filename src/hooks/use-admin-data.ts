@@ -160,3 +160,28 @@ export function useActivityLog(limit = 50, type?: string, category?: string) {
         mutate
     }
 }
+
+// Payroll / Lohnliste
+export function useAdminPayroll(month: number, year: number) {
+    const params = new URLSearchParams({
+        month: String(month),
+        year: String(year)
+    })
+
+    const { data, error, isLoading, mutate } = useSWR(
+        `/api/admin/payroll?${params}`,
+        fetcher,
+        swrConfig
+    )
+
+    return {
+        payroll: data?.payroll || [],
+        totals: data?.totals || {},
+        month: data?.month,
+        year: data?.year,
+        employeeCount: data?.employeeCount || 0,
+        isLoading,
+        isError: error,
+        mutate
+    }
+}

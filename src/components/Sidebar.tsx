@@ -7,14 +7,14 @@ import { useState } from "react"
 import {
     Calendar,
     FileText,
-    Users,
     UserCircle,
     Settings,
     ChevronLeft,
     ChevronRight,
     LogOut,
     Search,
-    UserCog
+    UserCog,
+    Wallet
 } from "lucide-react"
 
 interface NavItem {
@@ -34,16 +34,13 @@ export function Sidebar({ onExportClick }: SidebarProps) {
     const pathname = usePathname()
     const [collapsed, setCollapsed] = useState(false)
 
-    const mainNavItems: NavItem[] = [
+    const navItems: NavItem[] = [
         { icon: Calendar, label: "Kalender", href: "/admin/schedule" },
-        { icon: Users, label: "Team-Übersicht", href: "/admin/team-overview" },
-        { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
         { icon: UserCog, label: "Assistenten", href: "/admin/assistants" },
-    ]
-
-    const secondaryNavItems: NavItem[] = [
-        { icon: Settings, label: "Einstellungen", href: "/admin/settings" },
+        { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
         { icon: FileText, label: "Stundennachweise", href: "/admin/timesheets" },
+        { icon: Wallet, label: "Lohnliste", href: "/admin/payroll" },
+        { icon: Settings, label: "Einstellungen", href: "/admin/settings" },
     ]
 
     const isActive = (href?: string) => {
@@ -136,13 +133,7 @@ export function Sidebar({ onExportClick }: SidebarProps) {
 
             {/* Main Navigation */}
             <nav className="flex-1 p-3 space-y-1">
-                {mainNavItems.map((item) => (
-                    <NavLink key={item.label} item={item} />
-                ))}
-
-                <div className="my-3 border-t border-neutral-800" />
-
-                {secondaryNavItems.map((item) => (
+                {navItems.map((item) => (
                     <NavLink key={item.label} item={item} />
                 ))}
             </nav>
