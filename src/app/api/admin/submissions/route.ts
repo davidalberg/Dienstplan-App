@@ -418,6 +418,10 @@ export async function GET(req: NextRequest) {
             const recipientName = submission.dienstplanConfig?.assistantRecipientName ||
                 (submission.client ? `${submission.client.firstName} ${submission.client.lastName}` : null)
 
+            // BUGFIX: Prefer submission.client.id over submission.clientId
+            // This ensures consistency when Client record is updated but TeamSubmission.clientId is stale
+            const resolvedClientId = submission.client?.id || submission.clientId
+
             return {
                 id: submission.id,
                 sheetFileName: submission.sheetFileName,
@@ -427,7 +431,7 @@ export async function GET(req: NextRequest) {
                 status: submission.status,
                 createdAt: submission.createdAt,
                 updatedAt: submission.updatedAt,
-                clientId: submission.clientId, // Include clientId for CombinedTimesheetModal
+                clientId: resolvedClientId, // BUGFIX: Use resolved clientId from client relation
                 recipientEmail,
                 recipientName,
                 recipientSignedAt: submission.recipientSignedAt,
