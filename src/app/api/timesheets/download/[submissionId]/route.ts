@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { generateTimesheetPdf } from "@/lib/pdf-generator"
+import { generateCombinedTeamPdf } from "@/lib/pdf-generator"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
 
 /**
@@ -137,55 +137,69 @@ export async function GET(
             ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}`
             : teamSubmission.dienstplanConfig?.assistantRecipientName || "Unbekannt"
 
-        // Generate PDF with all employees
-        const teamName = clientName
-        const employeeName = allEmployeeData.length === 1
-            ? allEmployeeData[0].employee.name || "Unbekannt"
-            : `Team (${allEmployeeData.length} Mitarbeiter)`
+        // Prepare timesheets for combined PDF (flat structure with employee names)
+        const pdfTimesheets = timesheets.map(ts => {
+            // Calculate hours from actual times
+            let hours = 0
+            if (ts.actualStart && ts.actualEnd && !ts.absenceType) {
+                const [startH, startM] = ts.actualStart.split(":").map(Number)
+                const [endH, endM] = ts.actualEnd.split(":").map(Number)
+                hours = (endH * 60 + endM - startH * 60 - startM) / 60
+                if (hours < 0) hours += 24 // overnight shift
+            }
+            return {
+                date: ts.date,
+                employeeId: ts.employeeId,
+                employeeName: ts.employee.name || ts.employee.email,
+                plannedStart: ts.plannedStart,
+                plannedEnd: ts.plannedEnd,
+                actualStart: ts.actualStart,
+                actualEnd: ts.actualEnd,
+                absenceType: ts.absenceType,
+                note: ts.note,
+                status: ts.status,
+                hours
+            }
+        })
 
-        const pdfTimesheets = timesheets.map(ts => ({
-            date: ts.date,
-            plannedStart: ts.plannedStart,
-            plannedEnd: ts.plannedEnd,
-            actualStart: ts.actualStart,
-            actualEnd: ts.actualEnd,
-            absenceType: ts.absenceType,
-            note: ts.note,
-            status: ts.status,
-            employeeName: ts.employee.name || ts.employee.email
+        // Prepare employee stats for the PDF
+        const employeeStats = allEmployeeData.map(empData => ({
+            employeeId: empData.employee.id,
+            employeeName: empData.employee.name || empData.employee.email,
+            totalHours: empData.stats.totalHours,
+            plannedHours: empData.stats.totalHours,
+            workDays: empData.timesheets.filter((ts: any) => !ts.absenceType).length,
+            sickDays: empData.timesheets.filter((ts: any) => ts.absenceType === "SICK").length,
+            vacationDays: empData.timesheets.filter((ts: any) => ts.absenceType === "VACATION").length
         }))
 
-        const pdfBuffer = generateTimesheetPdf({
-            employeeName,
-            teamName,
+        // Generate combined PDF (same format as admin export)
+        const pdfBuffer = generateCombinedTeamPdf({
+            teamName: teamSubmission.sheetFileName || clientName,
+            clientName,
             month: teamSubmission.month,
             year: teamSubmission.year,
             timesheets: pdfTimesheets,
-            stats: {
-                totalHours,
-                plannedHours: totalHours,
-                sickDays: timesheets.filter(ts => ts.absenceType === "SICK").length,
-                sickHours: 0,
-                vacationDays: timesheets.filter(ts => ts.absenceType === "VACATION").length,
-                vacationHours: 0,
-                nightHours: 0,
-                sundayHours: 0,
-                holidayHours: 0
-            },
+            employeeStats,
+            totalHours,
             signatures: {
-                employeeSignatures: teamSubmission.employeeSignatures
+                employees: teamSubmission.employeeSignatures
                     .filter(sig => sig.signedAt && sig.signature)
                     .map(sig => ({
+                        employeeId: sig.employeeId,
                         employeeName: sig.employee.name || sig.employee.email,
                         signature: sig.signature!,
                         signedAt: sig.signedAt!
                     })),
-                recipientSignature: teamSubmission.recipientSignature,
-                recipientSignedAt: teamSubmission.recipientSignedAt
+                client: {
+                    clientName,
+                    signature: teamSubmission.recipientSignature,
+                    signedAt: teamSubmission.recipientSignedAt
+                }
             }
         })
 
-        const filename = `Stundennachweis_${teamName.replace(/\s+/g, "_")}_${teamSubmission.month}_${teamSubmission.year}.pdf`
+        const filename = `Stundennachweis_${clientName.replace(/\s+/g, "_")}_${teamSubmission.month}_${teamSubmission.year}.pdf`
 
         return new NextResponse(pdfBuffer, {
             headers: {

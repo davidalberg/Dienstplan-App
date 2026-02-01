@@ -636,12 +636,6 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
     // Info Box
     doc.setFontSize(10)
     doc.setFont("helvetica", "bold")
-    doc.text("Team:", margin, yPos)
-    doc.setFont("helvetica", "normal")
-    doc.text(teamName, margin + 25, yPos)
-    yPos += 5
-
-    doc.setFont("helvetica", "bold")
     doc.text("Klient:", margin, yPos)
     doc.setFont("helvetica", "normal")
     doc.text(clientName, margin + 25, yPos)
