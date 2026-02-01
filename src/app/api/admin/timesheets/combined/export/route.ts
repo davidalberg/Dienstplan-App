@@ -173,11 +173,11 @@ export async function GET(req: NextRequest) {
             }, { status: 404 })
         }
 
-        // Helper function to anonymize employee names (only first letter)
+        // Helper function to anonymize employee names (e.g., "Najra Fejzovic" -> "Assistent N")
         const anonymizeName = (name: string): string => {
             if (templateId !== "invoice") return name
             const firstChar = name.trim().charAt(0).toUpperCase()
-            return firstChar || "?"
+            return `Assistent ${firstChar || "?"}`
         }
 
         // Create employee name map (anonymized if invoice template)

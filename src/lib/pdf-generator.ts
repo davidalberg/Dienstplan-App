@@ -609,12 +609,12 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
         isInvoice = false
     } = options
 
-    // Helper function to anonymize employee names (only first letter of first name)
+    // Helper function to anonymize employee names (e.g., "Najra Fejzovic" -> "Assistent N")
     const anonymizeName = (name: string): string => {
         if (!isInvoice) return name
-        // Get first letter of first name only (e.g., "Najra Fejzovic" -> "N")
+        // Get first letter of first name only and prefix with "Assistent"
         const firstChar = name.trim().charAt(0).toUpperCase()
-        return firstChar || "?"
+        return `Assistent ${firstChar || "?"}`
     }
 
     const doc = new jsPDF({

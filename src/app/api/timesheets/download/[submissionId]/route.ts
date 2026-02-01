@@ -108,9 +108,12 @@ export async function GET(
             const monthlyData = aggregateMonthlyData(
                 empTimesheets.map(ts => ({
                     date: ts.date,
+                    plannedStart: ts.plannedStart,
+                    plannedEnd: ts.plannedEnd,
                     actualStart: ts.actualStart,
                     actualEnd: ts.actualEnd,
-                    absenceType: ts.absenceType
+                    absenceType: ts.absenceType,
+                    status: ts.status
                 })),
                 {
                     hourlyWage: employee.hourlyWage || 0,
