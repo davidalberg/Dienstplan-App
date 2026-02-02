@@ -1,10 +1,10 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { useEffect, useState, useMemo, useCallback, Suspense } from "react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from "date-fns"
 import { de } from "date-fns/locale"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import {
     Calendar,
     List,
@@ -32,6 +32,27 @@ import DuplicateShiftModal from "@/components/DuplicateShiftModal"
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
 import { toast } from "sonner"
+
+// Loading fallback component
+function ScheduleLoadingFallback() {
+    return (
+        <div className="admin-dark min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
+            <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-violet-500 mb-4"></div>
+                <p className="text-neutral-400 font-medium">Dienstplan wird geladen...</p>
+            </div>
+        </div>
+    )
+}
+
+// Main export wrapped in Suspense
+export default function SchedulePage() {
+    return (
+        <Suspense fallback={<ScheduleLoadingFallback />}>
+            <SchedulePageContent />
+        </Suspense>
+    )
+}
 
 interface Shift {
     id: string
@@ -77,18 +98,41 @@ interface Client {
     employees: { id: string; name: string }[]
 }
 
-export default function SchedulePage() {
+function SchedulePageContent() {
     const { data: session } = useSession()
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const pathname = usePathname()
     const [viewMode, setViewMode] = useState<"list" | "calendar">("list")
 
-    // Filter
-    const [currentDate, setCurrentDate] = useState(new Date())
+    // Filter - Initialize from URL params or current date
+    const [currentDate, setCurrentDate] = useState(() => {
+        const monthParam = searchParams.get('month')
+        const yearParam = searchParams.get('year')
+        if (monthParam && yearParam) {
+            const m = parseInt(monthParam, 10)
+            const y = parseInt(yearParam, 10)
+            if (!isNaN(m) && !isNaN(y) && m >= 1 && m <= 12) {
+                return new Date(y, m - 1, 1)
+            }
+        }
+        return new Date()
+    })
     const [selectedTeam, setSelectedTeam] = useState<string>("")
     const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
 
     const month = currentDate.getMonth() + 1
     const year = currentDate.getFullYear()
+
+    // Sync URL when month changes
+    useEffect(() => {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('month', String(month))
+        params.set('year', String(year))
+        const newUrl = `${pathname}?${params.toString()}`
+        // Use replace to avoid adding to browser history on every change
+        router.replace(newUrl, { scroll: false })
+    }, [month, year, pathname, router, searchParams])
 
     // SWR für Daten-Caching
     const {
@@ -104,6 +148,7 @@ export default function SchedulePage() {
     const [employees, setEmployees] = useState<Employee[]>([])
     const [teams, setTeams] = useState<Team[]>([])
     const [clients, setClients] = useState<Client[]>([])
+    const [clientsLoading, setClientsLoading] = useState(true)
     const [loading, setLoading] = useState(true)
 
     // Bulk-Delete State
@@ -123,6 +168,7 @@ export default function SchedulePage() {
     // Lade Klienten
     useEffect(() => {
         async function loadClients() {
+            setClientsLoading(true)
             try {
                 const res = await fetch("/api/clients")
                 if (res.ok) {
@@ -135,6 +181,8 @@ export default function SchedulePage() {
             } catch (err) {
                 console.error("Fehler beim Laden der Klienten:", err)
                 showToast("error", "Netzwerkfehler beim Laden der Klienten")
+            } finally {
+                setClientsLoading(false)
             }
         }
         loadClients()
@@ -782,8 +830,8 @@ export default function SchedulePage() {
 
     if (!session) return null
 
-    // ✅ BLACK SCREEN FIX: Show loading spinner while data is loading
-    if (isLoading && shifts.length === 0) {
+    // ✅ BLACK SCREEN FIX: Show loading spinner while data is loading (including clients)
+    if ((isLoading && shifts.length === 0) || clientsLoading) {
         return (
             <div className="admin-dark min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
                 <div className="text-center">

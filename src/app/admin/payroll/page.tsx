@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import {
     Wallet,
     ChevronLeft,
@@ -14,6 +15,27 @@ import {
 } from "lucide-react"
 import { useAdminPayroll } from "@/hooks/use-admin-data"
 import { showToast } from "@/lib/toast-utils"
+
+// Loading fallback component
+function PayrollLoadingFallback() {
+    return (
+        <div className="min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
+            <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-violet-500 mb-4"></div>
+                <p className="text-neutral-400 font-medium">Lohnliste wird geladen...</p>
+            </div>
+        </div>
+    )
+}
+
+// Main export wrapped in Suspense
+export default function PayrollPage() {
+    return (
+        <Suspense fallback={<PayrollLoadingFallback />}>
+            <PayrollPageContent />
+        </Suspense>
+    )
+}
 
 // German month names
 const MONTH_NAMES = [
@@ -72,14 +94,39 @@ function StatCard({
 }
 
 /**
- * Main Payroll Admin Page
+ * Main Payroll Admin Page Content
  */
-export default function PayrollPage() {
-    const [currentDate, setCurrentDate] = useState(new Date())
+function PayrollPageContent() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const pathname = usePathname()
+
+    // Initialize from URL params or current date
+    const [currentDate, setCurrentDate] = useState(() => {
+        const monthParam = searchParams.get('month')
+        const yearParam = searchParams.get('year')
+        if (monthParam && yearParam) {
+            const m = parseInt(monthParam, 10)
+            const y = parseInt(yearParam, 10)
+            if (!isNaN(m) && !isNaN(y) && m >= 1 && m <= 12) {
+                return new Date(y, m - 1, 1)
+            }
+        }
+        return new Date()
+    })
     const [isExporting, setIsExporting] = useState(false)
 
     const month = currentDate.getMonth() + 1
     const year = currentDate.getFullYear()
+
+    // Sync URL when month changes
+    useEffect(() => {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('month', String(month))
+        params.set('year', String(year))
+        const newUrl = `${pathname}?${params.toString()}`
+        router.replace(newUrl, { scroll: false })
+    }, [month, year, pathname, router, searchParams])
 
     // Fetch payroll data
     const { payroll, totals, employeeCount, isLoading } = useAdminPayroll(month, year)
@@ -301,10 +348,12 @@ export default function PayrollPage() {
                                             <td className="px-4 py-3 text-right text-emerald-400">
                                                 {item.backupDays > 0 || (item.backupHours && item.backupHours > 0) ? (
                                                     <div>
-                                                        <span>{item.backupDays} Tage</span>
+                                                        {item.backupDays > 0 && (
+                                                            <span>{item.backupDays} {item.backupDays === 1 ? "Tag" : "Tage"}</span>
+                                                        )}
                                                         {item.backupHours && item.backupHours > 0 && (
-                                                            <span className="text-xs text-neutral-400 ml-1">
-                                                                ({item.backupHours.toFixed(1)}h)
+                                                            <span className={item.backupDays > 0 ? "text-xs text-neutral-400 ml-1" : ""}>
+                                                                {item.backupDays > 0 ? `(${item.backupHours.toFixed(1)}h)` : `${item.backupHours.toFixed(1)}h`}
                                                             </span>
                                                         )}
                                                     </div>

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, Suspense } from "react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import {
     FileText,
     ChevronLeft,
@@ -17,6 +18,27 @@ import EmployeeAvatarStack from "@/components/EmployeeAvatarStack"
 import SignatureProgress from "@/components/SignatureProgress"
 import { showToast } from "@/lib/toast-utils"
 import CombinedTimesheetModal from "@/components/CombinedTimesheetModal"
+
+// Loading fallback component
+function TimesheetsLoadingFallback() {
+    return (
+        <div className="min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
+            <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-violet-500 mb-4"></div>
+                <p className="text-neutral-400 font-medium">Stundennachweise werden geladen...</p>
+            </div>
+        </div>
+    )
+}
+
+// Main export wrapped in Suspense
+export default function TimesheetsPage() {
+    return (
+        <Suspense fallback={<TimesheetsLoadingFallback />}>
+            <TimesheetsPageContent />
+        </Suspense>
+    )
+}
 
 // German month names
 const MONTH_NAMES = [
@@ -255,16 +277,41 @@ function TeamSubmissionRow({
 }
 
 /**
- * Main Timesheets Admin Page
+ * Main Timesheets Admin Page Content
  */
-export default function TimesheetsPage() {
-    const [currentDate, setCurrentDate] = useState(new Date())
+function TimesheetsPageContent() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const pathname = usePathname()
+
+    // Initialize from URL params or current date
+    const [currentDate, setCurrentDate] = useState(() => {
+        const monthParam = searchParams.get('month')
+        const yearParam = searchParams.get('year')
+        if (monthParam && yearParam) {
+            const m = parseInt(monthParam, 10)
+            const y = parseInt(yearParam, 10)
+            if (!isNaN(m) && !isNaN(y) && m >= 1 && m <= 12) {
+                return new Date(y, m - 1, 1)
+            }
+        }
+        return new Date()
+    })
     const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
     const [showCombinedModal, setShowCombinedModal] = useState(false)
     const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null)
 
     const month = currentDate.getMonth() + 1
     const year = currentDate.getFullYear()
+
+    // Sync URL when month changes
+    useEffect(() => {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('month', String(month))
+        params.set('year', String(year))
+        const newUrl = `${pathname}?${params.toString()}`
+        router.replace(newUrl, { scroll: false })
+    }, [month, year, pathname, router, searchParams])
 
     // Fetch submissions data
     const { submissions, pendingDienstplaene, targetMonth, targetYear, isLoading, mutate } = useAdminSubmissions(month, year)
@@ -325,11 +372,11 @@ export default function TimesheetsPage() {
     }, [allSubmissions])
 
     // Expand all clients by default when data loads
-    useMemo(() => {
+    useEffect(() => {
         if (groupedByClient.length > 0) {
             setExpandedClients(new Set(groupedByClient.map(g => g.clientId)))
         }
-    }, [groupedByClient.length])
+    }, [groupedByClient])
 
     // Toggle client expansion
     const toggleClient = (clientId: string) => {
