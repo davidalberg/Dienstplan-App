@@ -41,6 +41,11 @@ model User {
   // Dienstplan-Zuweisung
   assignedSheetId          String?
   assignedPlanTab          String?
+
+  // Urlaubs-Integration
+  vacationRequests    VacationRequest[] @relation("VacationRequests")
+  vacationApprovals   VacationRequest[] @relation("VacationApprovals")
+  vacationQuotas      VacationQuota[]
 }
 
 model Team {
@@ -271,4 +276,42 @@ model ActivityLog {
   @@index([createdAt])
   @@index([type])
   @@index([category])
+}
+
+// Urlaubsantrag - Integration mit Urlaubs-App
+model VacationRequest {
+  id           String    @id @default(cuid())
+  employeeId   String
+  startDate    DateTime
+  endDate      DateTime
+  status       String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  reason       String?
+  firebaseId   String?   // Fuer Sync mit Urlaubs-App
+  approvedBy   String?   // Admin der genehmigt hat
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  employee     User      @relation("VacationRequests", fields: [employeeId], references: [id], onDelete: Cascade)
+  approver     User?     @relation("VacationApprovals", fields: [approvedBy], references: [id])
+
+  @@index([employeeId])
+  @@index([startDate, endDate])
+  @@index([status])
+}
+
+// Urlaubskontingent pro Mitarbeiter und Jahr
+model VacationQuota {
+  id          String   @id @default(cuid())
+  employeeId  String
+  year        Int
+  totalDays   Int      @default(30)
+  usedDays    Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee    User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, year])
+  @@index([year])
 }

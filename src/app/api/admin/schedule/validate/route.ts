@@ -163,7 +163,7 @@ export async function POST(req: Request) {
       }
     })
 
-    // Check 3: Absence (Urlaub/Krankheit)
+    // Check 3: Absence (Urlaub/Krankheit) in Timesheet
     const absence = await prisma.timesheet.findFirst({
       where: {
         employeeId,
@@ -186,6 +186,32 @@ export async function POST(req: Request) {
         message: `${employee.name} ist ${absenceLabel} am ${new Date(date).toLocaleDateString("de-DE")}`,
         severity: "error",
         icon: absence.absenceType === "SICK" ? "thermometer" : "palm-tree"
+      })
+    }
+
+    // Check 3b: Genehmigter Urlaub aus VacationRequest
+    const vacationRequest = await prisma.vacationRequest.findFirst({
+      where: {
+        employeeId,
+        status: "APPROVED",
+        startDate: { lte: new Date(date) },
+        endDate: { gte: new Date(date) }
+      },
+      select: {
+        startDate: true,
+        endDate: true,
+        reason: true
+      }
+    })
+
+    if (vacationRequest) {
+      const startStr = vacationRequest.startDate.toLocaleDateString("de-DE")
+      const endStr = vacationRequest.endDate.toLocaleDateString("de-DE")
+      conflicts.push({
+        type: "ABSENCE",
+        message: `${employee.name} hat genehmigten Urlaub vom ${startStr} bis ${endStr}${vacationRequest.reason ? ` (${vacationRequest.reason})` : ""}`,
+        severity: "error",
+        icon: "palm-tree"
       })
     }
 
@@ -253,6 +279,25 @@ export async function POST(req: Request) {
             })
           }
         })
+
+        // Prüfe ob Backup genehmigten Urlaub hat
+        const backupVacation = await prisma.vacationRequest.findFirst({
+          where: {
+            employeeId: backupEmployeeId,
+            status: "APPROVED",
+            startDate: { lte: new Date(date) },
+            endDate: { gte: new Date(date) }
+          }
+        })
+
+        if (backupVacation) {
+          conflicts.push({
+            type: "BACKUP_CONFLICT",
+            message: `Backup-Mitarbeiter ${backupEmployee.name} hat genehmigten Urlaub`,
+            severity: "error",
+            icon: "palm-tree"
+          })
+        }
       }
     }
 

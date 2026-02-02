@@ -184,16 +184,144 @@ function bufferToStream(buffer: Buffer) {
 }
 
 /**
- * Delete a file from Google Drive
- */
-export async function deleteTimesheetPdf(fileId: string): Promise<void> {
-    const drive = getDriveClient()
-    await drive.files.delete({ fileId })
-}
-
-/**
  * Get download URL for a file
  */
 export async function getDownloadUrl(fileId: string): Promise<string> {
     return `https://drive.google.com/uc?export=download&id=${fileId}`
+}
+
+// ============================================================================
+// Client Folder Upload Functions (for "Nachweise und Rechnungen" structure)
+// ============================================================================
+
+/**
+ * Find existing client folder "Team - {Name}" in the Nachweise root folder
+ * @param clientName - The client name (e.g., "Jana Scheuer")
+ * @returns The folder ID if found, null otherwise
+ */
+async function findClientFolder(clientName: string): Promise<string | null> {
+    const drive = getDriveClient()
+    const rootFolderId = process.env.GOOGLE_DRIVE_NACHWEISE_FOLDER_ID
+
+    if (!rootFolderId) {
+        throw new Error("GOOGLE_DRIVE_NACHWEISE_FOLDER_ID environment variable not set")
+    }
+
+    // Clean the client name and build the expected folder name
+    const cleanName = clientName.trim()
+    const folderName = `Team - ${cleanName}`
+
+    return findFolder(drive, rootFolderId, folderName)
+}
+
+/**
+ * Get or create year/month subfolder structure within a client folder
+ * Creates: {clientFolderId}/{year}/{month-name}
+ * @param clientFolderId - The parent client folder ID
+ * @param year - Year (e.g., 2026)
+ * @param month - Month number (1-12)
+ * @returns The month folder ID
+ */
+async function getOrCreateYearMonthFolder(
+    clientFolderId: string,
+    year: number,
+    month: number
+): Promise<string> {
+    const drive = getDriveClient()
+
+    // Find or create year folder
+    const yearFolderName = `${year}`
+    let yearFolderId = await findFolder(drive, clientFolderId, yearFolderName)
+
+    if (!yearFolderId) {
+        yearFolderId = await createFolder(drive, clientFolderId, yearFolderName)
+    }
+
+    // Find or create month folder (format: "01-Januar")
+    const monthFolderName = `${String(month).padStart(2, "0")}-${MONTH_NAMES[month - 1]}`
+    let monthFolderId = await findFolder(drive, yearFolderId, monthFolderName)
+
+    if (!monthFolderId) {
+        monthFolderId = await createFolder(drive, yearFolderId, monthFolderName)
+    }
+
+    return monthFolderId
+}
+
+interface UploadToClientFolderParams {
+    pdfBuffer: Buffer
+    clientName: string  // e.g., "Jana Scheuer"
+    month: number
+    year: number
+    fileName?: string   // Optional custom filename
+}
+
+/**
+ * Upload timesheet PDF to client's folder structure in Google Drive
+ * Structure: Team - {ClientName}/{year}/{month}/Stundennachweis_{Month}_{Year}.pdf
+ *
+ * SECURITY: Does NOT delete/overwrite existing files - adds timestamp for duplicates
+ *
+ * @returns The file ID and web view link
+ */
+export async function uploadToClientFolder(params: UploadToClientFolderParams): Promise<UploadResult> {
+    const { pdfBuffer, clientName, month, year, fileName: customFileName } = params
+
+    const drive = getDriveClient()
+
+    // Step 1: Find existing client folder
+    const clientFolderId = await findClientFolder(clientName)
+
+    if (!clientFolderId) {
+        throw new Error(`Client folder "Team - ${clientName}" not found in Google Drive. Please create it first.`)
+    }
+
+    // Step 2: Get or create year/month subfolder
+    const monthFolderId = await getOrCreateYearMonthFolder(clientFolderId, year, month)
+
+    // Step 3: Generate filename
+    const monthName = MONTH_NAMES[month - 1]
+    const baseFileName = customFileName || `Stundennachweis_${monthName}_${year}`
+
+    // Step 4: Check for existing file with same name (add timestamp if exists)
+    let finalFileName = `${baseFileName}.pdf`
+
+    const existingFile = await drive.files.list({
+        q: `'${monthFolderId}' in parents and name='${finalFileName}' and trashed=false`,
+        fields: "files(id)",
+        spaces: "drive"
+    })
+
+    if (existingFile.data.files && existingFile.data.files.length > 0) {
+        // File exists - add timestamp to avoid overwriting
+        const timestamp = Date.now()
+        finalFileName = `${baseFileName}_${timestamp}.pdf`
+    }
+
+    // Step 5: Upload new file (NEVER overwrite/delete existing)
+    const res = await drive.files.create({
+        requestBody: {
+            name: finalFileName,
+            mimeType: "application/pdf",
+            parents: [monthFolderId]
+        },
+        media: {
+            mimeType: "application/pdf",
+            body: bufferToStream(pdfBuffer)
+        },
+        fields: "id, webViewLink"
+    })
+
+    const fileId = res.data.id!
+
+    // Get web view link
+    const fileInfo = await drive.files.get({
+        fileId,
+        fields: "webViewLink"
+    })
+
+    return {
+        fileId,
+        webViewLink: fileInfo.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`
+    }
 }

@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma"
 import { generateTimesheetPdf } from "@/lib/pdf-generator"
 import { sendCompletionEmails } from "@/lib/email"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
-import { uploadTimesheetPdf } from "@/lib/google-drive"
+import { uploadTimesheetPdf, uploadToClientFolder } from "@/lib/google-drive"
 import { headers } from "next/headers"
 
 /**
@@ -363,35 +363,58 @@ export async function POST(
         let googleDriveFileId: string | null = null
 
         try {
-            // Get client and employee names for filename
-            const clientName = teamSubmission.dienstplanConfig?.assistantRecipientName ||
-                (teamSubmission.client ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}` : "Unbekannt")
+            // Get client name for folder lookup
+            // Client relation is preferred, fallback to dienstplanConfig
+            const clientNameForFolder = teamSubmission.client
+                ? `${teamSubmission.client.firstName} ${teamSubmission.client.lastName}`
+                : teamSubmission.dienstplanConfig?.assistantRecipientName || null
 
-            // Generate direct download link via APP (no Google Drive needed)
+            // Generate direct download link via APP (fallback if Drive upload fails)
             const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
             pdfUrl = `${baseUrl}/api/timesheets/download/${teamSubmission.id}`
 
-            // Optional: Still upload to Google Drive for backup
-            try {
-                const employeeName = teamSubmission.employeeSignatures.length === 1
-                    ? teamSubmission.employeeSignatures[0].employee.name || "Mitarbeiter"
-                    : `Team_${teamSubmission.employeeSignatures.length}MA`
+            // Upload to client's folder structure in Google Drive
+            // Structure: Team - {ClientName}/{year}/{month}/Stundennachweis_{Month}_{Year}.pdf
+            if (clientNameForFolder) {
+                try {
+                    const uploadResult = await uploadToClientFolder({
+                        pdfBuffer: Buffer.from(pdfBuffer),
+                        clientName: clientNameForFolder,
+                        month: teamSubmission.month,
+                        year: teamSubmission.year
+                    })
 
-                const uploadResult = await uploadTimesheetPdf({
-                    pdfBuffer: Buffer.from(pdfBuffer),
-                    clientName,
-                    employeeName,
-                    month: teamSubmission.month,
-                    year: teamSubmission.year
-                })
+                    googleDriveFileId = uploadResult.fileId
+                    console.log(`[RECIPIENT SIGN] PDF uploaded to client folder: ${uploadResult.webViewLink}`)
+                } catch (driveError: any) {
+                    console.error("[RECIPIENT SIGN] Client folder upload failed:", driveError.message)
 
-                googleDriveFileId = uploadResult.fileId
-            } catch (driveError: any) {
-                console.error("[RECIPIENT SIGN] Google Drive backup upload failed:", driveError)
-                // Continue - we have the app link
+                    // Fallback: Try legacy upload method for backup
+                    try {
+                        const employeeName = teamSubmission.employeeSignatures.length === 1
+                            ? teamSubmission.employeeSignatures[0].employee.name || "Mitarbeiter"
+                            : `Team_${teamSubmission.employeeSignatures.length}MA`
+
+                        const fallbackResult = await uploadTimesheetPdf({
+                            pdfBuffer: Buffer.from(pdfBuffer),
+                            clientName: clientNameForFolder,
+                            employeeName,
+                            month: teamSubmission.month,
+                            year: teamSubmission.year
+                        })
+
+                        googleDriveFileId = fallbackResult.fileId
+                        console.log("[RECIPIENT SIGN] Fallback upload succeeded")
+                    } catch (fallbackError: any) {
+                        console.error("[RECIPIENT SIGN] Fallback upload also failed:", fallbackError.message)
+                        // Continue without Google Drive - we have the app link
+                    }
+                }
+            } else {
+                console.warn("[RECIPIENT SIGN] No client name available for folder upload")
             }
         } catch (uploadError: any) {
-            console.error("[RECIPIENT SIGN] PDF generation failed:", uploadError)
+            console.error("[RECIPIENT SIGN] PDF URL generation failed:", uploadError)
             // Continue without PDF link
         }
 
