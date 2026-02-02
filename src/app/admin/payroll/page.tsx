@@ -101,8 +101,9 @@ function PayrollPageContent() {
     const searchParams = useSearchParams()
     const pathname = usePathname()
 
-    // Initialize from URL params or current date
+    // Initialize from URL params, then localStorage, then current date
     const [currentDate, setCurrentDate] = useState(() => {
+        // 1. URL-Parameter haben höchste Priorität
         const monthParam = searchParams.get('month')
         const yearParam = searchParams.get('year')
         if (monthParam && yearParam) {
@@ -112,6 +113,23 @@ function PayrollPageContent() {
                 return new Date(y, m - 1, 1)
             }
         }
+
+        // 2. localStorage als Fallback (für Navigation ohne Query-Strings)
+        if (typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem('admin-selected-month')
+                if (saved) {
+                    const { month: savedMonth, year: savedYear } = JSON.parse(saved)
+                    if (savedMonth >= 1 && savedMonth <= 12 && savedYear >= 2020 && savedYear <= 2100) {
+                        return new Date(savedYear, savedMonth - 1, 1)
+                    }
+                }
+            } catch {
+                // Ignore parse errors
+            }
+        }
+
+        // 3. Fallback: Aktueller Monat
         return new Date()
     })
     const [isExporting, setIsExporting] = useState(false)
@@ -119,13 +137,21 @@ function PayrollPageContent() {
     const month = currentDate.getMonth() + 1
     const year = currentDate.getFullYear()
 
-    // Sync URL when month changes
+    // Sync URL AND localStorage when month changes
     useEffect(() => {
+        // Update URL
         const params = new URLSearchParams(searchParams.toString())
         params.set('month', String(month))
         params.set('year', String(year))
         const newUrl = `${pathname}?${params.toString()}`
         router.replace(newUrl, { scroll: false })
+
+        // Persist to localStorage for cross-page navigation
+        try {
+            localStorage.setItem('admin-selected-month', JSON.stringify({ month, year }))
+        } catch {
+            // Ignore storage errors (e.g., private browsing)
+        }
     }, [month, year, pathname, router, searchParams])
 
     // Fetch payroll data

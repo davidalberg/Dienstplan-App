@@ -26,7 +26,7 @@ import {
 } from "lucide-react"
 import { showToast } from "@/lib/toast-utils"
 import { formatTimeRange } from "@/lib/time-utils"
-import { useAdminSchedule } from "@/hooks/use-admin-data"
+import { useAdminSchedule, useClients } from "@/hooks/use-admin-data"
 import TimesheetDetail from "@/components/TimesheetDetail"
 import DuplicateShiftModal from "@/components/DuplicateShiftModal"
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
@@ -105,8 +105,9 @@ function SchedulePageContent() {
     const pathname = usePathname()
     const [viewMode, setViewMode] = useState<"list" | "calendar">("list")
 
-    // Filter - Initialize from URL params or current date
+    // Filter - Initialize from URL params, then localStorage, then current date
     const [currentDate, setCurrentDate] = useState(() => {
+        // 1. URL-Parameter haben höchste Priorität
         const monthParam = searchParams.get('month')
         const yearParam = searchParams.get('year')
         if (monthParam && yearParam) {
@@ -116,6 +117,23 @@ function SchedulePageContent() {
                 return new Date(y, m - 1, 1)
             }
         }
+
+        // 2. localStorage als Fallback (für Navigation ohne Query-Strings)
+        if (typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem('admin-selected-month')
+                if (saved) {
+                    const { month: savedMonth, year: savedYear } = JSON.parse(saved)
+                    if (savedMonth >= 1 && savedMonth <= 12 && savedYear >= 2020 && savedYear <= 2100) {
+                        return new Date(savedYear, savedMonth - 1, 1)
+                    }
+                }
+            } catch {
+                // Ignore parse errors
+            }
+        }
+
+        // 3. Fallback: Aktueller Monat
         return new Date()
     })
     const [selectedTeam, setSelectedTeam] = useState<string>("")
@@ -124,17 +142,25 @@ function SchedulePageContent() {
     const month = currentDate.getMonth() + 1
     const year = currentDate.getFullYear()
 
-    // Sync URL when month changes
+    // Sync URL AND localStorage when month changes
     useEffect(() => {
+        // Update URL
         const params = new URLSearchParams(searchParams.toString())
         params.set('month', String(month))
         params.set('year', String(year))
         const newUrl = `${pathname}?${params.toString()}`
         // Use replace to avoid adding to browser history on every change
         router.replace(newUrl, { scroll: false })
+
+        // Persist to localStorage for cross-page navigation
+        try {
+            localStorage.setItem('admin-selected-month', JSON.stringify({ month, year }))
+        } catch {
+            // Ignore storage errors (e.g., private browsing)
+        }
     }, [month, year, pathname, router, searchParams])
 
-    // SWR für Daten-Caching
+    // SWR für Daten-Caching - lädt PARALLEL statt sequentiell
     const {
         shifts: swrShifts,
         employees: swrEmployees,
@@ -143,12 +169,14 @@ function SchedulePageContent() {
         mutate
     } = useAdminSchedule(month, year, selectedTeam || undefined)
 
+    // ✅ PERFORMANCE FIX: Clients mit SWR parallel laden statt sequentiell mit useEffect
+    const { clients: swrClients, isLoading: clientsLoading } = useClients()
+
     // Lokaler State für optimistische Updates
     const [shifts, setShifts] = useState<Shift[]>([])
     const [employees, setEmployees] = useState<Employee[]>([])
     const [teams, setTeams] = useState<Team[]>([])
     const [clients, setClients] = useState<Client[]>([])
-    const [clientsLoading, setClientsLoading] = useState(true)
     const [loading, setLoading] = useState(true)
 
     // Bulk-Delete State
@@ -162,31 +190,9 @@ function SchedulePageContent() {
         if (swrShifts) setShifts(swrShifts)
         if (swrEmployees) setEmployees(swrEmployees)
         if (swrTeams) setTeams(swrTeams)
+        if (swrClients) setClients(swrClients)
         setLoading(isLoading)
-    }, [swrShifts, swrEmployees, swrTeams, isLoading])
-
-    // Lade Klienten
-    useEffect(() => {
-        async function loadClients() {
-            setClientsLoading(true)
-            try {
-                const res = await fetch("/api/clients")
-                if (res.ok) {
-                    const data = await res.json()
-                    setClients(data.clients || [])
-                } else {
-                    console.error("Fehler beim Laden der Klienten: HTTP", res.status)
-                    showToast("error", "Klienten konnten nicht geladen werden")
-                }
-            } catch (err) {
-                console.error("Fehler beim Laden der Klienten:", err)
-                showToast("error", "Netzwerkfehler beim Laden der Klienten")
-            } finally {
-                setClientsLoading(false)
-            }
-        }
-        loadClients()
-    }, [])
+    }, [swrShifts, swrEmployees, swrTeams, swrClients, isLoading])
 
     // Expand all clients by default when data loads
     useEffect(() => {
@@ -818,13 +824,15 @@ function SchedulePageContent() {
     const monthEnd = endOfMonth(currentDate)
     const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
 
-    // Gruppiere Schichten nach Datum für Kalender
-    const shiftsByDate = shifts.reduce((acc, shift) => {
-        const dateKey = format(new Date(shift.date), "yyyy-MM-dd")
-        if (!acc[dateKey]) acc[dateKey] = []
-        acc[dateKey].push(shift)
-        return acc
-    }, {} as Record<string, Shift[]>)
+    // ✅ PERFORMANCE FIX: Memoize shiftsByDate for calendar view
+    const shiftsByDate = useMemo(() => {
+        return shifts.reduce((acc, shift) => {
+            const dateKey = format(new Date(shift.date), "yyyy-MM-dd")
+            if (!acc[dateKey]) acc[dateKey] = []
+            acc[dateKey].push(shift)
+            return acc
+        }, {} as Record<string, Shift[]>)
+    }, [shifts])
 
     const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"]
 

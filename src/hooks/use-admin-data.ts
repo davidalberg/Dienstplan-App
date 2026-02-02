@@ -6,15 +6,16 @@ const fetcher = (url: string) => fetch(url).then(res => {
     return res.json()
 })
 
-// SWR configuration for admin pages - Optimized for fast navigation
+// SWR configuration for admin pages - Notion-Style Caching for instant navigation
 const swrConfig = {
     revalidateOnFocus: false,       // Don't refetch when window regains focus
-    revalidateOnReconnect: true,    // Refetch on network reconnect
-    dedupingInterval: 5000,         // 5s deduplication window (down from 30s for faster updates)
+    revalidateOnReconnect: false,   // Don't auto-refetch on network reconnect
+    dedupingInterval: 300000,       // 5 minutes cache - Notion-style persistence
+    focusThrottleInterval: 300000,  // Only allow focus revalidation every 5 minutes
     revalidateIfStale: false,       // Use cache first, don't revalidate stale data automatically
-    focusThrottleInterval: 60000,   // Only allow focus revalidation every 60s
+    keepPreviousData: true,         // Show cached data while loading new data
     errorRetryInterval: 5000,       // Retry failed requests after 5s
-    errorRetryCount: 3,             // Max 3 retries for failed requests
+    errorRetryCount: 2,             // Max 2 retries for failed requests
 }
 
 // Dashboard / Timesheets
