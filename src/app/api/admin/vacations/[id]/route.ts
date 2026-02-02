@@ -281,12 +281,26 @@ export async function DELETE(
             return NextResponse.json({ error: "Urlaubsantrag nicht gefunden" }, { status: 404 })
         }
 
-        // Genehmigte Antraege koennen nicht direkt geloescht werden
+        // Bei genehmigten Antraegen: usedDays reduzieren
         if (existing.status === "APPROVED") {
-            return NextResponse.json(
-                { error: "Genehmigte Urlaubsantraege koennen nicht geloescht werden. Bitte zuerst ablehnen." },
-                { status: 400 }
-            )
+            const days = Math.ceil(
+                Math.abs(existing.endDate.getTime() - existing.startDate.getTime()) / (1000 * 60 * 60 * 24)
+            ) + 1
+            const year = existing.startDate.getFullYear()
+
+            await prisma.vacationQuota.update({
+                where: {
+                    employeeId_year: {
+                        employeeId: existing.employeeId,
+                        year
+                    }
+                },
+                data: {
+                    usedDays: { decrement: days }
+                }
+            }).catch(() => {
+                // Quota might not exist, ignore
+            })
         }
 
         await prisma.vacationRequest.delete({

@@ -12,7 +12,8 @@ import {
     Edit2,
     AlertCircle,
     Users,
-    ExternalLink
+    ExternalLink,
+    Trash2
 } from "lucide-react"
 import { format, startOfMonth, endOfMonth } from "date-fns"
 import { de } from "date-fns/locale"
@@ -299,6 +300,28 @@ function VacationsContent() {
         }
     }
 
+    const handleDelete = async (id: string) => {
+        if (!confirm("Urlaubseintrag wirklich löschen? Bei genehmigten Anträgen werden die Urlaubstage zurückgebucht.")) return
+
+        try {
+            const res = await fetch(`/api/admin/vacations/${id}`, {
+                method: "DELETE"
+            })
+
+            if (res.ok) {
+                toast.success("Urlaubseintrag gelöscht")
+                loadData()
+                loadQuotas()
+            } else {
+                const err = await res.json()
+                toast.error(err.error || "Fehler beim Löschen")
+            }
+        } catch (error) {
+            console.error("Error deleting request:", error)
+            toast.error("Netzwerkfehler")
+        }
+    }
+
     const handleUpdateQuota = async () => {
         if (!quotaForm.employeeId) {
             toast.error("Bitte Mitarbeiter auswählen")
@@ -378,7 +401,7 @@ function VacationsContent() {
 
                     <div className="flex items-center gap-3">
                         <a
-                            href="https://urlaubsapp-12920.web.app"
+                            href="https://urlaubs-app.vercel.app/"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 bg-cyan-700 text-white px-4 py-2 rounded-lg hover:bg-cyan-600 transition font-medium"
@@ -547,24 +570,33 @@ function VacationsContent() {
                                             {request.reason || "-"}
                                         </td>
                                         <td className="px-4 py-3 text-right">
-                                            {request.status === "PENDING" && request.source !== "dienstplan" && (
-                                                <div className="flex gap-2 justify-end">
-                                                    <button
-                                                        onClick={() => handleApprove(request.id)}
-                                                        className="p-2 text-green-400 hover:bg-green-900/30 rounded transition"
-                                                        title="Genehmigen"
-                                                    >
-                                                        <Check size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleReject(request.id)}
-                                                        className="p-2 text-red-400 hover:bg-red-900/30 rounded transition"
-                                                        title="Ablehnen"
-                                                    >
-                                                        <X size={16} />
-                                                    </button>
-                                                </div>
-                                            )}
+                                            <div className="flex gap-2 justify-end">
+                                                {request.status === "PENDING" && request.source !== "dienstplan" && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleApprove(request.id)}
+                                                            className="p-2 text-green-400 hover:bg-green-900/30 rounded transition"
+                                                            title="Genehmigen"
+                                                        >
+                                                            <Check size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleReject(request.id)}
+                                                            className="p-2 text-amber-400 hover:bg-amber-900/30 rounded transition"
+                                                            title="Ablehnen"
+                                                        >
+                                                            <X size={16} />
+                                                        </button>
+                                                    </>
+                                                )}
+                                                <button
+                                                    onClick={() => handleDelete(request.id)}
+                                                    className="p-2 text-red-400 hover:bg-red-900/30 rounded transition"
+                                                    title="Löschen"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
