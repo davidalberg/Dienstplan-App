@@ -276,14 +276,6 @@ function VacationsContent() {
                     </div>
                 </div>
 
-                {/* Info Box */}
-                <div className="bg-blue-900/20 border border-blue-700 rounded-xl p-4 mb-6">
-                    <p className="text-blue-300 text-sm">
-                        <strong>Hinweis:</strong> Diese Übersicht zeigt alle Urlaubs- und Krankheitstage aus dem Dienstplan.
-                        Für detaillierte Urlaubsberechnungen (Resturlaub, Auszahlung) nutze die <a href="https://urlaubs-app.vercel.app/" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-200">Urlaubs-App</a>.
-                    </p>
-                </div>
-
                 {/* Absences grouped by employee */}
                 <div className="space-y-4">
                     {Object.keys(groupedByEmployee).length === 0 ? (

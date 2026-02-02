@@ -40,7 +40,7 @@ export function Sidebar({ onExportClick }: SidebarProps) {
         { icon: UserCog, label: "Assistenten", href: "/admin/assistants" },
         { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
         { icon: FileText, label: "Stundennachweise", href: "/admin/timesheets" },
-        { icon: Palmtree, label: "Urlaub", href: "/admin/vacations" },
+        { icon: Palmtree, label: "Urlaub / Krank", href: "/admin/vacations" },
         { icon: Wallet, label: "Lohnliste", href: "/admin/payroll" },
         { icon: Settings, label: "Einstellungen", href: "/admin/settings" },
     ]
