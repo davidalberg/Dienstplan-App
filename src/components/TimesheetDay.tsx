@@ -254,7 +254,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
                             >
                                 <option value="">Keine</option>
                                 <option value="SICK">Krank</option>
-                                <option value="VACATION">Urlaub</option>
+                                {/* Urlaub-Option entfernt - Urlaub wird vom Admin im Dienstplan eingetragen */}
                             </select>
                         </div>
                         <div>

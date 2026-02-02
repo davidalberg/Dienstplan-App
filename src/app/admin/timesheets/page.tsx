@@ -425,11 +425,14 @@ function TimesheetsPageContent() {
 
     // Open Combined Timesheet Modal
     const handleViewCombined = (submission: Submission) => {
-        if (!submission.clientId) {
-            showToast("error", "Klient-Zuordnung fehlt für diese Einreichung")
-            return
+        // Versuche clientId aus verschiedenen Quellen zu bekommen
+        const resolvedClientId = submission.clientId || submission.client?.id
+
+        if (!resolvedClientId) {
+            showToast("warning", "Klient-Zuordnung fehlt - einige Funktionen eingeschränkt")
         }
-        setSelectedSubmission(submission)
+
+        setSelectedSubmission({ ...submission, clientId: resolvedClientId || null })
         setShowCombinedModal(true)
     }
 
@@ -620,11 +623,11 @@ function TimesheetsPageContent() {
             </div>
 
             {/* Combined Timesheet Modal */}
-            {selectedSubmission && selectedSubmission.clientId && (
+            {selectedSubmission && (
                 <CombinedTimesheetModal
                     isOpen={showCombinedModal}
                     sheetFileName={selectedSubmission.sheetFileName}
-                    clientId={selectedSubmission.clientId}
+                    clientId={selectedSubmission.clientId || ""}
                     month={selectedSubmission.month}
                     year={selectedSubmission.year}
                     onClose={() => {

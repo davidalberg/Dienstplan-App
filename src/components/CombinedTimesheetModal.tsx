@@ -32,7 +32,7 @@ interface CombinedTimesheetModalProps {
     isOpen: boolean
     onClose: () => void
     sheetFileName: string
-    clientId: string
+    clientId: string  // Can be empty string if missing
     month: number
     year: number
     onOpenIndividual?: (employeeId: string, clientId: string) => void
@@ -69,6 +69,7 @@ interface CombinedTimesheetData {
         fullName: string
         email: string | null
     }
+    clientMissing?: boolean  // Flag when client is not assigned
     employees: EmployeeInfo[]
     timesheets: Timesheet[]
     totalHours: number
@@ -391,6 +392,17 @@ export default function CombinedTimesheetModal({
                     <div className="flex-1 flex overflow-hidden">
                         {/* Left: Combined Table */}
                         <div className="flex-1 overflow-y-auto px-6 py-4">
+                            {/* Warning when client is missing */}
+                            {data.clientMissing && (
+                                <div className="mb-4 p-3 bg-amber-900/30 border border-amber-700 rounded-lg">
+                                    <p className="text-amber-300 text-sm font-medium">
+                                        ⚠️ Klient-Zuordnung fehlt für diesen Dienstplan
+                                    </p>
+                                    <p className="text-amber-200/70 text-xs mt-1">
+                                        Einige Funktionen (E-Mail, PDF mit Klient-Signatur) sind eingeschränkt.
+                                    </p>
+                                </div>
+                            )}
                             <div className="mb-4">
                                 <h3 className="text-lg font-semibold text-white mb-2">Chronologische Übersicht</h3>
                                 <p className="text-sm text-neutral-400">

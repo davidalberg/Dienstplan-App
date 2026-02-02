@@ -98,6 +98,7 @@ export async function GET(req: NextRequest) {
             ]
         }
 
+        // Fetch formal VacationRequests
         const vacationRequests = await prisma.vacationRequest.findMany({
             where,
             include: {
@@ -125,10 +126,90 @@ export async function GET(req: NextRequest) {
         // Berechne Urlaubstage fuer jeden Antrag
         const requestsWithDays = vacationRequests.map(request => ({
             ...request,
-            days: calculateVacationDays(request.startDate, request.endDate)
+            days: calculateVacationDays(request.startDate, request.endDate),
+            source: "vacation_request" as const  // Mark source for UI
         }))
 
-        return NextResponse.json({ vacationRequests: requestsWithDays })
+        // Fetch vacation timesheets from Dienstplan (absenceType = "VACATION")
+        // that are NOT already covered by VacationRequests
+        let timesheetVacations: Array<{
+            id: string
+            employeeId: string
+            employee: { id: string; name: string | null; email: string; employeeId: string | null }
+            startDate: Date
+            endDate: Date
+            days: number
+            status: "APPROVED"
+            reason: string
+            source: "dienstplan"
+            createdAt: Date
+        }> = []
+
+        if (month && year) {
+            const monthNum = parseInt(month)
+            const yearNum = parseInt(year)
+
+            // Get all vacation timesheets for this period
+            const vacationTimesheets = await prisma.timesheet.findMany({
+                where: {
+                    absenceType: "VACATION",
+                    month: monthNum,
+                    year: yearNum,
+                    ...(employeeId ? { employeeId } : {})
+                },
+                include: {
+                    employee: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                            employeeId: true
+                        }
+                    }
+                },
+                orderBy: { date: "desc" }
+            })
+
+            // Filter out timesheets that are already covered by VacationRequests
+            const existingRequestDates = new Set<string>()
+            for (const req of requestsWithDays) {
+                const start = new Date(req.startDate)
+                const end = new Date(req.endDate)
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    existingRequestDates.add(`${req.employeeId}_${d.toISOString().split('T')[0]}`)
+                }
+            }
+
+            // Convert timesheets to vacation-like format
+            for (const ts of vacationTimesheets) {
+                const dateKey = `${ts.employeeId}_${ts.date.toISOString().split('T')[0]}`
+                if (!existingRequestDates.has(dateKey)) {
+                    timesheetVacations.push({
+                        id: `timesheet_${ts.id}`,
+                        employeeId: ts.employeeId,
+                        employee: ts.employee,
+                        startDate: ts.date,
+                        endDate: ts.date,
+                        days: 1,
+                        status: "APPROVED",
+                        reason: "Aus Dienstplan",
+                        source: "dienstplan",
+                        createdAt: ts.lastUpdatedAt || new Date()
+                    })
+                }
+            }
+        }
+
+        // Combine both sources
+        const allVacations = [...requestsWithDays, ...timesheetVacations]
+
+        // Sort by startDate descending
+        allVacations.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
+
+        return NextResponse.json({
+            vacationRequests: requestsWithDays,  // Keep original for backward compatibility
+            requests: allVacations  // New combined list
+        })
     } catch (error: any) {
         console.error("[GET /api/admin/vacations] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })

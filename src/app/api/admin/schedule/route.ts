@@ -27,6 +27,7 @@ const createShiftSchema = z.object({
     backupEmployeeId: z.string().optional().nullable(),
     note: z.string().optional().nullable(),
     teamId: z.string().optional().nullable(),
+    absenceType: z.enum(["SICK", "VACATION"]).optional().nullable(),
 })
 
 // Schema für Schicht-Update
@@ -36,6 +37,7 @@ const updateShiftSchema = z.object({
     plannedEnd: z.string().regex(/^\d{2}:\d{2}$/, "Ungültiges Zeitformat").optional(),
     backupEmployeeId: z.string().optional().nullable(),
     note: z.string().optional().nullable(),
+    absenceType: z.enum(["SICK", "VACATION"]).optional().nullable(),
 })
 
 // Schema für Bulk-Erstellung (Wiederholung)
@@ -57,6 +59,7 @@ const bulkCreateSchema = z.object({
     note: z.string().optional().nullable(),
     teamId: z.string().optional().nullable(),
     repeatDays: z.array(z.number().min(0).max(6)).min(1, "Mindestens ein Wochentag muss ausgewählt sein"),
+    absenceType: z.enum(["SICK", "VACATION"]).optional().nullable(),
 })
 
 // GET - Alle Schichten für einen Zeitraum
@@ -176,7 +179,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: formatZodError(validated.error) }, { status: 400 })
             }
 
-            const { employeeId, startDate, endDate, plannedStart, plannedEnd, backupEmployeeId, note, teamId, repeatDays } = validated.data
+            const { employeeId, startDate, endDate, plannedStart, plannedEnd, backupEmployeeId, note, teamId, repeatDays, absenceType } = validated.data
 
             // Lade Mitarbeiter + Team für sheetFileName
             const employee = await prisma.user.findUnique({
@@ -225,10 +228,11 @@ export async function POST(req: NextRequest) {
                     ? `Team_${employee.team.name.replace(/\s+/g, '_')}_${year}`
                     : null
 
+                const shiftDate = new Date(dateStr)
                 const shift = await prisma.timesheet.create({
                     data: {
                         employeeId,
-                        date: new Date(dateStr),
+                        date: shiftDate,
                         month,
                         year,
                         plannedStart,
@@ -239,10 +243,36 @@ export async function POST(req: NextRequest) {
                         sheetFileName,
                         status: "PLANNED",
                         source: "APP",
-                        syncVerified: true
+                        syncVerified: true,
+                        absenceType: absenceType || null,
+                        actualStart: absenceType === "VACATION" ? plannedStart : null,
+                        actualEnd: absenceType === "VACATION" ? plannedEnd : null,
                     }
                 })
                 createdShifts.push(shift)
+
+                // Auto-create VacationRequest for VACATION shifts
+                if (absenceType === "VACATION") {
+                    const existingVacation = await prisma.vacationRequest.findFirst({
+                        where: {
+                            employeeId,
+                            startDate: { lte: shiftDate },
+                            endDate: { gte: shiftDate }
+                        }
+                    })
+
+                    if (!existingVacation) {
+                        await prisma.vacationRequest.create({
+                            data: {
+                                employeeId,
+                                startDate: shiftDate,
+                                endDate: shiftDate,
+                                status: "APPROVED",
+                                reason: "Aus Dienstplan übernommen"
+                            }
+                        })
+                    }
+                }
             }
 
             return NextResponse.json({
@@ -257,7 +287,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: formatZodError(validated.error) }, { status: 400 })
         }
 
-        const { employeeId, date, plannedStart, plannedEnd, backupEmployeeId, note, teamId } = validated.data
+        const { employeeId, date, plannedStart, plannedEnd, backupEmployeeId, note, teamId, absenceType } = validated.data
 
         // Robustes Date-Parsing
         const dateObj = new Date(date + "T00:00:00Z")
@@ -315,12 +345,40 @@ export async function POST(req: NextRequest) {
                 sheetFileName,  // 🆕 CRITICAL FIX: sheetFileName setzen!
                 status: "PLANNED",
                 source: "APP",
-                syncVerified: true
+                syncVerified: true,
+                absenceType: absenceType || null,
+                // Wenn Urlaub, setze actualStart/End gleich wie planned
+                actualStart: absenceType === "VACATION" ? plannedStart : null,
+                actualEnd: absenceType === "VACATION" ? plannedEnd : null,
             },
             include: {
                 employee: { select: { id: true, name: true } }
             }
         })
+
+        // 🆕 Auto-create VacationRequest when absenceType is VACATION
+        if (absenceType === "VACATION") {
+            // Check if VacationRequest already exists for this date
+            const existingVacation = await prisma.vacationRequest.findFirst({
+                where: {
+                    employeeId,
+                    startDate: { lte: dateObj },
+                    endDate: { gte: dateObj }
+                }
+            })
+
+            if (!existingVacation) {
+                await prisma.vacationRequest.create({
+                    data: {
+                        employeeId,
+                        startDate: dateObj,
+                        endDate: dateObj,
+                        status: "APPROVED",
+                        reason: "Aus Dienstplan übernommen"
+                    }
+                })
+            }
+        }
 
         // Backup-Employee-Info separat laden
         let backupEmployee = null

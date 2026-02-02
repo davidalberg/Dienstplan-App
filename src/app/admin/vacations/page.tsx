@@ -31,6 +31,7 @@ interface VacationRequest {
     status: "PENDING" | "APPROVED" | "REJECTED"
     reason?: string | null
     createdAt: string
+    source?: "vacation_request" | "dienstplan"  // Source indicator
 }
 
 interface VacationQuota {
@@ -180,7 +181,8 @@ function VacationsContent() {
             const res = await fetch(`/api/admin/vacations?${params}`)
             if (res.ok) {
                 const data = await res.json()
-                setRequests(data.requests || [])
+                // Use new combined "requests" field, fallback to vacationRequests for backward compat
+                setRequests(data.requests || data.vacationRequests || [])
             } else {
                 toast.error("Fehler beim Laden der Urlaubsanträge")
             }
@@ -515,20 +517,27 @@ function VacationsContent() {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${
-                                                request.status === "PENDING" ? "bg-amber-900/50 text-amber-400" :
-                                                request.status === "APPROVED" ? "bg-green-900/50 text-green-400" :
-                                                "bg-red-900/50 text-red-400"
-                                            }`}>
-                                                {request.status === "PENDING" ? "Offen" :
-                                                 request.status === "APPROVED" ? "Genehmigt" : "Abgelehnt"}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${
+                                                    request.status === "PENDING" ? "bg-amber-900/50 text-amber-400" :
+                                                    request.status === "APPROVED" ? "bg-green-900/50 text-green-400" :
+                                                    "bg-red-900/50 text-red-400"
+                                                }`}>
+                                                    {request.status === "PENDING" ? "Offen" :
+                                                     request.status === "APPROVED" ? "Genehmigt" : "Abgelehnt"}
+                                                </span>
+                                                {request.source === "dienstplan" && (
+                                                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-900/50 text-cyan-400">
+                                                        Dienstplan
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3 text-neutral-400 text-sm max-w-xs truncate">
                                             {request.reason || "-"}
                                         </td>
                                         <td className="px-4 py-3 text-right">
-                                            {request.status === "PENDING" && (
+                                            {request.status === "PENDING" && request.source !== "dienstplan" && (
                                                 <div className="flex gap-2 justify-end">
                                                     <button
                                                         onClick={() => handleApprove(request.id)}

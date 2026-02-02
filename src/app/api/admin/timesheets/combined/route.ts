@@ -8,12 +8,13 @@ import { getEmployeesInDienstplan } from "@/lib/team-submission-utils"
 /**
  * Zod Schema for query parameter validation
  * Validates all required parameters for combined timesheet data
+ * clientId is now optional to support cases where it's missing
  */
 const QueryParamsSchema = z.object({
     sheetFileName: z.string().min(1, "sheetFileName ist erforderlich"),
     month: z.coerce.number().int().min(1).max(12),
     year: z.coerce.number().int().min(2020).max(2030),
-    clientId: z.string().min(1, "clientId ist erforderlich")
+    clientId: z.string().optional().default("")
 })
 
 /**
@@ -96,18 +97,20 @@ export async function GET(req: NextRequest) {
     const { sheetFileName, month, year, clientId } = validationResult.data
 
     try {
-        // Parallel fetch: Client data, TeamSubmission, and employee IDs
+        // Parallel fetch: Client data (if clientId provided), TeamSubmission, and employee IDs
         const [client, submission, employeeIds] = await Promise.all([
-            // Fetch client data
-            prisma.client.findUnique({
-                where: { id: clientId },
-                select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    email: true
-                }
-            }),
+            // Fetch client data (only if clientId provided)
+            clientId
+                ? prisma.client.findUnique({
+                    where: { id: clientId },
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true
+                    }
+                })
+                : Promise.resolve(null),
             // Fetch team submission with employee signatures
             prisma.teamSubmission.findUnique({
                 where: {
@@ -135,11 +138,10 @@ export async function GET(req: NextRequest) {
             getEmployeesInDienstplan(sheetFileName, month, year)
         ])
 
-        // Validate client exists
-        if (!client) {
-            return NextResponse.json({
-                error: "Klient nicht gefunden"
-            }, { status: 404 })
+        // Client is now optional - log warning but don't block
+        const clientMissing = !client && clientId
+        if (clientMissing) {
+            console.warn(`[GET /api/admin/timesheets/combined] Client not found for clientId: ${clientId}`)
         }
 
         // Check if any employees found
@@ -321,13 +323,20 @@ export async function GET(req: NextRequest) {
 
         // Build final response
         const response = {
-            client: {
+            client: client ? {
                 id: client.id,
                 firstName: client.firstName,
                 lastName: client.lastName,
                 fullName: `${client.firstName} ${client.lastName}`,
                 email: client.email
+            } : {
+                id: "",
+                firstName: "Unbekannt",
+                lastName: "",
+                fullName: "Klient nicht zugeordnet",
+                email: null
             },
+            clientMissing: !client,
             sheetFileName,
             month,
             year,

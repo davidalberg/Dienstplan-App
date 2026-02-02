@@ -119,7 +119,57 @@ export function formatTimeRange(start: string | null | undefined, end: string | 
 }
 
 /**
+ * Hours breakdown by type (work, vacation, sick)
+ */
+export interface HoursBreakdown {
+    workHours: number
+    vacationHours: number
+    sickHours: number
+    totalHours: number
+}
+
+/**
+ * Calculate hours breakdown from a list of timesheets
+ * Separates work hours from vacation and sick hours
+ * @param timesheets Array of timesheet objects with times and absenceType
+ * @returns HoursBreakdown with separate totals for each type
+ */
+export function calculateHoursBreakdown(timesheets: Array<{
+    actualStart?: string | null
+    actualEnd?: string | null
+    absenceType?: string | null
+}>): HoursBreakdown {
+    let workMinutes = 0
+    let vacationMinutes = 0
+    let sickMinutes = 0
+
+    for (const ts of timesheets) {
+        if (ts.actualStart && ts.actualEnd) {
+            const minutes = calculateMinutesBetween(ts.actualStart, ts.actualEnd)
+            if (minutes !== null && minutes > 0) {
+                if (ts.absenceType === 'VACATION') {
+                    vacationMinutes += minutes
+                } else if (ts.absenceType === 'SICK') {
+                    sickMinutes += minutes
+                } else {
+                    workMinutes += minutes
+                }
+            }
+        }
+    }
+
+    return {
+        workHours: workMinutes / 60,
+        vacationHours: vacationMinutes / 60,
+        sickHours: sickMinutes / 60,
+        totalHours: (workMinutes + vacationMinutes + sickMinutes) / 60
+    }
+}
+
+/**
  * Calculate total hours from a list of timesheets with actual times
+ * NOTE: This function includes ALL hours (work + vacation + sick).
+ * For work-only hours, use calculateHoursBreakdown().workHours
  * @param timesheets Array of timesheet objects with actualStart and actualEnd
  * @returns Total hours as decimal string
  */

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Send, Clock, CheckCircle, X, AlertCircle, FileSignature, Undo2, Lock } from "lucide-react"
-import { calculateTotalHoursFromTimesheets } from "@/lib/time-utils"
+import { calculateHoursBreakdown } from "@/lib/time-utils"
 import SubmitModal from "./SubmitModal"
 
 interface SubmissionStatus {
@@ -70,8 +70,8 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
         }
     }, [currentMonth, currentYear, fetchSubmissionStatus])
 
-    const calculateTotalHours = () => {
-        return calculateTotalHoursFromTimesheets(timesheets)
+    const getHoursBreakdown = () => {
+        return calculateHoursBreakdown(timesheets)
     }
 
     const isReadyToSubmit = () => {
@@ -243,7 +243,7 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
         )
     }
 
-    const total = calculateTotalHours()
+    const hoursBreakdown = getHoursBreakdown()
     const ready = isReadyToSubmit()
     const submitted = isAlreadySubmitted()
 
@@ -256,9 +256,9 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
         <div className="rounded-3xl bg-blue-600 p-6 text-white shadow-xl shadow-blue-100">
             <div className="flex items-center justify-between">
                 <div>
-                    <p className="text-white text-sm font-black uppercase tracking-wider">Gesamtstunden</p>
+                    <p className="text-white text-sm font-black uppercase tracking-wider">Arbeitsstunden</p>
                     <div className="mt-1 flex items-baseline gap-2">
-                        <span className="text-4xl font-black">{total}</span>
+                        <span className="text-4xl font-black">{hoursBreakdown.workHours.toFixed(2)}</span>
                         <span className="text-blue-100 font-bold">Std.</span>
                     </div>
                 </div>
@@ -266,6 +266,24 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
                     <Clock className="text-blue-100" size={32} />
                 </div>
             </div>
+
+            {/* Urlaub/Krank Breakdown - nur anzeigen wenn vorhanden */}
+            {(hoursBreakdown.vacationHours > 0 || hoursBreakdown.sickHours > 0) && (
+                <div className="mt-4 flex gap-4 text-sm">
+                    {hoursBreakdown.vacationHours > 0 && (
+                        <div className="flex items-center gap-2 rounded-lg bg-cyan-500/20 px-3 py-1.5">
+                            <span className="text-cyan-200">Urlaub:</span>
+                            <span className="font-bold text-cyan-100">{hoursBreakdown.vacationHours.toFixed(2)}h</span>
+                        </div>
+                    )}
+                    {hoursBreakdown.sickHours > 0 && (
+                        <div className="flex items-center gap-2 rounded-lg bg-red-500/20 px-3 py-1.5">
+                            <span className="text-red-200">Krank:</span>
+                            <span className="font-bold text-red-100">{hoursBreakdown.sickHours.toFixed(2)}h</span>
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div className="mt-8 space-y-4">
                 {error && (
