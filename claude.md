@@ -225,4 +225,38 @@ npx tsc --noEmit        # Type Check
 
 ---
 
-**Version:** 3.1 | **Updated:** Februar 2026
+## Abwesenheits-System (Urlaub / Krank)
+
+### Übersicht
+- **Dienstplan-Editor** (`/admin/schedule`): Dropdown "Abwesenheitstyp" bei Schicht-Erstellung/Bearbeitung
+  - Optionen: Normal (Arbeit), Urlaub, Krank
+  - Feld: `Timesheet.absenceType` = `"VACATION"` | `"SICK"` | `null`
+
+- **Abwesenheits-Übersicht** (`/admin/vacations`): Zeigt alle Urlaub/Krank-Einträge aus Dienstplan
+  - Gruppiert nach Mitarbeiter
+  - Filter: Alle / Urlaub / Krank
+  - Statistik: Tage und Stunden pro Typ
+  - API: `/api/admin/vacations/absences?month=X&year=Y`
+
+- **Urlaubs-App** (extern): https://urlaubs-app.vercel.app/
+  - Separate App für detaillierte Urlaubsberechnung (Resturlaub, Auszahlung)
+  - Button in der Abwesenheits-Übersicht verlinkt dorthin
+  - **KEINE automatische Synchronisation** - manuell eintragen!
+
+### Wichtig
+- Urlaubsberechnung: 6 Werktage/Woche, 28 Urlaubstage/Jahr pro Person
+- Firebase-Sync wurde entfernt (war nicht stabil) - später neu implementieren
+- Sidebar: "Urlaub / Krank" (nicht nur "Urlaub")
+
+---
+
+## Verwandte Projekte
+
+| Projekt | Pfad | Beschreibung |
+|---------|------|--------------|
+| Dienstplan-App | `C:\Users\david\Desktop\Stundennachweis_App\Dienstplan-App` | Diese App |
+| Urlaubs-App | `C:\Users\david\Desktop\Urlaubsapp` | Urlaubsberechnung (React/Vite/Firebase) |
+
+---
+
+**Version:** 3.2 | **Updated:** 02. Februar 2026
