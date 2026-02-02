@@ -11,7 +11,8 @@ import {
     ChevronRight,
     Edit2,
     AlertCircle,
-    Users
+    Users,
+    ExternalLink
 } from "lucide-react"
 import { format, startOfMonth, endOfMonth } from "date-fns"
 import { de } from "date-fns/locale"
@@ -376,6 +377,15 @@ function VacationsContent() {
                     </h1>
 
                     <div className="flex items-center gap-3">
+                        <a
+                            href="https://urlaubsapp-12920.web.app"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 bg-cyan-700 text-white px-4 py-2 rounded-lg hover:bg-cyan-600 transition font-medium"
+                        >
+                            <ExternalLink size={20} />
+                            Urlaubs-App
+                        </a>
                         <button
                             onClick={() => setShowQuotaModal(true)}
                             className="flex items-center gap-2 bg-neutral-700 text-white px-4 py-2 rounded-lg hover:bg-neutral-600 transition font-medium"

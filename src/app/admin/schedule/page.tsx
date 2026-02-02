@@ -265,6 +265,7 @@ function SchedulePageContent() {
         plannedEnd: "16:00",
         backupEmployeeId: "",
         note: "",
+        absenceType: "", // "" | "SICK" | "VACATION"
         // Für Wiederholung
         isRepeating: false,
         repeatEndDate: "",
@@ -424,7 +425,8 @@ function SchedulePageContent() {
                         plannedStart: formData.plannedStart,
                         plannedEnd: formData.plannedEnd,
                         backupEmployeeId: formData.backupEmployeeId || null,
-                        note: formData.note || null
+                        note: formData.note || null,
+                        absenceType: formData.absenceType || null
                     })
                 })
 
@@ -458,6 +460,7 @@ function SchedulePageContent() {
                     plannedEnd: formData.plannedEnd,
                     backupEmployeeId: formData.backupEmployeeId || null,
                     note: formData.note || null,
+                    absenceType: formData.absenceType || null,
                 }
 
                 if (formData.isRepeating && formData.repeatEndDate) {
@@ -661,6 +664,7 @@ function SchedulePageContent() {
             plannedEnd: "16:00",
             backupEmployeeId: "",
             note: "",
+            absenceType: "",
             isRepeating: false,
             repeatEndDate: "",
             repeatDays: [1, 2, 3, 4, 5]
@@ -683,6 +687,7 @@ function SchedulePageContent() {
             plannedEnd: shift.plannedEnd || "16:00",
             backupEmployeeId: shift.backupEmployee?.id || "",
             note: shift.note || "",
+            absenceType: shift.absenceType || "",
             isRepeating: false,
             repeatEndDate: "",
             repeatDays: [1, 2, 3, 4, 5]
@@ -1411,6 +1416,25 @@ function SchedulePageContent() {
                                                 rows={2}
                                                 placeholder="Optionale Notizen zur Schicht..."
                                             />
+                                        </div>
+
+                                        {/* Abwesenheitstyp */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-neutral-400 mb-1">
+                                                Abwesenheitstyp
+                                            </label>
+                                            <select
+                                                value={formData.absenceType}
+                                                onChange={(e) => setFormData({ ...formData, absenceType: e.target.value })}
+                                                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+                                            >
+                                                <option value="">Normal (Arbeit)</option>
+                                                <option value="VACATION">Urlaub</option>
+                                                <option value="SICK">Krank</option>
+                                            </select>
+                                            <p className="text-xs text-neutral-500 mt-1">
+                                                Bei Urlaub wird automatisch mit Urlaubs-App synchronisiert
+                                            </p>
                                         </div>
 
                                         {/* Wiederholung (nur bei Neuanlage) */}
