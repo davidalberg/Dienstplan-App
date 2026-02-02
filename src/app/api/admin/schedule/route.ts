@@ -548,15 +548,16 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: "Schicht nicht gefunden" }, { status: 404 })
         }
 
-        // 🔥 Firebase Sync: Remove vacation/sick entry if needed
-        if (timesheet.absenceType === "VACATION" || timesheet.absenceType === "SICK") {
+        // 🔥 Firebase Sync: Remove vacation entry if needed (only VACATION, not SICK)
+        if (timesheet.absenceType === "VACATION") {
             const employee = await prisma.user.findUnique({
                 where: { id: timesheet.employeeId },
-                select: { email: true }
+                select: { email: true, name: true }
             })
-            if (employee?.email) {
+            if (employee?.name) {
                 removeVacationFromFirebase({
-                    employeeEmail: employee.email,
+                    employeeEmail: employee.email || '',
+                    employeeName: employee.name,
                     date: timesheet.date
                 }).catch(err => console.error('[Firebase Sync] Delete error:', err))
             }
