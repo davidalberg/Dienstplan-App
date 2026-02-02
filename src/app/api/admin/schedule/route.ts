@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { z } from "zod"
-import { syncVacationToFirebase, removeVacationFromFirebase } from "@/lib/firebase-sync"
 
 // Hilfsfunktion: Zod-Fehler in lesbare Meldung umwandeln
 function formatZodError(error: z.ZodError<unknown>): string {
@@ -275,27 +274,6 @@ export async function POST(req: NextRequest) {
                     }
                 }
 
-                // 🔥 Firebase Sync for VACATION/SICK bulk entries
-                if (absenceType === "VACATION" || absenceType === "SICK") {
-                    const employeeForSync = await prisma.user.findUnique({
-                        where: { id: employeeId },
-                        select: { email: true, name: true }
-                    })
-                    if (employeeForSync?.email) {
-                        const [startH, startM] = plannedStart.split(':').map(Number)
-                        const [endH, endM] = plannedEnd.split(':').map(Number)
-                        const hours = (endH + endM / 60) - (startH + startM / 60)
-
-                        syncVacationToFirebase({
-                            employeeEmail: employeeForSync.email,
-                            employeeName: employeeForSync.name || employeeForSync.email,
-                            date: shiftDate,
-                            hours: hours > 0 ? hours : 8,
-                            type: absenceType,
-                            note: note || undefined
-                        }).catch(err => console.error('[Firebase Sync] Bulk error:', err))
-                    }
-                }
             }
 
             return NextResponse.json({
@@ -402,48 +380,6 @@ export async function POST(req: NextRequest) {
                 })
             }
 
-            // 🔥 Firebase Sync: Send to Urlaubs-App
-            const employeeForSync = await prisma.user.findUnique({
-                where: { id: employeeId },
-                select: { email: true, name: true }
-            })
-            if (employeeForSync?.email) {
-                // Calculate hours from planned times
-                const [startH, startM] = plannedStart.split(':').map(Number)
-                const [endH, endM] = plannedEnd.split(':').map(Number)
-                const hours = (endH + endM / 60) - (startH + startM / 60)
-
-                syncVacationToFirebase({
-                    employeeEmail: employeeForSync.email,
-                    employeeName: employeeForSync.name || employeeForSync.email,
-                    date: dateObj,
-                    hours: hours > 0 ? hours : 8,
-                    type: 'VACATION',
-                    note: note || undefined
-                }).catch(err => console.error('[Firebase Sync] Error:', err))
-            }
-        }
-
-        // 🔥 Firebase Sync for SICK entries
-        if (absenceType === "SICK") {
-            const employeeForSync = await prisma.user.findUnique({
-                where: { id: employeeId },
-                select: { email: true, name: true }
-            })
-            if (employeeForSync?.email) {
-                const [startH, startM] = plannedStart.split(':').map(Number)
-                const [endH, endM] = plannedEnd.split(':').map(Number)
-                const hours = (endH + endM / 60) - (startH + startM / 60)
-
-                syncVacationToFirebase({
-                    employeeEmail: employeeForSync.email,
-                    employeeName: employeeForSync.name || employeeForSync.email,
-                    date: dateObj,
-                    hours: hours > 0 ? hours : 8,
-                    type: 'SICK',
-                    note: note || undefined
-                }).catch(err => console.error('[Firebase Sync] Error:', err))
-            }
         }
 
         // Backup-Employee-Info separat laden
@@ -546,21 +482,6 @@ export async function DELETE(req: NextRequest) {
 
         if (!timesheet) {
             return NextResponse.json({ error: "Schicht nicht gefunden" }, { status: 404 })
-        }
-
-        // 🔥 Firebase Sync: Remove vacation entry if needed (only VACATION, not SICK)
-        if (timesheet.absenceType === "VACATION") {
-            const employee = await prisma.user.findUnique({
-                where: { id: timesheet.employeeId },
-                select: { email: true, name: true }
-            })
-            if (employee?.name) {
-                removeVacationFromFirebase({
-                    employeeEmail: employee.email || '',
-                    employeeName: employee.name,
-                    date: timesheet.date
-                }).catch(err => console.error('[Firebase Sync] Delete error:', err))
-            }
         }
 
         // 2. Delete the timesheet
