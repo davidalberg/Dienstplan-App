@@ -12,6 +12,11 @@ const MONTH_NAMES = [
     "Juli", "August", "September", "Oktober", "November", "Dezember"
 ]
 
+interface ShiftInfo {
+    date: string  // z.B. "15.02.2026"
+    time: string  // z.B. "08:00-16:00"
+}
+
 interface ReminderEmailData {
     employeeName: string
     month: number
@@ -20,16 +25,93 @@ interface ReminderEmailData {
     daysUntilDeadline?: number
     daysOverdue?: number
     dashboardUrl: string
+    shifts?: ShiftInfo[]  // NEU: Konkrete Schicht-Details
 }
 
-export type ReminderType = "BEFORE_DEADLINE" | "OVERDUE_1" | "OVERDUE_3"
+export type ReminderType = "EARLY_REMINDER" | "BEFORE_DEADLINE" | "OVERDUE_1" | "OVERDUE_3"
+
+/**
+ * Helper: Render shift list HTML
+ */
+function renderShiftListHTML(shifts: ShiftInfo[] | undefined, maxShifts: number = 5): string {
+    if (!shifts || shifts.length === 0) return ""
+
+    const displayShifts = shifts.slice(0, maxShifts)
+    const remaining = shifts.length - maxShifts
+
+    let html = `<div style="background: #f3f4f6; border-radius: 8px; padding: 15px; margin: 15px 0;">
+        <p style="margin: 0 0 10px 0; font-weight: 600; color: #374151; font-size: 14px;">Offene Schichten:</p>
+        <ul style="margin: 0; padding-left: 20px; color: #4b5563; font-size: 14px;">`
+
+    for (const shift of displayShifts) {
+        html += `<li style="padding: 3px 0;">${shift.date} &bull; ${shift.time}</li>`
+    }
+
+    html += `</ul>`
+
+    if (remaining > 0) {
+        html += `<p style="margin: 10px 0 0 0; color: #6b7280; font-size: 13px;">+ ${remaining} weitere Schicht${remaining !== 1 ? 'en' : ''}</p>`
+    }
+
+    html += `</div>`
+    return html
+}
 
 /**
  * Get reminder email HTML template based on type
  */
 export function getReminderEmailHTML(type: ReminderType, data: ReminderEmailData): string {
-    const { employeeName, month, year, unconfirmedCount, daysUntilDeadline, daysOverdue, dashboardUrl } = data
+    const { employeeName, month, year, unconfirmedCount, daysUntilDeadline, daysOverdue, dashboardUrl, shifts } = data
     const monthName = MONTH_NAMES[month - 1]
+    const shiftListHTML = renderShiftListHTML(shifts)
+
+    // NEU: Early Reminder (7 Tage vorher) - Freundlich, informativ
+    if (type === "EARLY_REMINDER") {
+        return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Info: Schichten zur Bestätigung</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">📋 Schichten zur Bestätigung</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">${monthName} ${year}</p>
+    </div>
+
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+        <p style="font-size: 16px; margin-bottom: 20px;">
+            Hallo ${employeeName},
+        </p>
+
+        <p style="font-size: 15px; color: #4b5563;">
+            Du hast <strong>${unconfirmedCount} Schicht${unconfirmedCount !== 1 ? 'en' : ''}</strong> für <strong>${monthName} ${year}</strong>, die noch bestätigt werden ${unconfirmedCount !== 1 ? 'müssen' : 'muss'}.
+        </p>
+
+        ${shiftListHTML}
+
+        <div style="background: #dbeafe; border: 1px solid #3b82f6; border-radius: 8px; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #1e40af; font-size: 14px;">
+                <strong>💡 Tipp:</strong> Du hast noch <strong>${daysUntilDeadline} Tage</strong> Zeit bis Monatsende. Bestätige jetzt und du bist fertig!
+            </p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="${dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);">
+                Schichten ansehen
+            </a>
+        </div>
+    </div>
+
+    <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+        <p>Diese E-Mail wurde automatisch von der Dienstplan App versendet.</p>
+    </div>
+</body>
+</html>
+`
+    }
 
     if (type === "BEFORE_DEADLINE") {
         return `
@@ -206,8 +288,32 @@ export function getReminderEmailHTML(type: ReminderType, data: ReminderEmailData
  * Get reminder email text template (fallback for email clients without HTML support)
  */
 export function getReminderEmailText(type: ReminderType, data: ReminderEmailData): string {
-    const { employeeName, month, year, unconfirmedCount, daysUntilDeadline, daysOverdue, dashboardUrl } = data
+    const { employeeName, month, year, unconfirmedCount, daysUntilDeadline, daysOverdue, dashboardUrl, shifts } = data
     const monthName = MONTH_NAMES[month - 1]
+
+    const shiftListText = shifts && shifts.length > 0
+        ? "\n\nOffene Schichten:\n" + shifts.slice(0, 5).map(s => `- ${s.date}: ${s.time}`).join("\n") +
+          (shifts.length > 5 ? `\n+ ${shifts.length - 5} weitere` : "")
+        : ""
+
+    if (type === "EARLY_REMINDER") {
+        return `
+Schichten zur Bestätigung - ${monthName} ${year}
+
+Hallo ${employeeName},
+
+Du hast ${unconfirmedCount} Schicht${unconfirmedCount !== 1 ? 'en' : ''} für ${monthName} ${year}, die noch bestätigt werden ${unconfirmedCount !== 1 ? 'müssen' : 'muss'}.
+${shiftListText}
+
+Du hast noch ${daysUntilDeadline} Tage Zeit bis Monatsende.
+
+Dashboard öffnen:
+${dashboardUrl}
+
+Mit freundlichen Grüßen,
+Dienstplan App
+`
+    }
 
     if (type === "BEFORE_DEADLINE") {
         return `
@@ -268,6 +374,10 @@ Dienstplan App
  */
 export function getReminderEmailSubject(type: ReminderType, month: number, year: number): string {
     const monthName = MONTH_NAMES[month - 1]
+
+    if (type === "EARLY_REMINDER") {
+        return `📋 ${monthName}: Schichten zur Bestätigung`
+    }
 
     if (type === "BEFORE_DEADLINE") {
         return `⏰ Erinnerung: Schichten bestätigen - ${monthName} ${year}`

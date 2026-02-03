@@ -30,6 +30,7 @@ import { useAdminSchedule } from "@/hooks/use-admin-data"
 import { useAdminData } from "@/components/AdminDataProvider"
 import TimesheetDetail from "@/components/TimesheetDetail"
 import DuplicateShiftModal from "@/components/DuplicateShiftModal"
+import ShiftTemplateManager from "@/components/ShiftTemplateManager"
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
 import { toast } from "sonner"
@@ -321,6 +322,7 @@ function SchedulePageContent() {
     // Modal State
     const [showModal, setShowModal] = useState(false)
     const [editingShift, setEditingShift] = useState<Shift | null>(null)
+    const [showTemplateManager, setShowTemplateManager] = useState(false)
     const [selectedClientId, setSelectedClientId] = useState<string>("")
     const [formData, setFormData] = useState({
         employeeId: "",
@@ -1063,6 +1065,14 @@ function SchedulePageContent() {
                         )}
 
                         <button
+                            onClick={() => setShowTemplateManager(true)}
+                            className="flex items-center gap-2 bg-violet-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-violet-700 transition font-medium"
+                        >
+                            <Calendar size={20} />
+                            <span className="hidden sm:inline">Vorlagen</span>
+                        </button>
+
+                        <button
                             onClick={() => openCreateModal()}
                             className="flex items-center gap-2 bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
                         >
@@ -1723,6 +1733,20 @@ function SchedulePageContent() {
                 {showShortcutsHelp && (
                     <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
                 )}
+
+                {/* Shift Template Manager */}
+                <ShiftTemplateManager
+                    isOpen={showTemplateManager}
+                    onClose={() => setShowTemplateManager(false)}
+                    employees={employees}
+                    clients={clients}
+                    currentMonth={month}
+                    currentYear={year}
+                    onTemplateApplied={() => {
+                        mutate()
+                        setShowTemplateManager(false)
+                    }}
+                />
             </div>
         </div>
     )

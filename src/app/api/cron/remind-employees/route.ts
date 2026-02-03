@@ -60,9 +60,96 @@ export async function GET(req: NextRequest) {
         let targetYear = currentYear
 
         // =========================================================================
+        // Scenario 0: 7 days before month end - Early Reminder (informativ)
+        // =========================================================================
+        if (daysUntilMonthEnd === 7) {
+            console.log("[Cron: remind-employees] Scenario 0: 7 days before month end (Early Reminder)")
+            reminderType = "EARLY_REMINDER"
+
+            // Find employees with unconfirmed shifts in current month
+            const employeesWithUnconfirmed = await prisma.user.findMany({
+                where: {
+                    role: "EMPLOYEE",
+                    AND: [
+                        { email: { not: "" } },
+                        { email: { not: undefined } }
+                    ],
+                    timesheets: {
+                        some: {
+                            month: currentMonth,
+                            year: currentYear,
+                            status: { in: ["PLANNED", "CHANGED"] }
+                        }
+                    }
+                },
+                include: {
+                    timesheets: {
+                        where: {
+                            month: currentMonth,
+                            year: currentYear,
+                            status: { in: ["PLANNED", "CHANGED"] }
+                        },
+                        orderBy: { date: "asc" }
+                    }
+                }
+            })
+
+            console.log(`[Cron: remind-employees] Found ${employeesWithUnconfirmed.length} employees with unconfirmed shifts`)
+
+            for (const employee of employeesWithUnconfirmed) {
+                if (!employee.email) continue
+
+                const unconfirmedCount = employee.timesheets.length
+
+                // Konvertiere Schichten zu ShiftInfo für E-Mail
+                const shifts = employee.timesheets.map(ts => ({
+                    date: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+                    time: `${ts.plannedStart || "?"}-${ts.plannedEnd || "?"}`
+                }))
+
+                try {
+                    const htmlContent = getReminderEmailHTML(reminderType, {
+                        employeeName: employee.name || "Mitarbeiter",
+                        month: currentMonth,
+                        year: currentYear,
+                        unconfirmedCount,
+                        daysUntilDeadline: 7,
+                        dashboardUrl,
+                        shifts
+                    })
+
+                    const textContent = getReminderEmailText(reminderType, {
+                        employeeName: employee.name || "Mitarbeiter",
+                        month: currentMonth,
+                        year: currentYear,
+                        unconfirmedCount,
+                        daysUntilDeadline: 7,
+                        dashboardUrl,
+                        shifts
+                    })
+
+                    const subject = getReminderEmailSubject(reminderType, currentMonth, currentYear)
+
+                    await resend.emails.send({
+                        from: fromEmail,
+                        to: employee.email,
+                        subject,
+                        html: htmlContent,
+                        text: textContent
+                    })
+
+                    remindersSent++
+                    console.log(`[Cron: remind-employees] Sent early reminder to ${employee.email}`)
+                } catch (emailError) {
+                    console.error(`[Cron: remind-employees] Failed to send email to ${employee.email}:`, emailError)
+                }
+            }
+        }
+
+        // =========================================================================
         // Scenario 1: 3 days before month end - Reminder
         // =========================================================================
-        if (daysUntilMonthEnd === 3) {
+        else if (daysUntilMonthEnd === 3) {
             console.log("[Cron: remind-employees] Scenario 1: 3 days before month end")
             reminderType = "BEFORE_DEADLINE"
 
@@ -88,7 +175,8 @@ export async function GET(req: NextRequest) {
                             month: currentMonth,
                             year: currentYear,
                             status: { in: ["PLANNED", "CHANGED"] }
-                        }
+                        },
+                        orderBy: { date: "asc" }
                     }
                 }
             })
@@ -100,6 +188,12 @@ export async function GET(req: NextRequest) {
 
                 const unconfirmedCount = employee.timesheets.length
 
+                // Konvertiere Schichten zu ShiftInfo für E-Mail
+                const shifts = employee.timesheets.map(ts => ({
+                    date: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+                    time: `${ts.plannedStart || "?"}-${ts.plannedEnd || "?"}`
+                }))
+
                 try {
                     const htmlContent = getReminderEmailHTML(reminderType, {
                         employeeName: employee.name || "Mitarbeiter",
@@ -107,7 +201,8 @@ export async function GET(req: NextRequest) {
                         year: currentYear,
                         unconfirmedCount,
                         daysUntilDeadline: 3,
-                        dashboardUrl
+                        dashboardUrl,
+                        shifts
                     })
 
                     const textContent = getReminderEmailText(reminderType, {
@@ -116,7 +211,8 @@ export async function GET(req: NextRequest) {
                         year: currentYear,
                         unconfirmedCount,
                         daysUntilDeadline: 3,
-                        dashboardUrl
+                        dashboardUrl,
+                        shifts
                     })
 
                     const subject = getReminderEmailSubject(reminderType, currentMonth, currentYear)
