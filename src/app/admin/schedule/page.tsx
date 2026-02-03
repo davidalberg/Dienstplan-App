@@ -226,43 +226,40 @@ function SchedulePageContent() {
         }
     }, [shifts.length])
 
-    // ✅ INSTANT UI: Prefetch ALLE Stundennachweise SOFORT beim Seitenaufruf
-    // Lädt alle Employee/Client-Kombinationen im Hintergrund vor
-    const hasPrefetched = useRef(false)
+    // ✅ INSTANT UI: Prefetch ALLE Stundennachweise in EINEM Request
+    // Skalierbar für 200+ Mitarbeiter - nur 1 API-Call statt 200
+    const hasPrefetched = useRef<string>("")
 
     useEffect(() => {
-        // Reset prefetch flag wenn Monat/Jahr wechselt
-        hasPrefetched.current = false
-    }, [month, year])
+        const cacheKey = `${month}-${year}`
+        if (loading || hasPrefetched.current === cacheKey) return
+        hasPrefetched.current = cacheKey
 
-    useEffect(() => {
-        if (shifts.length === 0 || loading || hasPrefetched.current) return
-        hasPrefetched.current = true
+        const prefetchAll = async () => {
+            try {
+                console.log(`[Schedule] Prefetching alle Stundennachweise für ${month}/${year}...`)
+                const res = await fetch(`/api/admin/schedule/prefetch?month=${month}&year=${year}`)
+                if (!res.ok) throw new Error("Prefetch failed")
 
-        // Sammle unique Employee+Client Kombinationen
-        const uniqueCombinations = new Map<string, { employeeId: string; clientId: string }>()
-        shifts.forEach(shift => {
-            const employeeId = shift.employee?.id
-            const clientId = shift.employee?.team?.client?.id
-            if (employeeId && clientId) {
-                const key = `${employeeId}-${clientId}`
-                if (!uniqueCombinations.has(key)) {
-                    uniqueCombinations.set(key, { employeeId, clientId })
-                }
+                const data = await res.json()
+                const details = data.details as Record<string, any>
+
+                // Schreibe jedes Detail in den SWR-Cache unter dem Original-URL-Key
+                Object.entries(details).forEach(([key, detailData]) => {
+                    const [employeeId, clientId] = key.split("-")
+                    const url = `/api/admin/submissions/detail?employeeId=${employeeId}&clientId=${clientId}&month=${month}&year=${year}`
+                    globalMutate(url, detailData, { revalidate: false })
+                })
+
+                console.log(`[Schedule] ✅ ${data.count} Stundennachweise vorgeladen`)
+            } catch (error) {
+                console.error("[Schedule] Prefetch error:", error)
             }
-        })
+        }
 
-        console.log(`[Schedule] Prefetching ${uniqueCombinations.size} Stundennachweise...`)
-
-        // Prefetch ALLE sofort parallel (kein Batching mehr - schneller!)
-        const combinations = Array.from(uniqueCombinations.values())
-        combinations.forEach(({ employeeId, clientId }) => {
-            const url = `/api/admin/submissions/detail?employeeId=${employeeId}&clientId=${clientId}&month=${month}&year=${year}`
-            globalMutate(url, fetch(url).then(res => res.json()), { revalidate: false })
-                .then(() => console.log(`[Prefetch] ✓ ${employeeId.slice(-4)}`))
-                .catch(() => console.log(`[Prefetch] ✗ ${employeeId.slice(-4)}`))
-        })
-    }, [shifts, loading, month, year, globalMutate])
+        // Starte Prefetch sofort
+        prefetchAll()
+    }, [loading, month, year, globalMutate])
 
     // ✅ PERFORMANCE FIX: Memoize grouping logic (was recalculating on every render)
     const groupedShifts = useMemo(() => {
