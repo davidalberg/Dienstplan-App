@@ -187,11 +187,14 @@ function SchedulePageContent() {
 
     // Sync SWR data to local state
     useEffect(() => {
-        if (swrShifts) setShifts(swrShifts)
+        if (swrShifts !== undefined) setShifts(swrShifts)
         if (swrEmployees) setEmployees(swrEmployees)
         if (swrTeams) setTeams(swrTeams)
         if (swrClients) setClients(swrClients)
-        setLoading(isLoading)
+        // Loading ist false wenn SWR fertig ist (auch bei leerem Array)
+        if (swrShifts !== undefined && !isLoading) {
+            setLoading(false)
+        }
     }, [swrShifts, swrEmployees, swrTeams, swrClients, isLoading])
 
     // Expand all clients by default when data loads
@@ -841,10 +844,11 @@ function SchedulePageContent() {
 
     const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"]
 
-    if (!session) return null
+    // ✅ BLACK SCREEN FIX: Show loading spinner while session or data is loading
+    // Zeige Spinner wenn: keine Session ODER SWR lädt ODER Clients laden ODER lokaler loading-State
+    const showLoading = !session || isLoading || clientsLoading || loading
 
-    // ✅ BLACK SCREEN FIX: Show loading spinner while data is loading (including clients)
-    if ((isLoading && shifts.length === 0) || clientsLoading) {
+    if (showLoading) {
         return (
             <div className="admin-dark min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
                 <div className="text-center">
