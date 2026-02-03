@@ -33,6 +33,7 @@ import DuplicateShiftModal from "@/components/DuplicateShiftModal"
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
 import { toast } from "sonner"
+import { preload } from "swr"
 
 // Loading fallback component
 function ScheduleLoadingFallback() {
@@ -791,6 +792,12 @@ function SchedulePageContent() {
         setShowModal(true)
     }
 
+    // ✅ PERFORMANCE: Prefetch TimesheetDetail data on hover
+    const prefetchTimesheetDetail = useCallback((employeeId: string, clientId: string) => {
+        const url = `/api/admin/submissions/detail?employeeId=${employeeId}&clientId=${clientId}&month=${month}&year=${year}`
+        preload(url, (url) => fetch(url).then(res => res.json()))
+    }, [month, year])
+
     // ✅ PERFORMANCE FIX: Memoize event handler
     const openTimesheetPreview = useCallback((shift: Shift) => {
         // Validierung: clientId ist REQUIRED für TimesheetDetail
@@ -1180,6 +1187,12 @@ function SchedulePageContent() {
                                                                 <td className="px-3 py-2 text-right">
                                                                     <div className="flex gap-1 justify-end">
                                                                         <button
+                                                                            onMouseEnter={() => {
+                                                                                const clientId = shift.employee?.team?.client?.id
+                                                                                if (shift.employee?.id && clientId) {
+                                                                                    prefetchTimesheetDetail(shift.employee.id, clientId)
+                                                                                }
+                                                                            }}
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation()
                                                                                 openTimesheetPreview(shift)
