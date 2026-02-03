@@ -64,6 +64,8 @@ const bulkCreateSchema = z.object({
 
 // GET - Alle Schichten für einen Zeitraum
 export async function GET(req: NextRequest) {
+    const startTime = performance.now()
+
     const session = await auth()
     if (!session?.user || (session.user as any).role !== "ADMIN") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -91,27 +93,32 @@ export async function GET(req: NextRequest) {
                 select: { id: true, name: true, email: true, teamId: true },
                 orderBy: { name: "asc" }
             }),
+            // OPTIMIZED: Using select instead of include for better performance
             prisma.timesheet.findMany({
                 where,
-                include: {
+                select: {
+                    id: true,
+                    date: true,
+                    plannedStart: true,
+                    plannedEnd: true,
+                    actualStart: true,
+                    actualEnd: true,
+                    breakMinutes: true,
+                    note: true,
+                    absenceType: true,
+                    status: true,
+                    employeeId: true,
+                    teamId: true,
+                    month: true,
+                    year: true,
+                    backupEmployeeId: true,
+                    sheetFileName: true,
                     employee: {
                         select: {
                             id: true,
                             name: true,
                             email: true,
-                            team: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                    client: {
-                                        select: {
-                                            id: true,
-                                            firstName: true,
-                                            lastName: true
-                                        }
-                                    }
-                                }
-                            }
+                            teamId: true
                         }
                     }
                 },
@@ -126,6 +133,14 @@ export async function GET(req: NextRequest) {
                 select: {
                     id: true,
                     name: true,
+                    clientId: true,
+                    client: {
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true
+                        }
+                    },
                     _count: {
                         select: { members: true }
                     }
@@ -137,13 +152,31 @@ export async function GET(req: NextRequest) {
         // Map für schnelle Mitarbeiter-Lookup
         const employeeMap = new Map(employees.map(e => [e.id, e]))
 
-        // Backup-Employee-Namen hinzufügen
-        const shifts = rawShifts.map(shift => ({
-            ...shift,
-            backupEmployee: shift.backupEmployeeId
-                ? employeeMap.get(shift.backupEmployeeId) || null
-                : null
-        }))
+        // Map für schnelle Team-Lookup (für client info)
+        const teamMap = new Map(teams.map(t => [t.id, t]))
+
+        // Backup-Employee-Namen und Team/Client-Info hinzufügen
+        const shifts = rawShifts.map(shift => {
+            const team = shift.teamId ? teamMap.get(shift.teamId) : null
+            return {
+                ...shift,
+                backupEmployee: shift.backupEmployeeId
+                    ? employeeMap.get(shift.backupEmployeeId) || null
+                    : null,
+                // Enriched employee with team/client info from teamMap
+                employee: {
+                    ...shift.employee,
+                    team: team ? {
+                        id: team.id,
+                        name: team.name,
+                        client: team.client
+                    } : null
+                }
+            }
+        })
+
+        const duration = Math.round(performance.now() - startTime)
+        console.log(`[API] GET /api/admin/schedule - ${duration}ms (${shifts.length} shifts, ${employees.length} employees)`)
 
         return NextResponse.json({ shifts, employees, teams })
     } catch (error: any) {

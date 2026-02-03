@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { formatTimeRange } from "@/lib/time-utils"
 import CombinedTimesheetModal from "@/components/CombinedTimesheetModal"
+import { useAdminSubmissions } from "@/hooks/use-admin-data"
 
 interface EmployeeSignature {
     employeeId: string
@@ -127,9 +128,13 @@ function SignatureBadge({
 }
 
 export default function AdminSubmissionsPage() {
-    const [submissions, setSubmissions] = useState<Submission[]>([])
-    const [pendingDienstplaene, setPendingDienstplaene] = useState<Submission[]>([])
-    const [loading, setLoading] = useState(true)
+    // Month/Year filter
+    const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1)
+    const [filterYear, setFilterYear] = useState(new Date().getFullYear())
+
+    // Use SWR hook for data fetching
+    const { submissions, pendingDienstplaene, isLoading, mutate } = useAdminSubmissions(filterMonth, filterYear)
+
     const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
 
@@ -147,33 +152,6 @@ export default function AdminSubmissionsPage() {
     // Combined Timesheet Modal state
     const [showCombinedModal, setShowCombinedModal] = useState(false)
     const [selectedSubmissionForModal, setSelectedSubmissionForModal] = useState<Submission | null>(null)
-
-    // Month/Year filter
-    const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1)
-    const [filterYear, setFilterYear] = useState(new Date().getFullYear())
-
-    useEffect(() => {
-        fetchSubmissions()
-    }, [filterMonth, filterYear])
-
-    const fetchSubmissions = async () => {
-        setLoading(true)
-        try {
-            const res = await fetch(`/api/admin/submissions?month=${filterMonth}&year=${filterYear}`)
-            if (res.ok) {
-                const data = await res.json()
-                setSubmissions(data.submissions || [])
-                setPendingDienstplaene(data.pendingDienstplaene || [])
-            } else {
-                toast.error("Fehler beim Laden der Einreichungen")
-            }
-        } catch (error) {
-            console.error("Error fetching submissions:", error)
-            toast.error("Fehler beim Laden")
-        } finally {
-            setLoading(false)
-        }
-    }
 
     const goToToday = () => {
         const now = new Date()
@@ -222,20 +200,20 @@ export default function AdminSubmissionsPage() {
     }
 
     // Get submissions for current month grouped by client
-    const activeSubmissions = submissions.filter(s => s.month === filterMonth && s.year === filterYear)
-    const allDienstplaene = [...activeSubmissions, ...pendingDienstplaene].sort((a, b) =>
+    const activeSubmissions = (submissions || []).filter((s: Submission) => s.month === filterMonth && s.year === filterYear)
+    const allDienstplaene = [...activeSubmissions, ...(pendingDienstplaene || [])].sort((a: Submission, b: Submission) =>
         a.recipientName.localeCompare(b.recipientName)
     )
 
     // Group by client (recipientName)
-    const clientGroups = allDienstplaene.reduce((acc, sub) => {
+    const clientGroups: Record<string, Submission[]> = allDienstplaene.reduce((acc: Record<string, Submission[]>, sub: Submission) => {
         const clientName = sub.recipientName || "Unbekannt"
         if (!acc[clientName]) {
             acc[clientName] = []
         }
         acc[clientName].push(sub)
         return acc
-    }, {} as Record<string, Submission[]>)
+    }, {})
 
     // Calculate totals
     const totalCount = allDienstplaene.length
@@ -269,7 +247,7 @@ export default function AdminSubmissionsPage() {
                 setShowReleaseModal(false)
                 setSelectedSubmission(null)
                 setReleaseNote("")
-                await fetchSubmissions()
+                await mutate()
             } else {
                 toast.error(data.error || "Fehler beim Freigeben")
             }
@@ -296,7 +274,7 @@ export default function AdminSubmissionsPage() {
 
             if (res.ok) {
                 toast.success("Freigabe erfolgreich widerrufen")
-                await fetchSubmissions()
+                await mutate()
             } else {
                 toast.error(data.error || "Fehler beim Widerrufen")
             }
@@ -330,7 +308,7 @@ export default function AdminSubmissionsPage() {
                 toast.success(`Unterschrift gelöscht`)
                 setShowSignatureModal(false)
                 setSelectedSubmission(null)
-                await fetchSubmissions()
+                await mutate()
             } else {
                 toast.error(data.error || "Fehler beim Löschen")
             }
@@ -359,7 +337,7 @@ export default function AdminSubmissionsPage() {
                 toast.success("Assistenznehmer-Unterschrift gelöscht")
                 setShowSignatureModal(false)
                 setSelectedSubmission(null)
-                await fetchSubmissions()
+                await mutate()
             } else {
                 toast.error(data.error || "Fehler beim Löschen")
             }
@@ -391,7 +369,7 @@ export default function AdminSubmissionsPage() {
 
             if (res.ok) {
                 toast.success(`Einreichung zurückgesetzt`)
-                await fetchSubmissions()
+                await mutate()
             } else {
                 toast.error(data.error || "Fehler beim Zurücksetzen")
             }
@@ -466,7 +444,7 @@ export default function AdminSubmissionsPage() {
 
             if (res.ok) {
                 toast.success("Stundennachweis erfolgreich gelöscht")
-                await fetchSubmissions()
+                await mutate()
             } else {
                 toast.error(data.error || "Fehler beim Löschen")
             }
@@ -530,7 +508,7 @@ export default function AdminSubmissionsPage() {
 
             {/* Content */}
             <div className="px-6 py-4">
-                {loading ? (
+                {isLoading ? (
                     <div className="text-center py-12 text-neutral-500">
                         Laden...
                     </div>
@@ -540,13 +518,13 @@ export default function AdminSubmissionsPage() {
                     </div>
                 ) : (
                     <div className="space-y-1">
-                        {Object.entries(clientGroups).map(([clientName, clientSubmissions], clientIndex) => {
+                        {(Object.entries(clientGroups) as [string, Submission[]][]).map(([clientName, clientSubmissions], clientIndex) => {
                             const isExpanded = expandedClients.has(clientName)
-                            const totalClientHours = clientSubmissions.reduce((sum, s) => {
+                            const totalClientHours = clientSubmissions.reduce((sum: number, s: Submission) => {
                                 // Calculate actual hours from employee signatures or estimate
                                 return sum + (s.signedEmployees * 8)
                             }, 0)
-                            const allSigned = clientSubmissions.every(s =>
+                            const allSigned = clientSubmissions.every((s: Submission) =>
                                 s.signedEmployees === s.totalEmployees && s.recipientSignedAt
                             )
 

@@ -49,6 +49,8 @@ function extractTeamNameFromSheetFileName(sheetFileName: string): string | null 
  * - Reduces 100+ queries to 4-5 queries total
  */
 export async function GET(req: NextRequest) {
+    const startTime = performance.now()
+
     try {
         const session = await auth()
         if (!session?.user || (session.user as any).role !== "ADMIN") {
@@ -640,6 +642,9 @@ export async function GET(req: NextRequest) {
                 : b.recipientName || b.sheetFileName
             return nameA.localeCompare(nameB, 'de')
         })
+
+        const duration = Math.round(performance.now() - startTime)
+        console.log(`[API] GET /api/admin/submissions - ${duration}ms (${submissionsWithProgress.length} submissions, ${allPendingDienstplaene.length} pending)`)
 
         return NextResponse.json({
             submissions: submissionsWithProgress,

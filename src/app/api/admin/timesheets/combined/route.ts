@@ -71,6 +71,8 @@ interface EmployeeSignatureData {
  * - clientId: string (required) - CUID of the client
  */
 export async function GET(req: NextRequest) {
+    const startTime = performance.now()
+
     // Auth check: Require ADMIN role
     const session = await auth()
     if (!session?.user || (session.user as { role?: string }).role !== "ADMIN") {
@@ -363,6 +365,9 @@ export async function GET(req: NextRequest) {
                 client: clientSignature
             }
         }
+
+        const duration = Math.round(performance.now() - startTime)
+        console.log(`[API] GET /api/admin/timesheets/combined - ${duration}ms (${flatTimesheets.length} timesheets, ${employees.length} employees)`)
 
         return NextResponse.json(response)
 

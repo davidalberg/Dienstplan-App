@@ -111,6 +111,8 @@ model Timesheet {
   @@index([backupEmployeeId, month, year])
   @@index([month, year, teamId])     // ✅ PERFORMANCE FIX: Für GET /api/admin/schedule mit teamId filter
   @@index([teamId, month, year])     // ✅ PERFORMANCE FIX: Alternative für team-based queries
+  @@index([absenceType, month, year]) // ✅ PERFORMANCE: Für Urlaub/Krank-Reports
+  @@index([status, month, year])      // ✅ PERFORMANCE: Für Submissions-Filter
 }
 
 model AuditLog {
@@ -231,6 +233,7 @@ model TeamSubmission {
   @@index([status])
   @@index([clientId, month, year])
   @@index([month, year])            // ✅ PERFORMANCE FIX: Für submissions overview ohne clientId filter
+  @@index([status, month, year])    // ✅ PERFORMANCE: Häufige Filter-Kombination
 }
 
 // NEU: Einzelne Mitarbeiter-Unterschriften innerhalb einer Team-Einreichung
