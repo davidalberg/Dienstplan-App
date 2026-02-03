@@ -6,11 +6,11 @@ const fetcher = (url: string) => fetch(url).then(res => {
     return res.json()
 })
 
-// SWR configuration for admin pages - Optimized for performance
+// SWR configuration for admin pages - Optimized for INSTANT navigation
 const swrConfig = {
     revalidateOnFocus: false,       // NICHT bei jedem Tab-Wechsel
     revalidateOnReconnect: false,   // Kein Refetch bei Reconnect
-    dedupingInterval: 60000,        // 60 Sekunden Cache
+    dedupingInterval: 600000,       // 10 MINUTEN Cache - verhindert doppelte Requests
     revalidateIfStale: false,       // Kein Background-Refetch
     keepPreviousData: true,         // Show cached data while loading new data (better UX)
     errorRetryInterval: 5000,       // Retry failed requests after 5s

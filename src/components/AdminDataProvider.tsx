@@ -1,7 +1,7 @@
 "use client"
 
-import { createContext, useContext, ReactNode, useMemo } from 'react'
-import useSWR from 'swr'
+import { createContext, useContext, ReactNode, useMemo, useEffect, useRef } from 'react'
+import useSWR, { useSWRConfig } from 'swr'
 
 // SWR fetcher function
 const fetcher = (url: string) => fetch(url).then(res => {
@@ -121,6 +121,83 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
 
     // Combined loading state
     const isLoading = isLoadingEmployees || isLoadingClients || isLoadingTeams
+
+    // ✅ INSTANT UI: Prefetch ALLE Admin-Seiten-Daten im Hintergrund
+    const { mutate: globalMutate } = useSWRConfig()
+    const hasPrefetched = useRef(false)
+
+    useEffect(() => {
+        // Nur einmal prefetchen, nachdem Master-Daten geladen sind
+        if (isLoading || hasPrefetched.current) return
+        hasPrefetched.current = true
+
+        const currentMonth = new Date().getMonth() + 1
+        const currentYear = new Date().getFullYear()
+
+        // Alle Admin-Seiten-Daten im Hintergrund laden
+        const prefetchUrls = [
+            // Stundennachweise-Seite
+            `/api/admin/submissions?month=${currentMonth}&year=${currentYear}`,
+            `/api/admin/submissions/overview?month=${currentMonth}&year=${currentYear}`,
+            // Urlaub/Krank-Seite
+            `/api/admin/vacations/absences?month=${currentMonth}&year=${currentYear}`,
+            // Lohnliste-Seite
+            `/api/admin/payroll?month=${currentMonth}&year=${currentYear}`,
+            // Dienstplan-Seite
+            `/api/admin/schedule?month=${currentMonth}&year=${currentYear}`,
+            // Timesheets-Seite
+            `/api/admin/timesheets?month=${currentMonth}&year=${currentYear}`,
+        ]
+
+        // Prefetch in Batches um Server nicht zu überlasten
+        const prefetchAll = async () => {
+            for (let i = 0; i < prefetchUrls.length; i += 2) {
+                const batch = prefetchUrls.slice(i, i + 2)
+                await Promise.all(
+                    batch.map(url =>
+                        globalMutate(url, fetch(url).then(res => res.ok ? res.json() : null), { revalidate: false })
+                            .catch(() => null) // Fehler ignorieren
+                    )
+                )
+                // Kleine Pause zwischen Batches
+                if (i + 2 < prefetchUrls.length) {
+                    await new Promise(resolve => setTimeout(resolve, 150))
+                }
+            }
+
+            // Prefetch alle Mitarbeiter-Details für Stundennachweise
+            if (clients.length > 0 && employees.length > 0) {
+                const detailUrls: string[] = []
+                clients.forEach((client: Client) => {
+                    client.employees?.forEach((emp: { id: string }) => {
+                        detailUrls.push(
+                            `/api/admin/submissions/detail?employeeId=${emp.id}&clientId=${client.id}&month=${currentMonth}&year=${currentYear}`
+                        )
+                    })
+                })
+
+                // Batch prefetch details (max 3 parallel)
+                for (let i = 0; i < detailUrls.length; i += 3) {
+                    const batch = detailUrls.slice(i, i + 3)
+                    await Promise.all(
+                        batch.map(url =>
+                            globalMutate(url, fetch(url).then(res => res.ok ? res.json() : null), { revalidate: false })
+                                .catch(() => null)
+                        )
+                    )
+                    if (i + 3 < detailUrls.length) {
+                        await new Promise(resolve => setTimeout(resolve, 100))
+                    }
+                }
+            }
+
+            console.log('[AdminDataProvider] ✅ Alle Seiten-Daten vorgeladen')
+        }
+
+        // Starte Prefetch nach kurzer Verzögerung (UI-Priorität)
+        const timer = setTimeout(prefetchAll, 1000)
+        return () => clearTimeout(timer)
+    }, [isLoading, globalMutate, clients, employees])
 
     // Memoize utility functions to prevent re-renders
     const getClientById = useMemo(() => {
