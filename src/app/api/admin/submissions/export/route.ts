@@ -80,37 +80,64 @@ export async function GET(req: NextRequest) {
         }
 
         // Daten aufbereiten
+        // WICHTIG: "Tatsaechlich geleistete Stunden" nur fuer bestaetigte Schichten (nicht PLANNED)
+        let totalPlannedHours = 0
+        let totalActualHours = 0
+
         const rows = timesheets.map(ts => {
-            const start = ts.actualStart || ts.plannedStart
-            const end = ts.actualEnd || ts.plannedEnd
-            let hours = 0
-
-            if (start && end && !ts.absenceType) {
-                const minutes = calculateMinutesBetween(start, end)
-                if (minutes !== null) {
-                    hours = Math.round(minutes / 60 * 100) / 100 // 2 Dezimalstellen
-                }
-            }
-
             const date = new Date(ts.date)
             const weekday = format(date, "EEEE", { locale: de })
             const formattedDate = format(date, "dd.MM.yyyy", { locale: de })
+
+            // Determine if this timesheet is CONFIRMED (not just PLANNED)
+            const isConfirmed = ts.status !== "PLANNED"
+
+            let plannedHours = 0
+            let actualHours = 0
+
+            // Calculate PLANNED hours (always, for all entries)
+            if (ts.plannedStart && ts.plannedEnd && !ts.absenceType) {
+                const minutes = calculateMinutesBetween(ts.plannedStart, ts.plannedEnd)
+                if (minutes !== null) {
+                    plannedHours = Math.round(minutes / 60 * 100) / 100
+                    totalPlannedHours += plannedHours
+                }
+            }
+
+            // Calculate ACTUAL hours only for CONFIRMED entries (not PLANNED)
+            if (!ts.absenceType && isConfirmed) {
+                const start = ts.actualStart || ts.plannedStart
+                const end = ts.actualEnd || ts.plannedEnd
+                if (start && end) {
+                    const minutes = calculateMinutesBetween(start, end)
+                    if (minutes !== null) {
+                        actualHours = Math.round(minutes / 60 * 100) / 100
+                        totalActualHours += actualHours
+                    }
+                }
+            }
+
+            // For display, use actualStart/End if available, else plannedStart/End
+            const displayStart = ts.actualStart || ts.plannedStart
+            const displayEnd = ts.actualEnd || ts.plannedEnd
 
             return {
                 date,
                 weekday,
                 formattedDate,
-                start: start || "-",
-                end: end || "-",
-                hours: ts.absenceType ? 0 : hours,
+                start: displayStart || "-",
+                end: displayEnd || "-",
+                hours: ts.absenceType ? 0 : actualHours,
+                plannedHours: ts.absenceType ? 0 : plannedHours,
                 note: ts.absenceType === "SICK" ? "Krank" :
                     ts.absenceType === "VACATION" ? "Urlaub" :
-                        ts.note || ""
+                        ts.note || "",
+                status: ts.status
             }
         })
 
-        // Gesamtstunden berechnen
-        const totalHours = rows.reduce((sum, r) => sum + r.hours, 0)
+        // Gesamtstunden = nur bestaetigte Stunden (totalActualHours)
+        const totalHours = totalActualHours
 
         const monthName = format(new Date(year, month - 1), "MMMM yyyy", { locale: de })
         const filename = `Stundennachweis_${employee.name?.replace(/\s+/g, "_")}_${month}_${year}`
@@ -196,8 +223,8 @@ export async function GET(req: NextRequest) {
                 year,
                 timesheets: pdfTimesheets,
                 stats: {
-                    totalHours,
-                    plannedHours: totalHours,
+                    totalHours,                   // Tatsaechlich geleistet (nur CONFIRMED+)
+                    plannedHours: totalPlannedHours,  // Geplante Stunden (alle)
                     sickDays: timesheets.filter(ts => ts.absenceType === "SICK").length,
                     sickHours: 0,
                     vacationDays: timesheets.filter(ts => ts.absenceType === "VACATION").length,

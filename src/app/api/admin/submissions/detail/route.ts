@@ -145,27 +145,45 @@ export async function GET(req: NextRequest) {
         }
 
         // Stunden berechnen
-        let totalMinutes = 0
+        let totalMinutes = 0      // Tatsaechlich geleistete Stunden (nur CONFIRMED+)
+        let plannedMinutes = 0    // Geplante Stunden (alle Schichten)
         let sickDays = 0
         let vacationDays = 0
 
         const timesheetsWithHours = timesheets.map(ts => {
-            const start = ts.actualStart || ts.plannedStart
-            const end = ts.actualEnd || ts.plannedEnd
             let hours = 0
+            let plannedHoursForEntry = 0
 
-            if (start && end && !ts.absenceType) {
-                const minutes = calculateMinutesBetween(start, end)
+            // Determine if this timesheet is CONFIRMED (not just PLANNED)
+            // Only CONFIRMED, CHANGED, SUBMITTED, COMPLETED count as "actually worked"
+            const isConfirmed = ts.status !== "PLANNED"
+
+            // Calculate PLANNED hours for this entry (always, regardless of status)
+            if (ts.plannedStart && ts.plannedEnd && !ts.absenceType) {
+                const minutes = calculateMinutesBetween(ts.plannedStart, ts.plannedEnd)
                 if (minutes !== null) {
-                    totalMinutes += minutes
-                    hours = Math.round(minutes / 60 * 10) / 10
+                    plannedMinutes += minutes
+                    plannedHoursForEntry = Math.round(minutes / 60 * 10) / 10
+                }
+            }
+
+            // Calculate ACTUAL hours only for CONFIRMED entries (not PLANNED)
+            if (!ts.absenceType && isConfirmed) {
+                const start = ts.actualStart || ts.plannedStart
+                const end = ts.actualEnd || ts.plannedEnd
+                if (start && end) {
+                    const minutes = calculateMinutesBetween(start, end)
+                    if (minutes !== null) {
+                        totalMinutes += minutes
+                        hours = Math.round(minutes / 60 * 10) / 10
+                    }
                 }
             }
 
             if (ts.absenceType === "SICK") sickDays++
             if (ts.absenceType === "VACATION") vacationDays++
 
-            // Typ bestimmen (für die PDF-Spalte)
+            // Typ bestimmen (fuer die PDF-Spalte)
             let type = ""
             if (ts.absenceType === "SICK") type = "K" // Krank
             else if (ts.absenceType === "VACATION") type = "U" // Urlaub
@@ -178,6 +196,7 @@ export async function GET(req: NextRequest) {
             return {
                 ...ts,
                 hours,
+                plannedHours: plannedHoursForEntry,
                 type,
                 weekday: new Date(ts.date).toLocaleDateString("de-DE", { weekday: "short" }),
                 formattedDate: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })
@@ -206,11 +225,14 @@ export async function GET(req: NextRequest) {
             year,
             timesheets: timesheetsWithHours,
             stats: {
-                totalHours: Math.round(totalMinutes / 60 * 10) / 10,
+                totalHours: Math.round(totalMinutes / 60 * 10) / 10,        // Tatsaechlich geleistet (nur CONFIRMED+)
+                plannedHours: Math.round(plannedMinutes / 60 * 10) / 10,    // Geplante Stunden (alle)
                 totalMinutes,
+                plannedMinutes,
                 sickDays,
                 vacationDays,
-                workDays: timesheets.filter(ts => !ts.absenceType).length
+                workDays: timesheets.filter(ts => !ts.absenceType).length,
+                confirmedDays: timesheets.filter(ts => !ts.absenceType && ts.status !== "PLANNED").length
             },
             submission: submission ? {
                 id: submission.id,

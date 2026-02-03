@@ -226,24 +226,31 @@ export async function GET(req: NextRequest) {
         }
 
         for (const ts of allTimesheets) {
-            const start = ts.actualStart || ts.plannedStart
-            const end = ts.actualEnd || ts.plannedEnd
             let hours = 0
             let plannedHours = 0
 
-            // Calculate ACTUAL hours only for non-absence entries
-            if (start && end && !ts.absenceType) {
-                const minutes = calculateMinutesBetween(start, end)
-                if (minutes !== null && minutes > 0) {
-                    hours = Math.round(minutes / 60 * 100) / 100
-                }
-            }
+            // Determine if this timesheet is CONFIRMED (not just PLANNED)
+            // Only CONFIRMED, CHANGED, SUBMITTED, COMPLETED count as "actually worked"
+            const isConfirmed = ts.status !== "PLANNED"
 
-            // Calculate PLANNED hours separately (for comparison)
+            // Calculate PLANNED hours (for comparison) - always calculate from planned times
             if (ts.plannedStart && ts.plannedEnd && !ts.absenceType) {
                 const plannedMinutes = calculateMinutesBetween(ts.plannedStart, ts.plannedEnd)
                 if (plannedMinutes !== null && plannedMinutes > 0) {
                     plannedHours = Math.round(plannedMinutes / 60 * 100) / 100
+                }
+            }
+
+            // Calculate ACTUAL hours only for CONFIRMED entries (not PLANNED)
+            // Use actual times if available, otherwise use planned times for confirmed entries
+            if (!ts.absenceType && isConfirmed) {
+                const start = ts.actualStart || ts.plannedStart
+                const end = ts.actualEnd || ts.plannedEnd
+                if (start && end) {
+                    const minutes = calculateMinutesBetween(start, end)
+                    if (minutes !== null && minutes > 0) {
+                        hours = Math.round(minutes / 60 * 100) / 100
+                    }
                 }
             }
 
@@ -255,10 +262,12 @@ export async function GET(req: NextRequest) {
                 } else if (ts.absenceType === "VACATION") {
                     stats.vacationDays++
                 } else {
+                    // totalHours = only confirmed work (not PLANNED)
                     if (hours > 0) {
                         stats.totalHours += hours
                         stats.workDays++
                     }
+                    // plannedHours = always count planned hours regardless of status
                     if (plannedHours > 0) {
                         stats.plannedHours += plannedHours
                     }

@@ -377,7 +377,7 @@ function PayrollPageContent() {
                                                         {item.backupDays > 0 && (
                                                             <span>{item.backupDays} {item.backupDays === 1 ? "Tag" : "Tage"}</span>
                                                         )}
-                                                        {item.backupHours && item.backupHours > 0 && (
+                                                        {item.backupHours !== undefined && item.backupHours > 0 && (
                                                             <span className={item.backupDays > 0 ? "text-xs text-neutral-400 ml-1" : ""}>
                                                                 {item.backupDays > 0 ? `(${item.backupHours.toFixed(1)}h)` : `${item.backupHours.toFixed(1)}h`}
                                                             </span>

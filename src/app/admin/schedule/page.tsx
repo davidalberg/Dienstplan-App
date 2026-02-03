@@ -448,7 +448,8 @@ function SchedulePageContent() {
                 })
 
                 // Robustes Response-Parsing
-                let responseData: { error?: string } = {}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                let responseData: any = {}
                 try {
                     responseData = await res.json()
                 } catch {
@@ -460,9 +461,27 @@ function SchedulePageContent() {
                 }
 
                 if (res.ok) {
+                    // OPTIMISTIC UPDATE: Sofort im lokalen State aktualisieren
+                    setShifts(prev => prev.map(s => {
+                        if (s.id === editingShift.id) {
+                            return {
+                                ...s,
+                                plannedStart: formData.plannedStart,
+                                plannedEnd: formData.plannedEnd,
+                                note: formData.note || null,
+                                absenceType: formData.absenceType || null,
+                                backupEmployee: responseData.backupEmployee || (formData.backupEmployeeId
+                                    ? { id: formData.backupEmployeeId, name: employees.find(e => e.id === formData.backupEmployeeId)?.name || "" }
+                                    : null)
+                            }
+                        }
+                        return s
+                    }))
                     showToast("success", "Schicht aktualisiert")
                     setShowModal(false)
-                    fetchData()
+
+                    // Background-Revalidierung fuer Konsistenz (ohne Warten)
+                    mutate()
                 } else {
                     const errorMessage = typeof responseData.error === "string"
                         ? responseData.error
@@ -496,7 +515,8 @@ function SchedulePageContent() {
                 })
 
                 // Robustes Response-Parsing
-                let responseData: { error?: string; created?: number } = {}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                let responseData: any = {}
                 try {
                     responseData = await res.json()
                 } catch {
@@ -508,13 +528,72 @@ function SchedulePageContent() {
                 }
 
                 if (res.ok) {
-                    if (responseData.created !== undefined) {
+                    // OPTIMISTIC UPDATE: Sofort in den lokalen State einfuegen
+                    if (responseData.created !== undefined && responseData.shifts) {
+                        // Bulk-Erstellung: Alle neuen Schichten hinzufuegen
+                        const newShifts: Shift[] = responseData.shifts.map((s: Shift) => ({
+                            id: s.id,
+                            date: s.date,
+                            plannedStart: s.plannedStart || formData.plannedStart,
+                            plannedEnd: s.plannedEnd || formData.plannedEnd,
+                            status: s.status || "PLANNED",
+                            note: s.note || null,
+                            absenceType: s.absenceType || null,
+                            employee: s.employee || {
+                                id: formData.employeeId,
+                                name: employees.find(e => e.id === formData.employeeId)?.name || "Mitarbeiter",
+                                team: null
+                            },
+                            backupEmployee: s.backupEmployee || null
+                        }))
+                        setShifts(prev => [...prev, ...newShifts].sort((a, b) =>
+                            new Date(a.date).getTime() - new Date(b.date).getTime()
+                        ))
                         showToast("success", `${responseData.created} Schichten erstellt`)
-                    } else {
+                    } else if (responseData.id) {
+                        // Einzelne Schicht: Sofort hinzufuegen
+                        const selectedClient = clients.find(c => c.id === selectedClientId)
+                        const selectedEmployee = employees.find(e => e.id === formData.employeeId)
+                        const team = teams.find(t => t.id === selectedEmployee?.teamId)
+
+                        const newShift: Shift = {
+                            id: responseData.id,
+                            date: responseData.date || formData.date,
+                            plannedStart: responseData.plannedStart || formData.plannedStart,
+                            plannedEnd: responseData.plannedEnd || formData.plannedEnd,
+                            status: responseData.status || "PLANNED",
+                            note: responseData.note || null,
+                            absenceType: responseData.absenceType || null,
+                            employee: {
+                                id: formData.employeeId,
+                                name: responseData.employee?.name || selectedEmployee?.name || "Mitarbeiter",
+                                team: team ? {
+                                    id: team.id,
+                                    name: team.name,
+                                    client: selectedClient ? {
+                                        id: selectedClient.id,
+                                        firstName: selectedClient.firstName,
+                                        lastName: selectedClient.lastName
+                                    } : null
+                                } : null
+                            },
+                            backupEmployee: responseData.backupEmployee || null
+                        }
+
+                        // Sofort zum lokalen State hinzufuegen (optimistisch)
+                        setShifts(prev => [...prev, newShift].sort((a, b) =>
+                            new Date(a.date).getTime() - new Date(b.date).getTime()
+                        ))
                         showToast("success", "Schicht erstellt")
+                    } else {
+                        // Fallback: Altes Verhalten (sollte nicht passieren)
+                        showToast("success", "Schicht erstellt")
+                        fetchData()
                     }
                     setShowModal(false)
-                    fetchData()
+
+                    // Background-Revalidierung fuer Konsistenz (ohne Warten)
+                    mutate()
                 } else {
                     const errorMessage = typeof responseData.error === "string"
                         ? responseData.error
@@ -528,7 +607,7 @@ function SchedulePageContent() {
         } finally {
             setLoading(false)
         }
-    }, [editingShift, formData, loading, fetchData])
+    }, [editingShift, formData, loading, fetchData, mutate, clients, employees, teams, selectedClientId])
 
     // Cleanup-Funktion für Undo-Queue
     useEffect(() => {
@@ -1375,30 +1454,32 @@ function SchedulePageContent() {
                                             </div>
                                         </div>
 
-                                        {/* Conflict Warnings */}
-                                        {validating && (
-                                            <div className="flex items-center gap-2 p-2 bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-400">
-                                                <div className="animate-spin rounded-full h-3 w-3 border-b border-violet-500"></div>
-                                                Prüfe auf Konflikte...
-                                            </div>
-                                        )}
-                                        {!validating && conflicts.length > 0 && (
-                                            <div className="space-y-2">
-                                                {conflicts.map((conflict, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        className={`flex items-start gap-2 p-2 border rounded text-sm ${
-                                                            conflict.severity === "error"
-                                                                ? "bg-red-900/20 border-red-700 text-red-400"
-                                                                : "bg-amber-900/20 border-amber-700 text-amber-400"
-                                                        }`}
-                                                    >
-                                                        <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
-                                                        <span>{conflict.message}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                        {/* Conflict Warnings - Fixed height container prevents jumping */}
+                                        <div className="min-h-[44px]">
+                                            {validating && (
+                                                <div className="flex items-center gap-2 p-2 bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-400">
+                                                    <div className="animate-spin rounded-full h-3 w-3 border-b border-violet-500"></div>
+                                                    Prüfe auf Konflikte...
+                                                </div>
+                                            )}
+                                            {!validating && conflicts.length > 0 && (
+                                                <div className="space-y-2">
+                                                    {conflicts.map((conflict, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            className={`flex items-start gap-2 p-2 border rounded text-sm ${
+                                                                conflict.severity === "error"
+                                                                    ? "bg-red-900/20 border-red-700 text-red-400"
+                                                                    : "bg-amber-900/20 border-amber-700 text-amber-400"
+                                                            }`}
+                                                        >
+                                                            <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                                                            <span>{conflict.message}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
 
                                         {/* Backup */}
                                         <div>
