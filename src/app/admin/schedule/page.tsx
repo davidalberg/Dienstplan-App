@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useEffect, useState, useMemo, useCallback, Suspense } from "react"
+import { useEffect, useState, useMemo, useCallback, Suspense, useRef } from "react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from "date-fns"
 import { de } from "date-fns/locale"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
@@ -226,10 +226,18 @@ function SchedulePageContent() {
         }
     }, [shifts.length])
 
-    // ✅ INSTANT UI: Prefetch ALLE Stundennachweise beim Seitenaufruf
+    // ✅ INSTANT UI: Prefetch ALLE Stundennachweise SOFORT beim Seitenaufruf
     // Lädt alle Employee/Client-Kombinationen im Hintergrund vor
+    const hasPrefetched = useRef(false)
+
     useEffect(() => {
-        if (shifts.length === 0 || loading) return
+        // Reset prefetch flag wenn Monat/Jahr wechselt
+        hasPrefetched.current = false
+    }, [month, year])
+
+    useEffect(() => {
+        if (shifts.length === 0 || loading || hasPrefetched.current) return
+        hasPrefetched.current = true
 
         // Sammle unique Employee+Client Kombinationen
         const uniqueCombinations = new Map<string, { employeeId: string; clientId: string }>()
@@ -244,29 +252,17 @@ function SchedulePageContent() {
             }
         })
 
-        // Prefetch alle im Hintergrund (mit kleiner Verzögerung um UI nicht zu blockieren)
-        const prefetchAll = async () => {
-            const combinations = Array.from(uniqueCombinations.values())
-            // Batch in Gruppen von 3 um Server nicht zu überlasten
-            for (let i = 0; i < combinations.length; i += 3) {
-                const batch = combinations.slice(i, i + 3)
-                await Promise.all(
-                    batch.map(({ employeeId, clientId }) => {
-                        const url = `/api/admin/submissions/detail?employeeId=${employeeId}&clientId=${clientId}&month=${month}&year=${year}`
-                        return globalMutate(url, fetch(url).then(res => res.json()), { revalidate: false })
-                    })
-                )
-                // Kleine Pause zwischen Batches
-                if (i + 3 < combinations.length) {
-                    await new Promise(resolve => setTimeout(resolve, 100))
-                }
-            }
-        }
+        console.log(`[Schedule] Prefetching ${uniqueCombinations.size} Stundennachweise...`)
 
-        // Starte Prefetch nach kurzer Verzögerung (UI-Priorität)
-        const timer = setTimeout(prefetchAll, 500)
-        return () => clearTimeout(timer)
-    }, [shifts.length, loading, month, year, globalMutate])
+        // Prefetch ALLE sofort parallel (kein Batching mehr - schneller!)
+        const combinations = Array.from(uniqueCombinations.values())
+        combinations.forEach(({ employeeId, clientId }) => {
+            const url = `/api/admin/submissions/detail?employeeId=${employeeId}&clientId=${clientId}&month=${month}&year=${year}`
+            globalMutate(url, fetch(url).then(res => res.json()), { revalidate: false })
+                .then(() => console.log(`[Prefetch] ✓ ${employeeId.slice(-4)}`))
+                .catch(() => console.log(`[Prefetch] ✗ ${employeeId.slice(-4)}`))
+        })
+    }, [shifts, loading, month, year, globalMutate])
 
     // ✅ PERFORMANCE FIX: Memoize grouping logic (was recalculating on every render)
     const groupedShifts = useMemo(() => {
