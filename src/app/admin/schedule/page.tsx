@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useEffect, useState, useMemo, useCallback, Suspense, useRef } from "react"
+import { useEffect, useState, useMemo, useCallback, Suspense } from "react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from "date-fns"
 import { de } from "date-fns/locale"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
@@ -228,12 +228,20 @@ function SchedulePageContent() {
 
     // ✅ INSTANT UI: Prefetch ALLE Stundennachweise in EINEM Request
     // Skalierbar für 200+ Mitarbeiter - nur 1 API-Call statt 200
-    const hasPrefetched = useRef<string>("")
+    // Nutzt sessionStorage um Prefetch über Seitenwechsel zu persistieren
 
     useEffect(() => {
-        const cacheKey = `${month}-${year}`
-        if (loading || hasPrefetched.current === cacheKey) return
-        hasPrefetched.current = cacheKey
+        const cacheKey = `prefetch-${month}-${year}`
+        const lastPrefetch = sessionStorage.getItem(cacheKey)
+        const now = Date.now()
+
+        // Skip wenn innerhalb der letzten 10 Minuten bereits prefetched
+        if (lastPrefetch && (now - parseInt(lastPrefetch)) < 10 * 60 * 1000) {
+            console.log(`[Schedule] Cache noch gültig für ${month}/${year}`)
+            return
+        }
+
+        if (loading) return
 
         const prefetchAll = async () => {
             try {
@@ -251,13 +259,14 @@ function SchedulePageContent() {
                     globalMutate(url, detailData, { revalidate: false })
                 })
 
+                // Speichere Timestamp in sessionStorage
+                sessionStorage.setItem(cacheKey, String(now))
                 console.log(`[Schedule] ✅ ${data.count} Stundennachweise vorgeladen`)
             } catch (error) {
                 console.error("[Schedule] Prefetch error:", error)
             }
         }
 
-        // Starte Prefetch sofort
         prefetchAll()
     }, [loading, month, year, globalMutate])
 
