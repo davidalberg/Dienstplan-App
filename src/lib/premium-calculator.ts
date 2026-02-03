@@ -1,7 +1,7 @@
 /**
  * Premium Calculator für Zuschlagsberechnungen
  * - NRW Feiertage 2026-2030
- * - Nachtstunden (23:00-06:00)
+ * - Nachtstunden (23:00-06:00) = 7 Stunden
  * - Sonntagsstunden
  * - Monatliche Aggregation
  */
@@ -141,7 +141,7 @@ export function calculateNightHours(start: string, end: string, date: Date): num
     // Fenster 2: 23:00-30:00 (1380-1800 Minuten, wobei 30:00 = 6:00 nächster Tag)
     const nightWindow1Start = 0
     const nightWindow1End = 6 * 60 // 360
-    const nightWindow2Start = 23 * 60 // 1380
+    const nightWindow2Start = 23 * 60 // 1380 - Nachtarbeit beginnt um 23 Uhr
     const nightWindow2End = 30 * 60 // 1800
 
     let nightMinutes = 0

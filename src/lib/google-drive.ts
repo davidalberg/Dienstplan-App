@@ -1,4 +1,13 @@
 import { google } from "googleapis"
+import { randomUUID } from "crypto"
+
+/**
+ * Escape special characters in Google Drive query strings
+ * Prevents query injection when using user-provided names
+ */
+function escapeQueryString(str: string): string {
+    return str.replace(/\\/g, "\\\\").replace(/'/g, "\\'")
+}
 
 const MONTH_NAMES = [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
@@ -7,17 +16,34 @@ const MONTH_NAMES = [
 
 /**
  * Get authenticated Google Drive client using service account
+ * Supports both combined GOOGLE_SERVICE_ACCOUNT_KEY or separate GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY
  */
 function getDriveClient() {
-    const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
-    if (!credentials) {
-        throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY environment variable not set")
+    let credentials: { client_email: string; private_key: string }
+
+    // Option 1: Full service account JSON
+    const fullKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
+    if (fullKey) {
+        credentials = JSON.parse(fullKey)
+    } else {
+        // Option 2: Separate email and private key
+        const clientEmail = process.env.GOOGLE_CLIENT_EMAIL
+        const privateKey = process.env.GOOGLE_PRIVATE_KEY
+
+        if (!clientEmail || !privateKey) {
+            throw new Error(
+                "Google Drive credentials not set. Provide either GOOGLE_SERVICE_ACCOUNT_KEY or both GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY"
+            )
+        }
+
+        credentials = {
+            client_email: clientEmail,
+            private_key: privateKey.replace(/\\n/g, "\n") // Handle escaped newlines
+        }
     }
 
-    const serviceAccount = JSON.parse(credentials)
-
     const auth = new google.auth.GoogleAuth({
-        credentials: serviceAccount,
+        credentials,
         scopes: ["https://www.googleapis.com/auth/drive.file"]
     })
 
@@ -63,7 +89,7 @@ async function findFolder(
     name: string
 ): Promise<string | null> {
     const res = await drive.files.list({
-        q: `'${parentId}' in parents and name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        q: `'${parentId}' in parents and name='${escapeQueryString(name)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
         fields: "files(id, name)",
         spaces: "drive"
     })
@@ -124,7 +150,7 @@ export async function uploadTimesheetPdf(params: UploadTimesheetPdfParams): Prom
 
     // Check if file already exists (update instead of create)
     const existingFile = await drive.files.list({
-        q: `'${monthFolderId}' in parents and name='${fileName}' and trashed=false`,
+        q: `'${monthFolderId}' in parents and name='${escapeQueryString(fileName)}' and trashed=false`,
         fields: "files(id)",
         spaces: "drive"
     })
@@ -273,7 +299,9 @@ export async function uploadToClientFolder(params: UploadToClientFolderParams): 
     const clientFolderId = await findClientFolder(clientName)
 
     if (!clientFolderId) {
-        throw new Error(`Client folder "Team - ${clientName}" not found in Google Drive. Please create it first.`)
+        console.error(`[GOOGLE DRIVE] Ordner "Team - ${clientName}" nicht gefunden.`)
+        console.error(`Bitte erstellen Sie den Ordner manuell in Google Drive.`)
+        throw new Error(`Client folder not found: Team - ${clientName}`)
     }
 
     // Step 2: Get or create year/month subfolder
@@ -287,15 +315,15 @@ export async function uploadToClientFolder(params: UploadToClientFolderParams): 
     let finalFileName = `${baseFileName}.pdf`
 
     const existingFile = await drive.files.list({
-        q: `'${monthFolderId}' in parents and name='${finalFileName}' and trashed=false`,
+        q: `'${monthFolderId}' in parents and name='${escapeQueryString(finalFileName)}' and trashed=false`,
         fields: "files(id)",
         spaces: "drive"
     })
 
     if (existingFile.data.files && existingFile.data.files.length > 0) {
-        // File exists - add timestamp to avoid overwriting
-        const timestamp = Date.now()
-        finalFileName = `${baseFileName}_${timestamp}.pdf`
+        // File exists - add unique ID to avoid overwriting (UUID prevents race conditions)
+        const uniqueId = randomUUID().slice(0, 8)
+        finalFileName = `${baseFileName}_${uniqueId}.pdf`
     }
 
     // Step 5: Upload new file (NEVER overwrite/delete existing)

@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
             // Create new TeamSubmission
             const signatureToken = randomBytes(32).toString("hex")
             const tokenExpiresAt = new Date()
-            tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 14) // 14 days validity
+            tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 7) // 7 Tage Gueltigkeit
 
             teamSubmission = await prisma.teamSubmission.create({
                 data: {
@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
             // Generate new token if missing or expired
             signatureToken = randomBytes(32).toString("hex")
             const tokenExpiresAt = new Date()
-            tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 14)
+            tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 7) // 7 Tage Gueltigkeit
 
             await prisma.teamSubmission.update({
                 where: { id: teamSubmission.id },
@@ -212,8 +212,8 @@ export async function POST(req: NextRequest) {
         const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
         const signatureUrl = `${baseUrl}/sign/${signatureToken}`
 
-        // Get token expiry date
-        const expiresAt = teamSubmission.tokenExpiresAt || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+        // Get token expiry date (7 Tage als Fallback)
+        const expiresAt = teamSubmission.tokenExpiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
         await sendSignatureRequestEmail({
             recipientEmail: client.email,

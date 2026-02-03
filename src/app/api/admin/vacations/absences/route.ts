@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { calculateMinutesBetween } from "@/lib/time-utils"
 
 /**
  * GET /api/admin/vacations/absences
@@ -48,11 +49,11 @@ export async function GET(req: NextRequest) {
         const absences = timesheets.map(ts => {
             let hours = 8 // Default
 
-            if (ts.plannedStart && ts.plannedEnd) {
-                const [startH, startM] = ts.plannedStart.split(':').map(Number)
-                const [endH, endM] = ts.plannedEnd.split(':').map(Number)
-                hours = (endH + endM / 60) - (startH + startM / 60)
-                if (hours <= 0) hours = 8
+            const start = ts.actualStart || ts.plannedStart
+            const end = ts.actualEnd || ts.plannedEnd
+            if (start && end) {
+                const minutes = calculateMinutesBetween(start, end)
+                hours = minutes ? Math.round(minutes / 60 * 100) / 100 : 8
             }
 
             return {

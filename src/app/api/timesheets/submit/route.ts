@@ -38,28 +38,30 @@ export async function POST(req: NextRequest) {
         }, { status: 400 })
     }
 
-    // 2. Update all to SUBMITTED
-    await prisma.timesheet.updateMany({
-        where: {
-            employeeId: user.id,
-            month,
-            year,
-        },
-        data: {
-            status: "SUBMITTED",
-            lastUpdatedBy: user.email
-        }
-    })
+    // 2. Update all to SUBMITTED and create audit log (transactional)
+    await prisma.$transaction(async (tx) => {
+        await tx.timesheet.updateMany({
+            where: {
+                employeeId: user.id,
+                month,
+                year,
+            },
+            data: {
+                status: "SUBMITTED",
+                lastUpdatedBy: user.email
+            }
+        })
 
-    // 3. Audit Log
-    await prisma.auditLog.create({
-        data: {
-            employeeId: user.id,
-            date: new Date(), // Using current date for submission event log
-            changedBy: user.email,
-            field: "MONTHLY_SUBMIT",
-            newValue: `Submitted month ${month}/${year}`
-        }
+        // 3. Audit Log
+        await tx.auditLog.create({
+            data: {
+                employeeId: user.id,
+                date: new Date(), // Using current date for submission event log
+                changedBy: user.email,
+                field: "MONTHLY_SUBMIT",
+                newValue: `Submitted month ${month}/${year}`
+            }
+        })
     })
 
     return NextResponse.json({ success: true })

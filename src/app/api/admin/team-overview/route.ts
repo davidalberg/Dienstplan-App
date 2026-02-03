@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { startOfWeek, endOfWeek, eachDayOfInterval, format } from "date-fns"
 import { de } from "date-fns/locale"
+import { calculateMinutesBetween } from "@/lib/time-utils"
 
 export async function GET(req: NextRequest) {
     const session = await auth()
@@ -114,12 +115,8 @@ export async function GET(req: NextRequest) {
 
                 let hours = 0
                 if (start && end) {
-                    const [startH, startM] = start.split(":").map(Number)
-                    const [endH, endM] = end.split(":").map(Number)
-                    let totalMinutes = endH * 60 + endM - startH * 60 - startM
-                    // Handle overnight shifts
-                    if (totalMinutes < 0) totalMinutes += 24 * 60
-                    hours = Math.max(0, totalMinutes / 60)
+                    const minutes = calculateMinutesBetween(start, end)
+                    hours = minutes ? Math.round(minutes / 60 * 100) / 100 : 0
                 }
 
                 shiftsByDay[dayOfWeek] = {

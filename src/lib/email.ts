@@ -366,7 +366,13 @@ Dienstplan App
         )
     }
 
-    await Promise.all(emailPromises)
+    // Use Promise.allSettled for better error tolerance - partial failures don't block other emails
+    const results = await Promise.allSettled(emailPromises)
+    const failed = results.filter(r => r.status === 'rejected')
+    if (failed.length > 0) {
+        console.error(`[EMAIL] ${failed.length} E-Mails fehlgeschlagen:`,
+            failed.map(f => (f as PromiseRejectedResult).reason))
+    }
 }
 
 /**

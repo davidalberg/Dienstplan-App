@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
             if (start && end && !ts.absenceType) {
                 const minutes = calculateMinutesBetween(start, end)
                 if (minutes !== null) {
-                    hours = Math.round(minutes / 60 * 10) / 10
+                    hours = Math.round(minutes / 60 * 100) / 100 // 2 Dezimalstellen
                 }
             }
 
@@ -117,13 +117,14 @@ export async function GET(req: NextRequest) {
 
         // Export je nach Format
         if (exportFormat === "csv") {
-            // CSV Export
+            // CSV Export mit UTF-8 BOM fuer Windows Excel Kompatibilitaet
+            const BOM = '\ufeff'
             const csvHeader = "Datum,Wochentag,Beginn,Ende,Stunden,Bemerkung\n"
             const csvRows = rows.map(r =>
                 `${r.formattedDate},${r.weekday},${r.start},${r.end},${r.hours},"${r.note.replace(/"/g, '""')}"`
             ).join("\n")
             const csvFooter = `\nGesamtstunden,,,,${totalHours},`
-            const csvContent = csvHeader + csvRows + csvFooter
+            const csvContent = BOM + csvHeader + csvRows + csvFooter
 
             return new NextResponse(csvContent, {
                 headers: {

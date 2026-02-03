@@ -484,38 +484,43 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: "Schicht nicht gefunden" }, { status: 404 })
         }
 
-        // 2. Delete the timesheet
-        await prisma.timesheet.delete({
-            where: { id }
-        })
-
-        // 3. CLEANUP: Check if this was the last timesheet for this submission
-        if (timesheet.sheetFileName) {
-            const remainingCount = await prisma.timesheet.count({
-                where: {
-                    sheetFileName: timesheet.sheetFileName,
-                    month: timesheet.month,
-                    year: timesheet.year
-                }
+        // 2. Delete the timesheet and cleanup in a transaction
+        await prisma.$transaction(async (tx) => {
+            // Delete the timesheet
+            await tx.timesheet.delete({
+                where: { id }
             })
 
-            if (remainingCount === 0) {
-                // Last timesheet deleted → Delete orphaned TeamSubmission
-                console.log(`[DELETE /api/admin/schedule] CLEANUP: Deleting orphaned TeamSubmission for ${timesheet.sheetFileName} ${timesheet.month}/${timesheet.year}`)
-                await prisma.teamSubmission.delete({
+            // 3. CLEANUP: Check if this was the last timesheet for this submission
+            if (timesheet.sheetFileName) {
+                const remainingCount = await tx.timesheet.count({
                     where: {
-                        sheetFileName_month_year: {
-                            sheetFileName: timesheet.sheetFileName,
-                            month: timesheet.month,
-                            year: timesheet.year
-                        }
+                        sheetFileName: timesheet.sheetFileName,
+                        month: timesheet.month,
+                        year: timesheet.year
                     }
-                }).catch((err) => {
-                    // Submission might not exist (not yet submitted) - ignore error
-                    console.log("[DELETE /api/admin/schedule] No submission to delete (not yet submitted)")
                 })
+
+                if (remainingCount === 0) {
+                    // Last timesheet deleted -> Delete orphaned TeamSubmission
+                    console.log(`[DELETE /api/admin/schedule] CLEANUP: Deleting orphaned TeamSubmission for ${timesheet.sheetFileName} ${timesheet.month}/${timesheet.year}`)
+                    try {
+                        await tx.teamSubmission.delete({
+                            where: {
+                                sheetFileName_month_year: {
+                                    sheetFileName: timesheet.sheetFileName,
+                                    month: timesheet.month,
+                                    year: timesheet.year
+                                }
+                            }
+                        })
+                    } catch {
+                        // Submission might not exist (not yet submitted) - ignore error
+                        console.log("[DELETE /api/admin/schedule] No submission to delete (not yet submitted)")
+                    }
+                }
             }
-        }
+        })
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

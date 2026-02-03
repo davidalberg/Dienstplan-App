@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { generateCombinedTeamPdf } from "@/lib/pdf-generator"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
+import { calculateMinutesBetween } from "@/lib/time-utils"
 
 /**
  * GET /api/timesheets/download/[submissionId]
@@ -145,10 +146,8 @@ export async function GET(
             // Calculate hours from actual times
             let hours = 0
             if (ts.actualStart && ts.actualEnd && !ts.absenceType) {
-                const [startH, startM] = ts.actualStart.split(":").map(Number)
-                const [endH, endM] = ts.actualEnd.split(":").map(Number)
-                hours = (endH * 60 + endM - startH * 60 - startM) / 60
-                if (hours < 0) hours += 24 // overnight shift
+                const minutes = calculateMinutesBetween(ts.actualStart, ts.actualEnd)
+                hours = minutes ? Math.round(minutes / 60 * 100) / 100 : 0
             }
             return {
                 date: ts.date,
