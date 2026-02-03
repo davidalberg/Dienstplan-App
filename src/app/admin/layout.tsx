@@ -2,6 +2,7 @@
 
 import { SessionProvider } from "next-auth/react"
 import { Sidebar } from "@/components/Sidebar"
+import { AdminDataProvider } from "@/components/AdminDataProvider"
 import { useState } from "react"
 import { Download, X } from "lucide-react"
 
@@ -117,7 +118,9 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     return (
         <SessionProvider>
-            <AdminLayoutContent>{children}</AdminLayoutContent>
+            <AdminDataProvider>
+                <AdminLayoutContent>{children}</AdminLayoutContent>
+            </AdminDataProvider>
         </SessionProvider>
     )
 }

@@ -6,13 +6,12 @@ const fetcher = (url: string) => fetch(url).then(res => {
     return res.json()
 })
 
-// SWR configuration for admin pages - Optimized for balance between cache and freshness
+// SWR configuration for admin pages - Optimized for performance
 const swrConfig = {
-    revalidateOnFocus: true,        // Refetch when window regains focus for fresh data
-    revalidateOnReconnect: true,    // Refetch on network reconnect
-    dedupingInterval: 30000,        // 30 seconds - prevent duplicate requests
-    focusThrottleInterval: 10000,   // Max 1x per 10 seconds for focus revalidation
-    revalidateIfStale: true,        // Background refresh for stale data
+    revalidateOnFocus: false,       // NICHT bei jedem Tab-Wechsel
+    revalidateOnReconnect: false,   // Kein Refetch bei Reconnect
+    dedupingInterval: 60000,        // 60 Sekunden Cache
+    revalidateIfStale: false,       // Kein Background-Refetch
     keepPreviousData: true,         // Show cached data while loading new data (better UX)
     errorRetryInterval: 5000,       // Retry failed requests after 5s
     errorRetryCount: 2,             // Max 2 retries for failed requests
@@ -181,6 +180,38 @@ export function useAdminPayroll(month: number, year: number) {
         month: data?.month,
         year: data?.year,
         employeeCount: data?.employeeCount || 0,
+        isLoading,
+        isError: error,
+        mutate
+    }
+}
+
+// Absences / Abwesenheiten (Urlaub, Krank)
+export interface AbsenceEntry {
+    id: string
+    date: string
+    type: "VACATION" | "SICK"
+    hours: number
+    employee: {
+        id: string
+        name: string | null
+    }
+    note: string | null
+}
+
+export interface AbsenceData {
+    absences: AbsenceEntry[]
+}
+
+export function useAdminVacations(month: number, year: number) {
+    const { data, error, isLoading, mutate } = useSWR<AbsenceData>(
+        `/api/admin/vacations/absences?month=${month}&year=${year}`,
+        fetcher,
+        swrConfig
+    )
+
+    return {
+        absences: data?.absences || [],
         isLoading,
         isError: error,
         mutate

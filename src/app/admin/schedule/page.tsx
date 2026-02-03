@@ -26,7 +26,8 @@ import {
 } from "lucide-react"
 import { showToast } from "@/lib/toast-utils"
 import { formatTimeRange } from "@/lib/time-utils"
-import { useAdminSchedule, useClients } from "@/hooks/use-admin-data"
+import { useAdminSchedule } from "@/hooks/use-admin-data"
+import { useAdminData } from "@/components/AdminDataProvider"
 import TimesheetDetail from "@/components/TimesheetDetail"
 import DuplicateShiftModal from "@/components/DuplicateShiftModal"
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
@@ -160,7 +161,15 @@ function SchedulePageContent() {
         }
     }, [month, year, pathname, router, searchParams])
 
-    // SWR für Daten-Caching - lädt PARALLEL statt sequentiell
+    // ✅ PRELOAD OPTIMIZATION: Nutze zentral gecachte Master-Daten
+    const {
+        clients,
+        employees: globalEmployees,
+        teams: globalTeams,
+        isLoading: globalDataLoading
+    } = useAdminData()
+
+    // SWR für Daten-Caching - lädt nur Shifts + Monat-spezifische Daten
     const {
         shifts: swrShifts,
         employees: swrEmployees,
@@ -169,14 +178,10 @@ function SchedulePageContent() {
         mutate
     } = useAdminSchedule(month, year, selectedTeam || undefined)
 
-    // ✅ PERFORMANCE FIX: Clients mit SWR parallel laden statt sequentiell mit useEffect
-    const { clients: swrClients, isLoading: clientsLoading } = useClients()
-
     // Lokaler State für optimistische Updates
     const [shifts, setShifts] = useState<Shift[]>([])
     const [employees, setEmployees] = useState<Employee[]>([])
     const [teams, setTeams] = useState<Team[]>([])
-    const [clients, setClients] = useState<Client[]>([])
     const [loading, setLoading] = useState(true)
 
     // Bulk-Delete State
@@ -186,16 +191,25 @@ function SchedulePageContent() {
     const [deletedShifts, setDeletedShifts] = useState<Array<{ id: string; shift: Shift; timeout: NodeJS.Timeout }>>([])
 
     // Sync SWR data to local state
+    // ✅ OPTIMIZATION: Nutze globale Employees/Teams wenn Schedule-API keine liefert
     useEffect(() => {
         if (swrShifts !== undefined) setShifts(swrShifts)
-        if (swrEmployees) setEmployees(swrEmployees)
-        if (swrTeams) setTeams(swrTeams)
-        if (swrClients) setClients(swrClients)
-        // Loading ist false wenn SWR fertig ist (auch bei leerem Array)
-        if (swrShifts !== undefined && !isLoading) {
+        // Fallback zu globalen Daten wenn Schedule-API keine Employees/Teams liefert
+        if (swrEmployees && swrEmployees.length > 0) {
+            setEmployees(swrEmployees)
+        } else if (globalEmployees.length > 0) {
+            setEmployees(globalEmployees)
+        }
+        if (swrTeams && swrTeams.length > 0) {
+            setTeams(swrTeams)
+        } else if (globalTeams.length > 0) {
+            setTeams(globalTeams)
+        }
+        // Loading ist false wenn SWR UND globale Daten fertig sind
+        if (swrShifts !== undefined && !isLoading && !globalDataLoading) {
             setLoading(false)
         }
-    }, [swrShifts, swrEmployees, swrTeams, swrClients, isLoading])
+    }, [swrShifts, swrEmployees, swrTeams, globalEmployees, globalTeams, isLoading, globalDataLoading])
 
     // Expand all clients by default when data loads
     useEffect(() => {
@@ -845,8 +859,8 @@ function SchedulePageContent() {
     const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"]
 
     // ✅ BLACK SCREEN FIX: Show loading spinner while session or data is loading
-    // Zeige Spinner wenn: keine Session ODER SWR lädt ODER Clients laden ODER lokaler loading-State
-    const showLoading = !session || isLoading || clientsLoading || loading
+    // Zeige Spinner wenn: keine Session ODER SWR lädt ODER globale Daten laden ODER lokaler loading-State
+    const showLoading = !session || isLoading || globalDataLoading || loading
 
     if (showLoading) {
         return (

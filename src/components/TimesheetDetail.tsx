@@ -16,6 +16,7 @@ interface TimesheetDetailProps {
     year: number
     onClose: () => void
     onDelete?: () => void
+    initialData?: DetailData // Optional: Preload data from parent component
 }
 
 interface Timesheet {
@@ -84,16 +85,21 @@ export default function TimesheetDetail({
     month,
     year,
     onClose,
-    onDelete
+    onDelete,
+    initialData
 }: TimesheetDetailProps) {
     const signaturesEnabled = true // Immer aktiviert - kein Toggle mehr
     const [showDownloadMenu, setShowDownloadMenu] = useState(false)
     const [withdrawing, setWithdrawing] = useState<string | null>(null)
 
-    // Daten laden
+    // Daten laden - nutze initialData als fallback wenn vorhanden
     const { data, isLoading, error, mutate } = useSWR<DetailData>(
         `/api/admin/submissions/detail?employeeId=${employeeId}&clientId=${clientId}&month=${month}&year=${year}`,
-        fetcher
+        fetcher,
+        {
+            fallbackData: initialData, // Nutze gecachte Daten wenn vorhanden
+            revalidateOnMount: !initialData, // Nur neu laden wenn keine initialData
+        }
     )
 
 

@@ -13,18 +13,7 @@ import {
 } from "lucide-react"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
-
-interface AbsenceEntry {
-    id: string
-    date: string
-    type: "VACATION" | "SICK"
-    hours: number
-    employee: {
-        id: string
-        name: string | null
-    }
-    note: string | null
-}
+import { useAdminVacations, type AbsenceEntry } from "@/hooks/use-admin-data"
 
 // Loading Fallback
 function VacationsLoading() {
@@ -84,6 +73,12 @@ function VacationsContent() {
     const month = currentDate.getMonth() + 1
     const year = currentDate.getFullYear()
 
+    // SWR Hook for absences data
+    const { absences, isLoading } = useAdminVacations(month, year)
+
+    // Filter state
+    const [filter, setFilter] = useState<"ALL" | "VACATION" | "SICK">("ALL")
+
     // Sync URL
     useEffect(() => {
         const params = new URLSearchParams(searchParams.toString())
@@ -98,31 +93,6 @@ function VacationsContent() {
             // Ignore
         }
     }, [month, year, pathname, router, searchParams])
-
-    // Data state
-    const [absences, setAbsences] = useState<AbsenceEntry[]>([])
-    const [loading, setLoading] = useState(true)
-    const [filter, setFilter] = useState<"ALL" | "VACATION" | "SICK">("ALL")
-
-    // Load absences from Dienstplan (timesheets with absenceType)
-    useEffect(() => {
-        loadAbsences()
-    }, [month, year])
-
-    const loadAbsences = async () => {
-        setLoading(true)
-        try {
-            const res = await fetch(`/api/admin/vacations/absences?month=${month}&year=${year}`)
-            if (res.ok) {
-                const data = await res.json()
-                setAbsences(data.absences || [])
-            }
-        } catch (error) {
-            console.error("Error loading absences:", error)
-        } finally {
-            setLoading(false)
-        }
-    }
 
     const navigateMonth = (delta: number) => {
         const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1)
@@ -155,7 +125,7 @@ function VacationsContent() {
         sickHours: absences.filter(a => a.type === "SICK").reduce((sum, a) => sum + a.hours, 0)
     }
 
-    if (loading && absences.length === 0) {
+    if (isLoading && absences.length === 0) {
         return <VacationsLoading />
     }
 
