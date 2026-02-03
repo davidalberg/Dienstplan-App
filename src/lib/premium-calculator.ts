@@ -1,12 +1,14 @@
 /**
  * Premium Calculator für Zuschlagsberechnungen
- * - NRW Feiertage 2026-2030
+ * - NRW Feiertage 2026-2035
  * - Nachtstunden (23:00-06:00) = 7 Stunden
  * - Sonntagsstunden
  * - Monatliche Aggregation
  */
 
-// NRW Feiertage 2026-2030 (Format: YYYY-MM-DD)
+// NRW Feiertage 2026-2035 (Format: YYYY-MM-DD)
+// Feste Feiertage: 01.01, 01.05, 03.10, 01.11, 25.12, 26.12
+// Variable Feiertage: Karfreitag, Ostermontag, Christi Himmelfahrt, Pfingstmontag, Fronleichnam
 const NRW_HOLIDAYS = new Set([
     // 2026
     "2026-01-01", // Neujahr
@@ -72,6 +74,71 @@ const NRW_HOLIDAYS = new Set([
     "2030-11-01", // Allerheiligen
     "2030-12-25", // 1. Weihnachtsfeiertag
     "2030-12-26", // 2. Weihnachtsfeiertag
+
+    // 2031
+    "2031-01-01", // Neujahr
+    "2031-04-11", // Karfreitag
+    "2031-04-14", // Ostermontag
+    "2031-05-01", // Tag der Arbeit
+    "2031-05-22", // Christi Himmelfahrt
+    "2031-06-02", // Pfingstmontag
+    "2031-06-12", // Fronleichnam
+    "2031-10-03", // Tag der Deutschen Einheit
+    "2031-11-01", // Allerheiligen
+    "2031-12-25", // 1. Weihnachtsfeiertag
+    "2031-12-26", // 2. Weihnachtsfeiertag
+
+    // 2032
+    "2032-01-01", // Neujahr
+    "2032-03-26", // Karfreitag
+    "2032-03-29", // Ostermontag
+    "2032-05-01", // Tag der Arbeit
+    "2032-05-06", // Christi Himmelfahrt
+    "2032-05-17", // Pfingstmontag
+    "2032-05-27", // Fronleichnam
+    "2032-10-03", // Tag der Deutschen Einheit
+    "2032-11-01", // Allerheiligen
+    "2032-12-25", // 1. Weihnachtsfeiertag
+    "2032-12-26", // 2. Weihnachtsfeiertag
+
+    // 2033
+    "2033-01-01", // Neujahr
+    "2033-04-15", // Karfreitag
+    "2033-04-18", // Ostermontag
+    "2033-05-01", // Tag der Arbeit
+    "2033-05-26", // Christi Himmelfahrt
+    "2033-06-06", // Pfingstmontag
+    "2033-06-16", // Fronleichnam
+    "2033-10-03", // Tag der Deutschen Einheit
+    "2033-11-01", // Allerheiligen
+    "2033-12-25", // 1. Weihnachtsfeiertag
+    "2033-12-26", // 2. Weihnachtsfeiertag
+
+    // 2034
+    "2034-01-01", // Neujahr
+    "2034-04-07", // Karfreitag
+    "2034-04-10", // Ostermontag
+    "2034-05-01", // Tag der Arbeit
+    "2034-05-18", // Christi Himmelfahrt
+    "2034-05-29", // Pfingstmontag
+    "2034-06-08", // Fronleichnam
+    "2034-10-03", // Tag der Deutschen Einheit
+    "2034-11-01", // Allerheiligen
+    "2034-12-25", // 1. Weihnachtsfeiertag
+    "2034-12-26", // 2. Weihnachtsfeiertag
+
+    // 2035
+    "2035-01-01", // Neujahr
+    "2035-03-23", // Karfreitag
+    "2035-03-26", // Ostermontag
+    "2035-05-01", // Tag der Arbeit
+    "2035-05-03", // Christi Himmelfahrt
+    "2035-05-14", // Pfingstmontag
+    "2035-05-24", // Fronleichnam
+    "2035-10-03", // Tag der Deutschen Einheit
+    "2035-11-01", // Allerheiligen
+    "2035-12-25", // 1. Weihnachtsfeiertag
+    "2035-12-26", // 2. Weihnachtsfeiertag
 ])
 
 /**

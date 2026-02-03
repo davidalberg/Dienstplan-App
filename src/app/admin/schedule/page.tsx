@@ -188,6 +188,7 @@ function SchedulePageContent() {
 
     // Bulk-Delete State
     const [selectedShiftIds, setSelectedShiftIds] = useState<Set<string>>(new Set())
+    const [isBulkDeleting, setIsBulkDeleting] = useState(false)
 
     // Undo Queue für gelöschte Schichten
     const [deletedShifts, setDeletedShifts] = useState<Array<{ id: string; shift: Shift; timeout: NodeJS.Timeout }>>([])
@@ -739,12 +740,13 @@ function SchedulePageContent() {
     }, [shifts, commitDelete, handleUndo])
 
     const handleBulkDelete = async () => {
-        if (selectedShiftIds.size === 0) return
+        if (selectedShiftIds.size === 0 || isBulkDeleting) return
 
         if (!window.confirm(`Wirklich ${selectedShiftIds.size} Schichten löschen?`)) {
             return
         }
 
+        setIsBulkDeleting(true)
         try {
             const res = await fetch("/api/admin/schedule/bulk-delete", {
                 method: "POST",
@@ -769,6 +771,8 @@ function SchedulePageContent() {
         } catch (error) {
             console.error("Bulk delete error:", error)
             showToast("error", "Fehler beim Löschen")
+        } finally {
+            setIsBulkDeleting(false)
         }
     }
 
@@ -1043,19 +1047,27 @@ function SchedulePageContent() {
                         {viewMode === "list" && selectedShiftIds.size > 0 && (
                             <button
                                 onClick={handleBulkDelete}
-                                className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium"
+                                disabled={isBulkDeleting}
+                                className="flex items-center gap-2 bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium"
                             >
-                                <Trash2 size={20} />
-                                {selectedShiftIds.size} Schichten löschen
+                                {isBulkDeleting ? (
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                    <Trash2 size={20} />
+                                )}
+                                <span className="hidden sm:inline">
+                                    {isBulkDeleting ? "Lösche..." : `${selectedShiftIds.size} Schichten löschen`}
+                                </span>
+                                <span className="sm:hidden">{selectedShiftIds.size}</span>
                             </button>
                         )}
 
                         <button
                             onClick={() => openCreateModal()}
-                            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
+                            className="flex items-center gap-2 bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
                         >
                             <Plus size={20} />
-                            Neue Schicht
+                            <span className="hidden sm:inline">Neue Schicht</span>
                         </button>
                     </div>
                 </div>

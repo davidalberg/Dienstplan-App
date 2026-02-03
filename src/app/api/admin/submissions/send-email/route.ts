@@ -215,7 +215,8 @@ export async function POST(req: NextRequest) {
         // Get token expiry date (7 Tage als Fallback)
         const expiresAt = teamSubmission.tokenExpiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-        await sendSignatureRequestEmail({
+        // ✅ FIX: Rückgabewert prüfen - Resend kann fehlschlagen ohne Exception
+        const emailResult = await sendSignatureRequestEmail({
             recipientEmail: client.email,
             recipientName: clientName,
             employeeName: employeeNames.length === 1
@@ -226,6 +227,12 @@ export async function POST(req: NextRequest) {
             signatureUrl,
             expiresAt
         })
+
+        if (!emailResult?.success) {
+            return NextResponse.json({
+                error: "E-Mail konnte nicht gesendet werden"
+            }, { status: 500 })
+        }
 
         return NextResponse.json({
             success: true,

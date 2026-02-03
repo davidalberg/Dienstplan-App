@@ -116,12 +116,20 @@ Mit freundlichen Grüßen,
 Dienstplan App
 `
 
-    await resend.emails.send({
+    const result = await resend.emails.send({
         from: fromEmail,
         to: recipientEmail,
         subject: `Stundennachweis zur Unterschrift`,
         html: htmlContent,
     })
+
+    // ✅ FIX: Resend API gibt error-Objekt zurück bei Fehlern (wirft keine Exception)
+    if (result.error) {
+        console.error("[EMAIL] sendSignatureRequestEmail failed:", result.error)
+        throw new Error(result.error.message || "E-Mail konnte nicht gesendet werden")
+    }
+
+    return { success: true, id: result.data?.id }
 }
 
 interface EmployeeInfo {

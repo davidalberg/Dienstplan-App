@@ -22,6 +22,32 @@ interface Conflict {
   icon?: string // Optional: Icon fuer UI-Darstellung
 }
 
+// ✅ FIX: Zeit als Minuten für korrekten Vergleich (statt String-Vergleich)
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(":").map(Number)
+  return hours * 60 + minutes
+}
+
+// ✅ FIX: Prüfe Zeitüberlappung korrekt (inkl. Übernacht-Schichten)
+function hasTimeOverlap(
+  newStart: string,
+  newEnd: string,
+  existingStart: string,
+  existingEnd: string
+): boolean {
+  const newStartMin = timeToMinutes(newStart)
+  let newEndMin = timeToMinutes(newEnd)
+  const existingStartMin = timeToMinutes(existingStart)
+  let existingEndMin = timeToMinutes(existingEnd)
+
+  // Übernacht-Schicht: Ende am nächsten Tag
+  if (newEndMin <= newStartMin) newEndMin += 24 * 60
+  if (existingEndMin <= existingStartMin) existingEndMin += 24 * 60
+
+  // Überlappung wenn: neue Schicht startet vor Ende der existierenden UND endet nach Start
+  return newStartMin < existingEndMin && newEndMin > existingStartMin
+}
+
 /**
  * POST /api/admin/schedule/validate
  *
@@ -150,10 +176,10 @@ export async function POST(req: Request) {
       const shiftStart = shift.plannedStart || "00:00"
       const shiftEnd = shift.plannedEnd || "23:59"
 
-      // Prüfe Überlappung: neue Schicht startet vor Ende der existierenden UND endet nach Start der existierenden
-      const hasOverlap = plannedStart < shiftEnd && plannedEnd > shiftStart
+      // ✅ FIX: Korrekter Zeitvergleich mit Minuten (nicht String)
+      const overlap = hasTimeOverlap(plannedStart, plannedEnd, shiftStart, shiftEnd)
 
-      if (hasOverlap && shift.id !== existingShift?.id) {
+      if (overlap && shift.id !== existingShift?.id) {
         conflicts.push({
           type: "TIME_OVERLAP",
           message: `Zeitueberlappung mit existierender Schicht (${shiftStart}-${shiftEnd})`,
@@ -265,12 +291,12 @@ export async function POST(req: Request) {
             return
           }
 
-          // Prüfe Zeitüberlappung
+          // ✅ FIX: Korrekter Zeitvergleich mit Minuten (nicht String)
           const shiftStart = shift.plannedStart || "00:00"
           const shiftEnd = shift.plannedEnd || "23:59"
-          const hasOverlap = plannedStart < shiftEnd && plannedEnd > shiftStart
+          const overlap = hasTimeOverlap(plannedStart, plannedEnd, shiftStart, shiftEnd)
 
-          if (hasOverlap) {
+          if (overlap) {
             conflicts.push({
               type: "BACKUP_CONFLICT",
               message: `Backup-Mitarbeiter ${backupEmployee.name} hat bereits Schicht (${shiftStart}-${shiftEnd})`,
