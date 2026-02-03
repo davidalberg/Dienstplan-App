@@ -33,7 +33,7 @@ import DuplicateShiftModal from "@/components/DuplicateShiftModal"
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
 import { toast } from "sonner"
-import { preload } from "swr"
+import { useSWRConfig } from "swr"
 
 // Loading fallback component
 function ScheduleLoadingFallback() {
@@ -105,6 +105,7 @@ function SchedulePageContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const pathname = usePathname()
+    const { mutate: globalMutate } = useSWRConfig()
     const [viewMode, setViewMode] = useState<"list" | "calendar">("list")
 
     // Filter - Initialize from URL params, then localStorage, then current date
@@ -793,10 +794,12 @@ function SchedulePageContent() {
     }
 
     // ✅ PERFORMANCE: Prefetch TimesheetDetail data on hover
+    // Nutzt globalMutate um direkt in den SWR-Cache zu schreiben
     const prefetchTimesheetDetail = useCallback((employeeId: string, clientId: string) => {
         const url = `/api/admin/submissions/detail?employeeId=${employeeId}&clientId=${clientId}&month=${month}&year=${year}`
-        preload(url, (url) => fetch(url).then(res => res.json()))
-    }, [month, year])
+        // Prefetch und in SWR-Cache speichern (revalidate: false verhindert doppelten Request)
+        globalMutate(url, fetch(url).then(res => res.json()), { revalidate: false })
+    }, [month, year, globalMutate])
 
     // ✅ PERFORMANCE FIX: Memoize event handler
     const openTimesheetPreview = useCallback((shift: Shift) => {
@@ -944,11 +947,11 @@ function SchedulePageContent() {
 
     const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"]
 
-    // ✅ BLACK SCREEN FIX: Show loading spinner while session or data is loading
-    // Zeige Spinner wenn: keine Session ODER SWR lädt ODER globale Daten laden ODER lokaler loading-State
-    const showLoading = !session || isLoading || globalDataLoading || loading
+    // ✅ INSTANT UI FIX: Zeige Spinner NUR bei initialem Laden
+    // Nach dem ersten Laden: SWR revalidiert im Hintergrund ohne UI-Freeze
+    const isInitialLoad = !session || (loading && shifts.length === 0)
 
-    if (showLoading) {
+    if (isInitialLoad) {
         return (
             <div className="admin-dark min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
                 <div className="text-center">

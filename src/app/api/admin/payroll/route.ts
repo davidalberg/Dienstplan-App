@@ -45,37 +45,59 @@ export async function GET(req: NextRequest) {
     const { month, year } = validationResult.data
 
     try {
-        // Fetch all employees with their team/client relationships
-        const employees = await prisma.user.findMany({
-            where: {
-                role: "EMPLOYEE"
-            },
-            include: {
-                team: {
-                    include: {
-                        client: true
+        // ✅ PERFORMANCE: Parallele Queries statt sequenziell
+        const [employees, timesheets] = await Promise.all([
+            // Fetch all employees with their team/client relationships
+            prisma.user.findMany({
+                where: {
+                    role: "EMPLOYEE"
+                },
+                include: {
+                    team: {
+                        include: {
+                            client: true
+                        }
                     }
+                },
+                orderBy: {
+                    name: "asc"
                 }
-            },
-            orderBy: {
-                name: "asc"
-            }
-        })
+            }),
+            // Fetch all timesheets for this month
+            prisma.timesheet.findMany({
+                where: {
+                    month,
+                    year,
+                    status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                },
+                orderBy: { date: "asc" }
+            })
+        ])
 
-        // Fetch all timesheets for this month
-        const timesheets = await prisma.timesheet.findMany({
-            where: {
-                month,
-                year,
-                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
-            },
-            orderBy: { date: "asc" }
-        })
+        // ✅ PERFORMANCE: O(n) Gruppierung statt O(n²) Filter in der Schleife
+        // Einmal durch alle Timesheets iterieren und nach employeeId gruppieren
+        const timesheetsByEmployee = new Map<string, typeof timesheets>()
+        const backupDaysByEmployee = new Map<string, number>()
+
+        for (const ts of timesheets) {
+            // Gruppiere nach employeeId
+            const existing = timesheetsByEmployee.get(ts.employeeId) || []
+            existing.push(ts)
+            timesheetsByEmployee.set(ts.employeeId, existing)
+
+            // Zähle Backup-Tage
+            if (ts.backupEmployeeId) {
+                backupDaysByEmployee.set(
+                    ts.backupEmployeeId,
+                    (backupDaysByEmployee.get(ts.backupEmployeeId) || 0) + 1
+                )
+            }
+        }
 
         // Process each employee's payroll data
         const payrollData = employees.map(employee => {
-            // Get employee's timesheets
-            const employeeTimesheets = timesheets.filter(ts => ts.employeeId === employee.id)
+            // ✅ O(1) Lookup statt O(n) Filter
+            const employeeTimesheets = timesheetsByEmployee.get(employee.id) || []
 
             // Nutze aggregateMonthlyData für konsistente Berechnung (inkl. Backup-Stunden)
             const aggregated = aggregateMonthlyData(
@@ -93,10 +115,8 @@ export async function GET(req: NextRequest) {
                 timesheets  // ALLE Timesheets für Backup-Suche
             )
 
-            // Backup-Tage separat zählen (ALLE Einträge, nicht nur bei Abwesenheit)
-            const backupDays = timesheets.filter(ts =>
-                ts.backupEmployeeId === employee.id
-            ).length
+            // ✅ O(1) Lookup für Backup-Tage
+            const backupDays = backupDaysByEmployee.get(employee.id) || 0
 
             // Krankheitszeiträume formatieren
             const sickDates = employeeTimesheets
