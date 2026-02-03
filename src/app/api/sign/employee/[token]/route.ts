@@ -47,17 +47,39 @@ export async function GET(
             return NextResponse.json({ error: "Ungueltiger oder abgelaufener Link" }, { status: 404 })
         }
 
-        // Check if token is expired
-        if (employeeSignature.tokenExpiresAt && new Date() > employeeSignature.tokenExpiresAt) {
-            return NextResponse.json({ error: "Dieser Link ist abgelaufen" }, { status: 410 })
-        }
-
-        // Check if already signed
+        // Check if already signed (vor Token-Check, da dann Token-Erneuerung sinnlos)
         if (employeeSignature.signature) {
             return NextResponse.json({
                 error: "Du hast diesen Stundennachweis bereits unterschrieben",
                 signedAt: employeeSignature.signedAt
             }, { status: 410 })
+        }
+
+        // ✅ FIX: Check if token is expired - Automatische Token-Erneuerung
+        if (employeeSignature.tokenExpiresAt && new Date() > employeeSignature.tokenExpiresAt) {
+            // Token abgelaufen aber noch nicht unterschrieben - erneuere Token automatisch
+            const { randomBytes } = await import("crypto")
+            const newToken = randomBytes(32).toString("hex")
+            const newExpiry = new Date()
+            newExpiry.setDate(newExpiry.getDate() + 14) // 14 Tage gültig
+
+            await prisma.employeeSignature.update({
+                where: { id: employeeSignature.id },
+                data: {
+                    signToken: newToken,
+                    tokenExpiresAt: newExpiry
+                }
+            })
+
+            console.log(`[GET /api/sign/employee] Token erneuert für Employee ${employeeSignature.employeeId}`)
+
+            // Redirect zur neuen URL
+            return NextResponse.json({
+                expired: true,
+                message: "Link war abgelaufen und wurde automatisch erneuert",
+                newToken: newToken,
+                redirectUrl: `/sign/employee/${newToken}`
+            }, { status: 200 }) // 200 damit Frontend redirect kann
         }
 
         const teamSubmission = employeeSignature.teamSubmission
@@ -161,16 +183,19 @@ export async function POST(
             return NextResponse.json({ error: "Ungueltiger oder abgelaufener Link" }, { status: 404 })
         }
 
-        // Check if token is expired
-        if (employeeSignature.tokenExpiresAt && new Date() > employeeSignature.tokenExpiresAt) {
-            return NextResponse.json({ error: "Dieser Link ist abgelaufen" }, { status: 410 })
-        }
-
-        // Check if already signed
+        // Check if already signed (vor Token-Check)
         if (employeeSignature.signature) {
             return NextResponse.json({
                 error: "Du hast diesen Stundennachweis bereits unterschrieben"
             }, { status: 400 })
+        }
+
+        // ✅ FIX: Check if token is expired - für POST: Fehler zurückgeben (User soll GET neu aufrufen)
+        if (employeeSignature.tokenExpiresAt && new Date() > employeeSignature.tokenExpiresAt) {
+            return NextResponse.json({
+                error: "Der Link ist abgelaufen. Bitte Seite neu laden für automatische Erneuerung.",
+                expired: true
+            }, { status: 410 })
         }
 
         // Get IP address

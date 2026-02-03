@@ -418,43 +418,58 @@ export async function POST(
             // Continue without PDF link
         }
 
-        // Update TeamSubmission to COMPLETED (atomically with status check to prevent re-signing)
-        const updateResult = await prisma.teamSubmission.updateMany({
-            where: {
-                id: teamSubmission.id,
-                status: "PENDING_RECIPIENT" // CRITICAL: Only update if status is PENDING_RECIPIENT
-            },
-            data: {
-                recipientSignature: signature,
-                recipientSignedAt,
-                recipientIp: clientIp,
-                clientSignatureUrl: signature,        // NEW: Store persistent signature URL (Base64 data URL)
-                allEmployeesSigned: true,             // NEW: Mark all employees as signed (cache flag)
-                status: "COMPLETED",
-                pdfUrl,
-                googleDriveFileId
+        // ✅ FIX: Atomare Transaktion für Signatur + Timesheet-Updates (Race Condition verhindert)
+        const updateResult = await prisma.$transaction(async (tx) => {
+            // Update TeamSubmission to COMPLETED (atomically with status check to prevent re-signing)
+            const result = await tx.teamSubmission.updateMany({
+                where: {
+                    id: teamSubmission.id,
+                    status: "PENDING_RECIPIENT" // CRITICAL: Only update if status is PENDING_RECIPIENT
+                },
+                data: {
+                    recipientSignature: signature,
+                    recipientSignedAt,
+                    recipientIp: clientIp,
+                    clientSignatureUrl: signature,
+                    allEmployeesSigned: true,
+                    status: "COMPLETED",
+                    pdfUrl,
+                    googleDriveFileId
+                }
+            })
+
+            // If update failed, throw to abort transaction
+            if (result.count === 0) {
+                throw new Error("ALREADY_SIGNED")
             }
+
+            // Update all timesheets to COMPLETED status (innerhalb der gleichen Transaktion!)
+            await tx.timesheet.updateMany({
+                where: {
+                    sheetFileName: teamSubmission.sheetFileName,
+                    month: teamSubmission.month,
+                    year: teamSubmission.year
+                },
+                data: {
+                    status: "COMPLETED"
+                }
+            })
+
+            return result
+        }).catch((err) => {
+            if (err.message === "ALREADY_SIGNED") {
+                return { count: 0, alreadySigned: true }
+            }
+            throw err
         })
 
         // If update failed, someone already signed (race condition or token reuse)
         if (updateResult.count === 0) {
             return NextResponse.json({
                 error: "Dieser Stundennachweis wurde bereits unterschrieben oder ist nicht mehr im korrekten Status.",
-                pdfUrl: teamSubmission.pdfUrl
+                pdfUrl: teamSubmission.pdfUrl || undefined
             }, { status: 409 })
         }
-
-        // Update all timesheets to COMPLETED status
-        await prisma.timesheet.updateMany({
-            where: {
-                sheetFileName: teamSubmission.sheetFileName,
-                month: teamSubmission.month,
-                year: teamSubmission.year
-            },
-            data: {
-                status: "COMPLETED"
-            }
-        })
 
         // Send completion emails to ALL employees + recipient + employer
         let emailSuccess = true

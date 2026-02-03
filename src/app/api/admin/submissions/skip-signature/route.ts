@@ -50,28 +50,32 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // Pruefe ob bereits unterschrieben
-        if (empSig.signature) {
-            return NextResponse.json(
-                { error: "Mitarbeiter hat bereits unterschrieben" },
-                { status: 400 }
-            )
-        }
-
         // Hole IP-Adresse des Admins
         const forwardedFor = req.headers.get("x-forwarded-for")
         const realIp = req.headers.get("x-real-ip")
         const adminIp = forwardedFor?.split(",")[0].trim() || realIp || "admin-skip"
 
-        // Markiere als "uebersprungen" mit Dummy-Signatur
-        await prisma.employeeSignature.update({
-            where: { id: empSig.id },
+        // ✅ FIX: Atomares Update NUR wenn signature noch null ist (Race Condition verhindert)
+        // Verhindert, dass eine echte Signatur überschrieben wird
+        const updateResult = await prisma.employeeSignature.updateMany({
+            where: {
+                id: empSig.id,
+                signature: null // CRITICAL: Nur wenn noch nicht unterschrieben
+            },
             data: {
                 signature: "SKIPPED_BY_ADMIN", // Marker fuer uebersprungene Unterschrift
                 signedAt: new Date(),
                 ipAddress: adminIp
             }
         })
+
+        // Prüfe ob Update erfolgreich war
+        if (updateResult.count === 0) {
+            return NextResponse.json(
+                { error: "Mitarbeiter hat bereits unterschrieben (oder Unterschrift läuft gerade)" },
+                { status: 409 }
+            )
+        }
 
         console.log(`[skip-signature] Signature uebersprungen fuer Employee ${employeeId} (${empSig.employee.name})`)
 

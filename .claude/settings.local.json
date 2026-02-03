@@ -73,7 +73,23 @@
       "Bash(ls:*)",
       "Bash(npm run type-check:*)",
       "Bash(grep:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(python update-schedule-page.py:*)",
+      "Bash(python3:*)",
+      "Bash(C:/Users/david/.bun/bin/bun.exe --version)",
+      "Bash(where bun)",
+      "Bash(claude plugins uninstall:*)",
+      "WebSearch",
+      "WebFetch(domain:registry.modelcontextprotocol.io)",
+      "WebFetch(domain:docs.claude.com)",
+      "Bash(gh auth:*)",
+      "Bash(cmd /c \"gh auth status\")",
+      "Bash(cmd /c \"vercel env ls\")",
+      "Bash(gh repo list:*)",
+      "Bash(cmd /c \"rmdir /s /q .next\")",
+      "Bash(git tag:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)"
     ]
   }
 }
