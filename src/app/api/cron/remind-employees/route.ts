@@ -4,18 +4,30 @@ import { Resend } from "resend"
 import { getReminderEmailHTML, getReminderEmailText, getReminderEmailSubject, ReminderType } from "@/lib/email-templates"
 
 /**
- * Cron Job: Remind Employees about Unconfirmed Shifts
+ * Cron Job: Remind Employees about Unsigned Timesheets
  *
  * Vercel Cron: Runs daily at 09:00 UTC
  * Schedule: 0 9 * * *
  *
- * Scenarios:
- * 1. 3 days before month end: Remind employees with unconfirmed shifts
- * 2. 1 day after month end: First overdue reminder
- * 3. 3 days after month end: Second overdue reminder (CC admin)
+ * NEUE LOGIK (basierend auf letztem Dienst des Mitarbeiters):
+ *
+ * 1. LAST_SHIFT_DAY: Am Tag des letzten Dienstes im Monat
+ *    → "Heute ist dein letzter Dienst. Bitte unterschreibe nach Dienstende."
+ *
+ * 2. DEADLINE: 2 Tage nach letztem Dienst
+ *    → "Bitte unterschreibe. Wir brauchen das."
+ *
+ * 3. OVERDUE: Am 2. des Folgemonats
+ *    → "Dringende Aufforderung! Wir brauchen bis heute Nachmittag die Unterschrift."
+ *
+ * 4. URGENT: Am 4. des Folgemonats (CC: info@assistenzplus.de)
+ *    → "DRINGEND! Administration wurde informiert."
  *
  * Auth: Requires CRON_SECRET in authorization header
  */
+
+const ADMIN_EMAIL = "info@assistenzplus.de"
+
 export async function GET(req: NextRequest) {
     // Auth check: Require CRON_SECRET
     const authHeader = req.headers.get("authorization")
@@ -31,17 +43,13 @@ export async function GET(req: NextRequest) {
         const currentMonth = now.getMonth() + 1 // 1-12
         const currentYear = now.getFullYear()
         const currentDay = now.getDate()
-
-        // Calculate days until month end
-        const lastDayOfMonth = new Date(currentYear, currentMonth, 0).getDate()
-        const daysUntilMonthEnd = lastDayOfMonth - currentDay
+        const todayStr = now.toISOString().split("T")[0] // YYYY-MM-DD
 
         console.log("[Cron: remind-employees] Running check", {
             currentMonth,
             currentYear,
             currentDay,
-            lastDayOfMonth,
-            daysUntilMonthEnd
+            todayStr
         })
 
         // Initialize Resend
@@ -52,419 +60,347 @@ export async function GET(req: NextRequest) {
         const fromEmail = process.env.EMAIL_FROM || "Dienstplan App <onboarding@resend.dev>"
         const dashboardUrl = process.env.NEXTAUTH_URL
             ? `${process.env.NEXTAUTH_URL}/dashboard`
-            : "https://yourdomain.com/dashboard"
+            : "https://dienstplan.assistenzplus.de/dashboard"
 
         let remindersSent = 0
-        let reminderType: ReminderType | null = null
-        let targetMonth = currentMonth
-        let targetYear = currentYear
+        const results: { type: string; email: string; success: boolean }[] = []
 
         // =========================================================================
-        // Scenario 0: 7 days before month end - Early Reminder (informativ)
+        // SCENARIO 1: Am Tag des letzten Dienstes - Info E-Mail
+        // "Heute ist dein letzter Dienst. Bitte unterschreibe nach Dienstende."
         // =========================================================================
-        if (daysUntilMonthEnd === 7) {
-            console.log("[Cron: remind-employees] Scenario 0: 7 days before month end (Early Reminder)")
-            reminderType = "EARLY_REMINDER"
 
-            // Find employees with unconfirmed shifts in current month
-            const employeesWithUnconfirmed = await prisma.user.findMany({
-                where: {
-                    role: "EMPLOYEE",
-                    AND: [
-                        { email: { not: "" } },
-                        { email: { not: undefined } }
-                    ],
-                    timesheets: {
-                        some: {
-                            month: currentMonth,
-                            year: currentYear,
-                            status: { in: ["PLANNED", "CHANGED"] }
-                        }
-                    }
-                },
-                include: {
-                    timesheets: {
-                        where: {
-                            month: currentMonth,
-                            year: currentYear,
-                            status: { in: ["PLANNED", "CHANGED"] }
-                        },
-                        orderBy: { date: "asc" }
+        // Finde alle Mitarbeiter deren letzter Dienst HEUTE ist
+        const employeesWithLastShiftToday = await prisma.user.findMany({
+            where: {
+                role: "EMPLOYEE",
+                AND: [
+                    { email: { not: "" } },
+                    { email: { not: undefined } }
+                ],
+                timesheets: {
+                    some: {
+                        month: currentMonth,
+                        year: currentYear,
+                        status: { in: ["PLANNED", "CONFIRMED", "CHANGED"] },
+                        absenceType: null // Nur echte Schichten, keine Urlaub/Krank
                     }
                 }
-            })
-
-            console.log(`[Cron: remind-employees] Found ${employeesWithUnconfirmed.length} employees with unconfirmed shifts`)
-
-            for (const employee of employeesWithUnconfirmed) {
-                if (!employee.email) continue
-
-                const unconfirmedCount = employee.timesheets.length
-
-                // Konvertiere Schichten zu ShiftInfo für E-Mail
-                const shifts = employee.timesheets.map(ts => ({
-                    date: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
-                    time: `${ts.plannedStart || "?"}-${ts.plannedEnd || "?"}`
-                }))
-
-                try {
-                    const htmlContent = getReminderEmailHTML(reminderType, {
-                        employeeName: employee.name || "Mitarbeiter",
+            },
+            include: {
+                timesheets: {
+                    where: {
                         month: currentMonth,
                         year: currentYear,
-                        unconfirmedCount,
-                        daysUntilDeadline: 7,
-                        dashboardUrl,
-                        shifts
-                    })
+                        status: { in: ["PLANNED", "CONFIRMED", "CHANGED"] },
+                        absenceType: null
+                    },
+                    orderBy: { date: "desc" }
+                }
+            }
+        })
 
-                    const textContent = getReminderEmailText(reminderType, {
-                        employeeName: employee.name || "Mitarbeiter",
-                        month: currentMonth,
-                        year: currentYear,
-                        unconfirmedCount,
-                        daysUntilDeadline: 7,
-                        dashboardUrl,
-                        shifts
-                    })
+        for (const employee of employeesWithLastShiftToday) {
+            if (!employee.email || employee.timesheets.length === 0) continue
 
-                    const subject = getReminderEmailSubject(reminderType, currentMonth, currentYear)
+            // Finde den letzten Dienst des Mitarbeiters im Monat
+            const lastShift = employee.timesheets[0]
+            const lastShiftDate = new Date(lastShift.date).toISOString().split("T")[0]
 
-                    await resend.emails.send({
-                        from: fromEmail,
-                        to: employee.email,
-                        subject,
-                        html: htmlContent,
-                        text: textContent
-                    })
+            if (lastShiftDate === todayStr) {
+                // Prüfe ob bereits unterschrieben
+                const hasUnsignedSubmissions = await prisma.employeeSignature.findFirst({
+                    where: {
+                        employeeId: employee.id,
+                        signature: null,
+                        teamSubmission: {
+                            month: currentMonth,
+                            year: currentYear
+                        }
+                    }
+                })
 
-                    remindersSent++
-                    console.log(`[Cron: remind-employees] Sent early reminder to ${employee.email}`)
-                } catch (emailError) {
-                    console.error(`[Cron: remind-employees] Failed to send email to ${employee.email}:`, emailError)
+                // Nur senden wenn noch nicht unterschrieben
+                if (hasUnsignedSubmissions) {
+                    const shifts = employee.timesheets.map(ts => ({
+                        date: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+                        time: `${ts.plannedStart || "?"}-${ts.plannedEnd || "?"}`
+                    }))
+
+                    try {
+                        const reminderType: ReminderType = "LAST_SHIFT_DAY"
+
+                        await resend.emails.send({
+                            from: fromEmail,
+                            to: employee.email,
+                            subject: getReminderEmailSubject(reminderType, currentMonth, currentYear),
+                            html: getReminderEmailHTML(reminderType, {
+                                employeeName: employee.name || "Mitarbeiter",
+                                month: currentMonth,
+                                year: currentYear,
+                                unconfirmedCount: shifts.length,
+                                dashboardUrl,
+                                shifts
+                            }),
+                            text: getReminderEmailText(reminderType, {
+                                employeeName: employee.name || "Mitarbeiter",
+                                month: currentMonth,
+                                year: currentYear,
+                                unconfirmedCount: shifts.length,
+                                dashboardUrl,
+                                shifts
+                            })
+                        })
+
+                        remindersSent++
+                        results.push({ type: "LAST_SHIFT_DAY", email: employee.email, success: true })
+                        console.log(`[Cron] Sent LAST_SHIFT_DAY to ${employee.email}`)
+                    } catch (emailError) {
+                        console.error(`[Cron] Failed LAST_SHIFT_DAY to ${employee.email}:`, emailError)
+                        results.push({ type: "LAST_SHIFT_DAY", email: employee.email, success: false })
+                    }
                 }
             }
         }
 
         // =========================================================================
-        // Scenario 1: 3 days before month end - Reminder
+        // SCENARIO 2: 2 Tage nach letztem Dienst - Deadline Warnung
         // =========================================================================
-        else if (daysUntilMonthEnd === 3) {
-            console.log("[Cron: remind-employees] Scenario 1: 3 days before month end")
-            reminderType = "BEFORE_DEADLINE"
 
-            // Find employees with unconfirmed shifts in current month
-            const employeesWithUnconfirmed = await prisma.user.findMany({
-                where: {
-                    role: "EMPLOYEE",
-                    AND: [
-                        { email: { not: "" } },      // Filter out empty emails
-                        { email: { not: undefined } } // Filter out null emails via undefined check
-                    ],
-                    timesheets: {
-                        some: {
+        const twoDaysAgo = new Date(now)
+        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
+        const twoDaysAgoStr = twoDaysAgo.toISOString().split("T")[0]
+
+        for (const employee of employeesWithLastShiftToday) {
+            if (!employee.email || employee.timesheets.length === 0) continue
+
+            const lastShift = employee.timesheets[0]
+            const lastShiftDate = new Date(lastShift.date).toISOString().split("T")[0]
+
+            if (lastShiftDate === twoDaysAgoStr) {
+                // Prüfe ob bereits unterschrieben
+                const hasUnsignedSubmissions = await prisma.employeeSignature.findFirst({
+                    where: {
+                        employeeId: employee.id,
+                        signature: null,
+                        teamSubmission: {
                             month: currentMonth,
-                            year: currentYear,
-                            status: { in: ["PLANNED", "CHANGED"] } // Not CONFIRMED/SUBMITTED
+                            year: currentYear
                         }
                     }
-                },
-                include: {
-                    timesheets: {
-                        where: {
-                            month: currentMonth,
-                            year: currentYear,
-                            status: { in: ["PLANNED", "CHANGED"] }
-                        },
-                        orderBy: { date: "asc" }
+                })
+
+                if (hasUnsignedSubmissions) {
+                    const shifts = employee.timesheets.map(ts => ({
+                        date: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+                        time: `${ts.plannedStart || "?"}-${ts.plannedEnd || "?"}`
+                    }))
+
+                    try {
+                        const reminderType: ReminderType = "DEADLINE"
+
+                        await resend.emails.send({
+                            from: fromEmail,
+                            to: employee.email,
+                            subject: getReminderEmailSubject(reminderType, currentMonth, currentYear),
+                            html: getReminderEmailHTML(reminderType, {
+                                employeeName: employee.name || "Mitarbeiter",
+                                month: currentMonth,
+                                year: currentYear,
+                                unconfirmedCount: shifts.length,
+                                daysUntilDeadline: 0,
+                                dashboardUrl,
+                                shifts
+                            }),
+                            text: getReminderEmailText(reminderType, {
+                                employeeName: employee.name || "Mitarbeiter",
+                                month: currentMonth,
+                                year: currentYear,
+                                unconfirmedCount: shifts.length,
+                                daysUntilDeadline: 0,
+                                dashboardUrl,
+                                shifts
+                            })
+                        })
+
+                        remindersSent++
+                        results.push({ type: "DEADLINE", email: employee.email, success: true })
+                        console.log(`[Cron] Sent DEADLINE to ${employee.email}`)
+                    } catch (emailError) {
+                        console.error(`[Cron] Failed DEADLINE to ${employee.email}:`, emailError)
+                        results.push({ type: "DEADLINE", email: employee.email, success: false })
                     }
-                }
-            })
-
-            console.log(`[Cron: remind-employees] Found ${employeesWithUnconfirmed.length} employees with unconfirmed shifts`)
-
-            for (const employee of employeesWithUnconfirmed) {
-                if (!employee.email) continue
-
-                const unconfirmedCount = employee.timesheets.length
-
-                // Konvertiere Schichten zu ShiftInfo für E-Mail
-                const shifts = employee.timesheets.map(ts => ({
-                    date: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
-                    time: `${ts.plannedStart || "?"}-${ts.plannedEnd || "?"}`
-                }))
-
-                try {
-                    const htmlContent = getReminderEmailHTML(reminderType, {
-                        employeeName: employee.name || "Mitarbeiter",
-                        month: currentMonth,
-                        year: currentYear,
-                        unconfirmedCount,
-                        daysUntilDeadline: 3,
-                        dashboardUrl,
-                        shifts
-                    })
-
-                    const textContent = getReminderEmailText(reminderType, {
-                        employeeName: employee.name || "Mitarbeiter",
-                        month: currentMonth,
-                        year: currentYear,
-                        unconfirmedCount,
-                        daysUntilDeadline: 3,
-                        dashboardUrl,
-                        shifts
-                    })
-
-                    const subject = getReminderEmailSubject(reminderType, currentMonth, currentYear)
-
-                    await resend.emails.send({
-                        from: fromEmail,
-                        to: employee.email,
-                        subject,
-                        html: htmlContent,
-                        text: textContent
-                    })
-
-                    remindersSent++
-                    console.log(`[Cron: remind-employees] Sent reminder to ${employee.email}`)
-                } catch (emailError) {
-                    console.error(`[Cron: remind-employees] Failed to send email to ${employee.email}:`, emailError)
                 }
             }
         }
 
         // =========================================================================
-        // Scenario 2: 1 day after month end - First overdue reminder
+        // SCENARIO 3: Am 2. des Monats - Überfällig (für Vormonat)
         // =========================================================================
-        else if (daysUntilMonthEnd === -1) {
-            console.log("[Cron: remind-employees] Scenario 2: 1 day overdue")
-            reminderType = "OVERDUE_1"
+
+        if (currentDay === 2) {
+            console.log("[Cron] Scenario 3: 2nd of month - OVERDUE")
 
             // Target LAST month
-            targetMonth = currentMonth === 1 ? 12 : currentMonth - 1
-            targetYear = currentMonth === 1 ? currentYear - 1 : currentYear
+            const targetMonth = currentMonth === 1 ? 12 : currentMonth - 1
+            const targetYear = currentMonth === 1 ? currentYear - 1 : currentYear
 
-            // Find incomplete submissions
-            const incompleteSubmissions = await prisma.teamSubmission.findMany({
+            const unsignedEmployees = await prisma.employeeSignature.findMany({
                 where: {
-                    month: targetMonth,
-                    year: targetYear,
-                    status: { not: "COMPLETED" }
+                    signature: null,
+                    teamSubmission: {
+                        month: targetMonth,
+                        year: targetYear,
+                        status: { not: "COMPLETED" }
+                    }
                 },
                 include: {
-                    employeeSignatures: {
-                        where: {
-                            signature: null // Not signed yet
-                        },
-                        include: {
-                            employee: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                    email: true
-                                }
-                            }
-                        }
-                    }
+                    employee: {
+                        select: { id: true, name: true, email: true }
+                    },
+                    teamSubmission: true
                 }
             })
 
-            console.log(`[Cron: remind-employees] Found ${incompleteSubmissions.length} incomplete submissions`)
-
-            // Collect unique employees who haven't signed
-            const unsignedEmployeesMap = new Map<string, {
-                email: string
-                name: string
-                unconfirmedCount: number
-            }>()
-
-            for (const submission of incompleteSubmissions) {
-                for (const empSig of submission.employeeSignatures) {
-                    if (!empSig.employee.email) continue
-
-                    const existing = unsignedEmployeesMap.get(empSig.employeeId)
-                    if (existing) {
-                        existing.unconfirmedCount++
-                    } else {
-                        unsignedEmployeesMap.set(empSig.employeeId, {
-                            email: empSig.employee.email,
-                            name: empSig.employee.name || "Mitarbeiter",
-                            unconfirmedCount: 1
-                        })
-                    }
+            const employeeMap = new Map<string, { name: string; email: string; count: number }>()
+            for (const sig of unsignedEmployees) {
+                if (!sig.employee.email) continue
+                const existing = employeeMap.get(sig.employeeId)
+                if (existing) {
+                    existing.count++
+                } else {
+                    employeeMap.set(sig.employeeId, {
+                        name: sig.employee.name || "Mitarbeiter",
+                        email: sig.employee.email,
+                        count: 1
+                    })
                 }
             }
 
-            console.log(`[Cron: remind-employees] Found ${unsignedEmployeesMap.size} employees to remind`)
-
-            for (const [employeeId, empData] of unsignedEmployeesMap) {
+            for (const [empId, empData] of employeeMap) {
                 try {
-                    const htmlContent = getReminderEmailHTML(reminderType, {
-                        employeeName: empData.name,
-                        month: targetMonth,
-                        year: targetYear,
-                        unconfirmedCount: empData.unconfirmedCount,
-                        daysOverdue: 1,
-                        dashboardUrl
-                    })
-
-                    const textContent = getReminderEmailText(reminderType, {
-                        employeeName: empData.name,
-                        month: targetMonth,
-                        year: targetYear,
-                        unconfirmedCount: empData.unconfirmedCount,
-                        daysOverdue: 1,
-                        dashboardUrl
-                    })
-
-                    const subject = getReminderEmailSubject(reminderType, targetMonth, targetYear)
+                    const reminderType: ReminderType = "OVERDUE"
 
                     await resend.emails.send({
                         from: fromEmail,
                         to: empData.email,
-                        subject,
-                        html: htmlContent,
-                        text: textContent
+                        subject: getReminderEmailSubject(reminderType, targetMonth, targetYear),
+                        html: getReminderEmailHTML(reminderType, {
+                            employeeName: empData.name,
+                            month: targetMonth,
+                            year: targetYear,
+                            unconfirmedCount: empData.count,
+                            daysOverdue: 2,
+                            dashboardUrl
+                        }),
+                        text: getReminderEmailText(reminderType, {
+                            employeeName: empData.name,
+                            month: targetMonth,
+                            year: targetYear,
+                            unconfirmedCount: empData.count,
+                            daysOverdue: 2,
+                            dashboardUrl
+                        })
                     })
 
                     remindersSent++
-                    console.log(`[Cron: remind-employees] Sent overdue reminder to ${empData.email}`)
+                    results.push({ type: "OVERDUE", email: empData.email, success: true })
+                    console.log(`[Cron] Sent OVERDUE to ${empData.email}`)
                 } catch (emailError) {
-                    console.error(`[Cron: remind-employees] Failed to send email to ${empData.email}:`, emailError)
+                    console.error(`[Cron] Failed OVERDUE to ${empData.email}:`, emailError)
+                    results.push({ type: "OVERDUE", email: empData.email, success: false })
                 }
             }
         }
 
         // =========================================================================
-        // Scenario 3: 3 days after month end - Second overdue reminder (CC admin)
+        // SCENARIO 4: Am 4. des Monats - DRINGEND mit CC an Admin
         // =========================================================================
-        else if (daysUntilMonthEnd === -3) {
-            console.log("[Cron: remind-employees] Scenario 3: 3 days overdue (CC admin)")
-            reminderType = "OVERDUE_3"
+
+        if (currentDay === 4) {
+            console.log("[Cron] Scenario 4: 4th of month - URGENT (CC admin)")
 
             // Target LAST month
-            targetMonth = currentMonth === 1 ? 12 : currentMonth - 1
-            targetYear = currentMonth === 1 ? currentYear - 1 : currentYear
+            const targetMonth = currentMonth === 1 ? 12 : currentMonth - 1
+            const targetYear = currentMonth === 1 ? currentYear - 1 : currentYear
 
-            // Find incomplete submissions
-            const incompleteSubmissions = await prisma.teamSubmission.findMany({
+            const unsignedEmployees = await prisma.employeeSignature.findMany({
                 where: {
-                    month: targetMonth,
-                    year: targetYear,
-                    status: { not: "COMPLETED" }
+                    signature: null,
+                    teamSubmission: {
+                        month: targetMonth,
+                        year: targetYear,
+                        status: { not: "COMPLETED" }
+                    }
                 },
                 include: {
-                    employeeSignatures: {
-                        where: {
-                            signature: null
-                        },
-                        include: {
-                            employee: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                    email: true
-                                }
-                            }
-                        }
-                    }
+                    employee: {
+                        select: { id: true, name: true, email: true }
+                    },
+                    teamSubmission: true
                 }
             })
 
-            console.log(`[Cron: remind-employees] Found ${incompleteSubmissions.length} incomplete submissions`)
-
-            // Collect unique employees who haven't signed
-            const unsignedEmployeesMap = new Map<string, {
-                email: string
-                name: string
-                unconfirmedCount: number
-            }>()
-
-            for (const submission of incompleteSubmissions) {
-                for (const empSig of submission.employeeSignatures) {
-                    if (!empSig.employee.email) continue
-
-                    const existing = unsignedEmployeesMap.get(empSig.employeeId)
-                    if (existing) {
-                        existing.unconfirmedCount++
-                    } else {
-                        unsignedEmployeesMap.set(empSig.employeeId, {
-                            email: empSig.employee.email,
-                            name: empSig.employee.name || "Mitarbeiter",
-                            unconfirmedCount: 1
-                        })
-                    }
+            const employeeMap = new Map<string, { name: string; email: string; count: number }>()
+            for (const sig of unsignedEmployees) {
+                if (!sig.employee.email) continue
+                const existing = employeeMap.get(sig.employeeId)
+                if (existing) {
+                    existing.count++
+                } else {
+                    employeeMap.set(sig.employeeId, {
+                        name: sig.employee.name || "Mitarbeiter",
+                        email: sig.employee.email,
+                        count: 1
+                    })
                 }
             }
 
-            console.log(`[Cron: remind-employees] Found ${unsignedEmployeesMap.size} employees to remind (with CC admin)`)
-
-            // Get admin emails for CC
-            const admins = await prisma.user.findMany({
-                where: {
-                    role: "ADMIN",
-                    AND: [
-                        { email: { not: "" } },
-                        { email: { not: undefined } }
-                    ]
-                },
-                select: { email: true }
-            })
-
-            const adminEmails = admins.map(a => a.email).filter(Boolean) as string[]
-
-            for (const [employeeId, empData] of unsignedEmployeesMap) {
+            for (const [empId, empData] of employeeMap) {
                 try {
-                    const htmlContent = getReminderEmailHTML(reminderType, {
-                        employeeName: empData.name,
-                        month: targetMonth,
-                        year: targetYear,
-                        unconfirmedCount: empData.unconfirmedCount,
-                        daysOverdue: 3,
-                        dashboardUrl
-                    })
-
-                    const textContent = getReminderEmailText(reminderType, {
-                        employeeName: empData.name,
-                        month: targetMonth,
-                        year: targetYear,
-                        unconfirmedCount: empData.unconfirmedCount,
-                        daysOverdue: 3,
-                        dashboardUrl
-                    })
-
-                    const subject = getReminderEmailSubject(reminderType, targetMonth, targetYear)
-
-                    // Send to employee + CC admin(s)
-                    const recipients = [empData.email, ...adminEmails]
+                    const reminderType: ReminderType = "URGENT"
 
                     await resend.emails.send({
                         from: fromEmail,
                         to: empData.email,
-                        cc: adminEmails.length > 0 ? adminEmails : undefined,
-                        subject,
-                        html: htmlContent,
-                        text: textContent
+                        cc: [ADMIN_EMAIL], // CC an info@assistenzplus.de
+                        subject: getReminderEmailSubject(reminderType, targetMonth, targetYear),
+                        html: getReminderEmailHTML(reminderType, {
+                            employeeName: empData.name,
+                            month: targetMonth,
+                            year: targetYear,
+                            unconfirmedCount: empData.count,
+                            daysOverdue: 4,
+                            dashboardUrl
+                        }),
+                        text: getReminderEmailText(reminderType, {
+                            employeeName: empData.name,
+                            month: targetMonth,
+                            year: targetYear,
+                            unconfirmedCount: empData.count,
+                            daysOverdue: 4,
+                            dashboardUrl
+                        })
                     })
 
                     remindersSent++
-                    console.log(`[Cron: remind-employees] Sent urgent reminder to ${empData.email} (CC: ${adminEmails.join(', ')})`)
+                    results.push({ type: "URGENT", email: empData.email, success: true })
+                    console.log(`[Cron] Sent URGENT to ${empData.email} (CC: ${ADMIN_EMAIL})`)
                 } catch (emailError) {
-                    console.error(`[Cron: remind-employees] Failed to send email to ${empData.email}:`, emailError)
+                    console.error(`[Cron] Failed URGENT to ${empData.email}:`, emailError)
+                    results.push({ type: "URGENT", email: empData.email, success: false })
                 }
             }
-        } else {
-            console.log(`[Cron: remind-employees] No action needed (daysUntilMonthEnd: ${daysUntilMonthEnd})`)
         }
 
         return NextResponse.json({
             success: true,
             message: `Reminder cron job completed`,
             remindersSent,
-            reminderType,
-            targetMonth,
-            targetYear,
-            daysUntilMonthEnd
+            results,
+            currentDay,
+            currentMonth,
+            currentYear
         })
 
     } catch (error: unknown) {
