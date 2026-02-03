@@ -51,20 +51,30 @@ test.describe('Einreichungs-Prozess', () => {
         const month = now.getMonth() + 1
         const year = now.getFullYear()
 
-        // Prüfe ob alle Schichten bestätigt sind
-        const unconfirmedCount = await prisma.timesheet.count({
+        // Erst alle Schichten auf CONFIRMED setzen (um sicherzugehen dass sie existieren und bestätigt sind)
+        const existingShifts = await prisma.timesheet.findMany({
             where: {
                 employeeId: employee!.id,
                 month,
                 year,
-                status: { notIn: ['CONFIRMED', 'CHANGED', 'SUBMITTED'] },
             },
         })
 
-        if (unconfirmedCount > 0) {
+        if (existingShifts.length === 0) {
+            console.log('No shifts found for employee in this month, skipping')
             test.skip()
             return
         }
+
+        // Bestätige alle Schichten
+        await prisma.timesheet.updateMany({
+            where: {
+                employeeId: employee!.id,
+                month,
+                year,
+            },
+            data: { status: 'CONFIRMED' },
+        })
 
         // Einreichen
         const response = await page.request.post('/api/timesheets/submit', {
@@ -75,33 +85,29 @@ test.describe('Einreichungs-Prozess', () => {
             },
         })
 
-        if (response.ok()) {
-            // Verifiziere Status-Änderung
-            const submittedCount = await prisma.timesheet.count({
-                where: {
-                    employeeId: employee!.id,
-                    month,
-                    year,
-                    status: 'SUBMITTED',
-                },
-            })
+        expect(response.ok()).toBeTruthy()
 
-            expect(submittedCount).toBeGreaterThan(0)
+        // Verifiziere Status-Änderung
+        const submittedCount = await prisma.timesheet.count({
+            where: {
+                employeeId: employee!.id,
+                month,
+                year,
+                status: 'SUBMITTED',
+            },
+        })
 
-            // Reset für weitere Tests
-            await prisma.timesheet.updateMany({
-                where: {
-                    employeeId: employee!.id,
-                    month,
-                    year,
-                },
-                data: { status: 'PLANNED' },
-            })
-        } else {
-            // Submission könnte fehlschlagen wenn bereits submitted
-            const data = await response.json()
-            console.log('Submit response:', data)
-        }
+        expect(submittedCount).toBeGreaterThan(0)
+
+        // Reset für weitere Tests
+        await prisma.timesheet.updateMany({
+            where: {
+                employeeId: employee!.id,
+                month,
+                year,
+            },
+            data: { status: 'PLANNED' },
+        })
     })
 
     test('Admin sieht Einreichungen', async ({ page, testUsers }) => {
@@ -113,12 +119,12 @@ test.describe('Einreichungs-Prozess', () => {
         await page.locator('button[type="submit"]').click()
         await page.waitForURL('**/admin')
 
-        // Navigiere zu Stundennachweise
-        await page.locator('text=Stundennachweise').click()
-        await page.waitForURL('**/admin/submissions')
+        // Navigiere zu Stundennachweise (URL ist /admin/timesheets, nicht /admin/submissions)
+        await page.getByRole('link', { name: 'Stundennachweise' }).click()
+        await page.waitForURL(/\/admin\/timesheets/)
 
         // Seite sollte laden
-        await expect(page.locator('h1')).toBeVisible()
+        await expect(page.getByRole('heading', { name: /Stundennachweise/i })).toBeVisible()
     })
 
     test('Einreichung kann storniert werden', async ({ page, prisma, testUsers }) => {

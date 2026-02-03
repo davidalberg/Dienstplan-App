@@ -28,8 +28,11 @@ export class DashboardPage {
 
     async waitForLoad() {
         // Wait for loading to finish
-        await this.page.waitForLoadState('networkidle')
+        await this.page.waitForLoadState('domcontentloaded')
+        // Warte auf spezifisches UI-Element oder bis Loading-Indikator verschwindet
         await this.loadingIndicator.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => { })
+        // Kurze Pause fuer initiale API-Requests
+        await this.page.waitForTimeout(500)
     }
 
     async selectMonth(month: number, year: number) {

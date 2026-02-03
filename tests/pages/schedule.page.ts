@@ -25,7 +25,9 @@ export class SchedulePage {
 
     async goto() {
         await this.page.goto('/admin/schedule')
-        await this.page.waitForLoadState('networkidle')
+        await this.page.waitForLoadState('domcontentloaded')
+        // Warte auf spezifisches UI-Element das anzeigt dass die Seite geladen ist
+        await this.page.waitForSelector('h1, [data-testid="page-loaded"], button:has-text("Neue Schicht")', { timeout: 15000 })
     }
 
     async switchToListView() {

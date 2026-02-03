@@ -25,7 +25,9 @@ export class AdminPage {
 
     async goto() {
         await this.page.goto('/admin')
-        await this.page.waitForLoadState('networkidle')
+        await this.page.waitForLoadState('domcontentloaded')
+        // Warte auf spezifisches UI-Element das anzeigt dass die Seite geladen ist
+        await this.page.waitForSelector('h1, [data-testid="page-loaded"], nav', { timeout: 15000 })
     }
 
     async navigateToScheduleEditor() {
