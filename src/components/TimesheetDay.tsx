@@ -20,6 +20,14 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
     const [isOptimistic, setIsOptimistic] = useState(false)
 
     const handleAction = async (action: "CONFIRM" | "UPDATE" | "UNCONFIRM") => {
+        // Zeit-Validierung bei UPDATE
+        if (action === "UPDATE" && editData.actualStart && editData.actualEnd) {
+            if (editData.actualStart >= editData.actualEnd) {
+                showToast("error", "Startzeit muss vor Endzeit liegen")
+                return
+            }
+        }
+
         // Optimistic UI update
         if (action === "CONFIRM") {
             setOptimisticStatus("CONFIRMED")

@@ -6,6 +6,7 @@ export interface KeyboardShortcutHandlers {
   onSave?: () => void
   onPrevMonth?: () => void
   onNextMonth?: () => void
+  onToday?: () => void
   onListView?: () => void
   onCalendarView?: () => void
   onHelp?: () => void
@@ -52,6 +53,10 @@ export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers, enabled
       case 'arrowright':
         e.preventDefault()
         handlers.onNextMonth?.()
+        break
+      case 't':
+        e.preventDefault()
+        handlers.onToday?.()
         break
       case 'l':
         e.preventDefault()

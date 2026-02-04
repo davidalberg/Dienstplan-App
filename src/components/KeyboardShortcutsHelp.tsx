@@ -12,6 +12,7 @@ const shortcuts = [
   { key: "Ctrl+S", description: "Schicht speichern (im Modal)" },
   { key: "←", description: "Vorheriger Monat" },
   { key: "→", description: "Nächster Monat" },
+  { key: "T", description: "Aktueller Monat (Heute)" },
   { key: "L", description: "Listen-Ansicht" },
   { key: "C", description: "Kalender-Ansicht" },
   { key: "?", description: "Tastenkombinationen anzeigen" }

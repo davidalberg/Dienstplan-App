@@ -690,6 +690,22 @@ function SchedulePageContent() {
         showToast("success", "Schicht wiederhergestellt")
     }, [deletedShifts])
 
+    // Helper: Invalidate all related caches after DELETE
+    const invalidateRelatedCaches = useCallback(() => {
+        // Schedule-Cache (local)
+        mutate()
+
+        // Abhängige Caches global invalidieren (Submissions, Timesheets)
+        globalMutate(
+            (key) => typeof key === 'string' && (
+                key.startsWith('/api/admin/submissions') ||
+                key.startsWith('/api/admin/timesheets')
+            ),
+            undefined,
+            { revalidate: true }
+        )
+    }, [mutate, globalMutate])
+
     // Commit-Delete: Tatsächlich löschen nach Timeout
     const commitDelete = useCallback(async (id: string) => {
         try {
@@ -699,8 +715,8 @@ function SchedulePageContent() {
                 // Remove from deleted queue
                 setDeletedShifts(prev => prev.filter(item => item.id !== id))
 
-                // Revalidate SWR cache
-                mutate()
+                // Revalidate all related SWR caches
+                invalidateRelatedCaches()
             } else {
                 // Rollback bei Fehler
                 const deletedItem = deletedShifts.find(item => item.id === id)
@@ -719,12 +735,17 @@ function SchedulePageContent() {
             }
             showToast("error", "Netzwerkfehler")
         }
-    }, [deletedShifts, mutate])
+    }, [deletedShifts, invalidateRelatedCaches])
 
     // ✅ PERFORMANCE FIX: Memoize event handler with Undo functionality
     const handleDelete = useCallback((id: string) => {
         const shiftToDelete = shifts.find(s => s.id === id)
         if (!shiftToDelete) return
+
+        // Bestätigungsdialog
+        if (!window.confirm("Schicht wirklich löschen?")) {
+            return
+        }
 
         // Optimistic removal from UI
         setShifts(prev => prev.filter(s => s.id !== id))
@@ -772,8 +793,8 @@ function SchedulePageContent() {
                 // Optimistisches Update
                 setShifts(prev => prev.filter(s => !selectedShiftIds.has(s.id)))
 
-                // SWR revalidate
-                mutate()
+                // Alle abhängigen Caches invalidieren
+                invalidateRelatedCaches()
             } else {
                 showToast("error", data.error || "Fehler beim Löschen")
             }
@@ -977,6 +998,7 @@ function SchedulePageContent() {
         onSave: handleSaveShortcut,
         onPrevMonth: () => !showModal && navigateMonth(-1),
         onNextMonth: () => !showModal && navigateMonth(1),
+        onToday: () => !showModal && setCurrentDate(new Date()),
         onListView: () => !showModal && setViewMode("list"),
         onCalendarView: () => !showModal && setViewMode("calendar"),
         onHelp: () => setShowShortcutsHelp(true)
