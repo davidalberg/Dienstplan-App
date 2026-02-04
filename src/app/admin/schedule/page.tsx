@@ -807,6 +807,24 @@ function SchedulePageContent() {
         }
     }, [selectedShiftIds.size, shifts])
 
+    // ✅ Toggle nur Schichten eines bestimmten Teams/Clients
+    const toggleSelectTeam = useCallback((teamShifts: Shift[]) => {
+        const teamShiftIds = teamShifts.map(s => s.id)
+        const allTeamSelected = teamShiftIds.every(id => selectedShiftIds.has(id))
+
+        setSelectedShiftIds(prev => {
+            const newSet = new Set(prev)
+            if (allTeamSelected) {
+                // Alle Team-Schichten abwählen
+                teamShiftIds.forEach(id => newSet.delete(id))
+            } else {
+                // Alle Team-Schichten auswählen
+                teamShiftIds.forEach(id => newSet.add(id))
+            }
+            return newSet
+        })
+    }, [selectedShiftIds])
+
     const openCreateModal = (date?: Date) => {
         setEditingShift(null)
         setSelectedClientId("")
@@ -1198,10 +1216,10 @@ function SchedulePageContent() {
                                                         <th className="px-3 py-2 text-left w-12">
                                                             <input
                                                                 type="checkbox"
-                                                                checked={shifts.length > 0 && selectedShiftIds.size === shifts.length}
-                                                                onChange={toggleSelectAll}
+                                                                checked={group.shifts.length > 0 && group.shifts.every(s => selectedShiftIds.has(s.id))}
+                                                                onChange={() => toggleSelectTeam(group.shifts)}
                                                                 className="w-5 h-5 rounded bg-neutral-700 border-neutral-600 text-violet-600 focus:ring-2 focus:ring-violet-500 cursor-pointer"
-                                                                aria-label="Alle Schichten auswählen"
+                                                                aria-label={`Alle Schichten von ${clientName} auswählen`}
                                                             />
                                                         </th>
                                                         <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Datum</th>
