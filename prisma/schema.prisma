@@ -46,6 +46,8 @@ model User {
   vacationRequests    VacationRequest[] @relation("VacationRequests")
   vacationApprovals   VacationRequest[] @relation("VacationApprovals")
   vacationQuotas      VacationQuota[]
+
+  @@index([role])  // ✅ PERFORMANCE: Für Abfragen mit role-Filter (EMPLOYEE/ADMIN)
 }
 
 model Team {

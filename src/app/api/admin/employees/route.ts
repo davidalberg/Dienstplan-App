@@ -15,16 +15,36 @@ function safeParseFloat(value: any, defaultValue: number, fieldName: string): nu
     return parsed
 }
 
-// GET - Liste aller Mitarbeiter
+// GET - Liste aller Mitarbeiter (mit optionaler Pagination)
 export async function GET(req: NextRequest) {
     const session = await auth()
     if (!session?.user || (session.user as any).role !== "ADMIN") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const { searchParams } = new URL(req.url)
+
+    // ✅ PERFORMANCE: Optionale Pagination für große Datensätze
+    // Wenn limit nicht gesetzt → alle Daten (Rückwärtskompatibilität)
+    const limitParam = searchParams.get("limit")
+    const offsetParam = searchParams.get("offset")
+    const usePagination = limitParam !== null
+
+    // Limit: Default 50, Max 100 (nur wenn Pagination aktiviert)
+    const limit = usePagination
+        ? Math.min(parseInt(limitParam || "50"), 100)
+        : undefined
+    const offset = usePagination
+        ? parseInt(offsetParam || "0")
+        : undefined
+
     try {
+        const where = { role: "EMPLOYEE" }
+
         const employees = await prisma.user.findMany({
-            where: { role: "EMPLOYEE" },
+            where,
+            ...(limit !== undefined && { take: limit }),
+            ...(offset !== undefined && { skip: offset }),
             select: {
                 id: true,
                 email: true,
@@ -86,6 +106,20 @@ export async function GET(req: NextRequest) {
             }
         })
 
+        // ✅ PERFORMANCE: Pagination-Metadaten nur wenn aktiviert
+        if (usePagination) {
+            const total = await prisma.user.count({ where })
+            return NextResponse.json({
+                employees: employeesWithAbsenceCounts,
+                pagination: {
+                    total,
+                    limit,
+                    offset,
+                    hasMore: (offset || 0) + employeesWithAbsenceCounts.length < total
+                }
+            })
+        }
+
         return NextResponse.json({ employees: employeesWithAbsenceCounts })
     } catch (error: any) {
         console.error("[GET /api/admin/employees] Error:", error)
@@ -131,32 +165,6 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // Prüfen ob Email bereits existiert
-        const existingUser = await prisma.user.findUnique({
-            where: { email }
-        })
-
-        if (existingUser) {
-            return NextResponse.json(
-                { error: "Email bereits vergeben" },
-                { status: 400 }
-            )
-        }
-
-        // Prüfen ob Mitarbeiter-ID bereits existiert
-        if (employeeId) {
-            const existingEmployeeId = await prisma.user.findUnique({
-                where: { employeeId }
-            })
-
-            if (existingEmployeeId) {
-                return NextResponse.json(
-                    { error: "Mitarbeiter-ID bereits vergeben" },
-                    { status: 400 }
-                )
-            }
-        }
-
         // Lookup teamId from team name (sheetFileName) if provided
         let resolvedTeamId = teamId || null
         if (team && !teamId) {
@@ -171,31 +179,57 @@ export async function POST(req: NextRequest) {
         // Passwort hashen
         const hashedPassword = await bcrypt.hash(password, 10)
 
-        // Mitarbeiter erstellen
-        const employee = await prisma.user.create({
-            data: {
-                email,
-                password: hashedPassword,
-                name,
-                role: "EMPLOYEE",
-                employeeId: employeeId || null,
-                entryDate: entryDate ? new Date(entryDate) : null,
-                exitDate: exitDate ? new Date(exitDate) : null,
-                hourlyWage: safeParseFloat(hourlyWage, 0, "hourlyWage"),
-                travelCostType: travelCostType || "NONE",
-                nightPremiumEnabled: nightPremiumEnabled !== undefined ? nightPremiumEnabled : true,
-                nightPremiumPercent: safeParseFloat(nightPremiumPercent, 25, "nightPremiumPercent"),
-                sundayPremiumEnabled: sundayPremiumEnabled !== undefined ? sundayPremiumEnabled : true,
-                sundayPremiumPercent: safeParseFloat(sundayPremiumPercent, 30, "sundayPremiumPercent"),
-                holidayPremiumEnabled: holidayPremiumEnabled !== undefined ? holidayPremiumEnabled : true,
-                holidayPremiumPercent: safeParseFloat(holidayPremiumPercent, 125, "holidayPremiumPercent"),
-                assignedSheetId: assignedSheetId || null,
-                assignedPlanTab: assignedPlanTab || null,
-                teamId: resolvedTeamId
-            }
-        })
+        // ✅ RACE CONDITION FIX: Direkt create() versuchen und P2002 abfangen
+        // Statt findUnique + create (Race Condition möglich), nutzen wir
+        // die unique constraint des DB als Schutz
+        try {
+            const employee = await prisma.user.create({
+                data: {
+                    email,
+                    password: hashedPassword,
+                    name,
+                    role: "EMPLOYEE",
+                    employeeId: employeeId || null,
+                    entryDate: entryDate ? new Date(entryDate) : null,
+                    exitDate: exitDate ? new Date(exitDate) : null,
+                    hourlyWage: safeParseFloat(hourlyWage, 0, "hourlyWage"),
+                    travelCostType: travelCostType || "NONE",
+                    nightPremiumEnabled: nightPremiumEnabled !== undefined ? nightPremiumEnabled : true,
+                    nightPremiumPercent: safeParseFloat(nightPremiumPercent, 25, "nightPremiumPercent"),
+                    sundayPremiumEnabled: sundayPremiumEnabled !== undefined ? sundayPremiumEnabled : true,
+                    sundayPremiumPercent: safeParseFloat(sundayPremiumPercent, 30, "sundayPremiumPercent"),
+                    holidayPremiumEnabled: holidayPremiumEnabled !== undefined ? holidayPremiumEnabled : true,
+                    holidayPremiumPercent: safeParseFloat(holidayPremiumPercent, 125, "holidayPremiumPercent"),
+                    assignedSheetId: assignedSheetId || null,
+                    assignedPlanTab: assignedPlanTab || null,
+                    teamId: resolvedTeamId
+                }
+            })
 
-        return NextResponse.json({ employee })
+            return NextResponse.json({ employee })
+        } catch (createError: any) {
+            // Prisma P2002: Unique constraint violation
+            if (createError.code === "P2002") {
+                const target = createError.meta?.target as string[] | undefined
+                if (target?.includes("email")) {
+                    return NextResponse.json(
+                        { error: "Email bereits vergeben" },
+                        { status: 409 }
+                    )
+                }
+                if (target?.includes("employeeId")) {
+                    return NextResponse.json(
+                        { error: "Mitarbeiter-ID bereits vergeben" },
+                        { status: 409 }
+                    )
+                }
+                return NextResponse.json(
+                    { error: "Eindeutigkeits-Konflikt" },
+                    { status: 409 }
+                )
+            }
+            throw createError
+        }
     } catch (error: any) {
         console.error("[POST /api/admin/employees] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })

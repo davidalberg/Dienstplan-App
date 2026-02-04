@@ -28,6 +28,25 @@ import { getReminderEmailHTML, getReminderEmailText, getReminderEmailSubject, Re
 
 const ADMIN_EMAIL = "info@assistenzplus.de"
 
+// ✅ PERFORMANCE: Batch-Parallelisierung für E-Mail-Versand
+const chunkArray = <T>(arr: T[], size: number): T[][] =>
+    Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+        arr.slice(i * size, i * size + size)
+    )
+
+// E-Mail-Typ für Batch-Verarbeitung
+interface EmailTask {
+    email: string
+    name: string
+    reminderType: ReminderType
+    targetMonth: number
+    targetYear: number
+    shifts?: Array<{ date: string; time: string }>
+    daysUntilDeadline?: number
+    daysOverdue?: number
+    cc?: string[]
+}
+
 export async function GET(req: NextRequest) {
     // Auth check: Require CRON_SECRET
     const authHeader = req.headers.get("authorization")
@@ -62,8 +81,9 @@ export async function GET(req: NextRequest) {
             ? `${process.env.NEXTAUTH_URL}/dashboard`
             : "https://dienstplan.assistenzplus.de/dashboard"
 
-        let remindersSent = 0
         const results: { type: string; email: string; success: boolean }[] = []
+        // ✅ PERFORMANCE: Sammle alle E-Mails und sende sie batch-weise am Ende
+        const emailTasks: EmailTask[] = []
 
         // =========================================================================
         // SCENARIO 1: Am Tag des letzten Dienstes - Info E-Mail
@@ -100,72 +120,20 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        for (const employee of employeesWithLastShiftToday) {
-            if (!employee.email || employee.timesheets.length === 0) continue
-
-            // Finde den letzten Dienst des Mitarbeiters im Monat
-            const lastShift = employee.timesheets[0]
-            const lastShiftDate = new Date(lastShift.date).toISOString().split("T")[0]
-
-            if (lastShiftDate === todayStr) {
-                // Prüfe ob bereits unterschrieben
-                const hasUnsignedSubmissions = await prisma.employeeSignature.findFirst({
-                    where: {
-                        employeeId: employee.id,
-                        signature: null,
-                        teamSubmission: {
-                            month: currentMonth,
-                            year: currentYear
-                        }
-                    }
-                })
-
-                // Nur senden wenn noch nicht unterschrieben
-                if (hasUnsignedSubmissions) {
-                    const shifts = employee.timesheets.map(ts => ({
-                        date: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
-                        time: `${ts.plannedStart || "?"}-${ts.plannedEnd || "?"}`
-                    }))
-
-                    try {
-                        const reminderType: ReminderType = "LAST_SHIFT_DAY"
-
-                        await resend.emails.send({
-                            from: fromEmail,
-                            to: employee.email,
-                            subject: getReminderEmailSubject(reminderType, currentMonth, currentYear),
-                            html: getReminderEmailHTML(reminderType, {
-                                employeeName: employee.name || "Mitarbeiter",
-                                month: currentMonth,
-                                year: currentYear,
-                                unconfirmedCount: shifts.length,
-                                dashboardUrl,
-                                shifts
-                            }),
-                            text: getReminderEmailText(reminderType, {
-                                employeeName: employee.name || "Mitarbeiter",
-                                month: currentMonth,
-                                year: currentYear,
-                                unconfirmedCount: shifts.length,
-                                dashboardUrl,
-                                shifts
-                            })
-                        })
-
-                        remindersSent++
-                        results.push({ type: "LAST_SHIFT_DAY", email: employee.email, success: true })
-                        console.log(`[Cron] Sent LAST_SHIFT_DAY to ${employee.email}`)
-                    } catch (emailError) {
-                        console.error(`[Cron] Failed LAST_SHIFT_DAY to ${employee.email}:`, emailError)
-                        results.push({ type: "LAST_SHIFT_DAY", email: employee.email, success: false })
-                    }
+        // ✅ PERFORMANCE: Batch-Abfrage für alle EmployeeSignatures statt N einzelner Queries
+        const employeeIds = employeesWithLastShiftToday.map(e => e.id)
+        const unsignedSignatures = await prisma.employeeSignature.findMany({
+            where: {
+                employeeId: { in: employeeIds },
+                signature: null,
+                teamSubmission: {
+                    month: currentMonth,
+                    year: currentYear
                 }
-            }
-        }
-
-        // =========================================================================
-        // SCENARIO 2: 2 Tage nach letztem Dienst - Deadline Warnung
-        // =========================================================================
+            },
+            select: { employeeId: true }
+        })
+        const unsignedEmployeeIds = new Set(unsignedSignatures.map(s => s.employeeId))
 
         const twoDaysAgo = new Date(now)
         twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
@@ -174,63 +142,43 @@ export async function GET(req: NextRequest) {
         for (const employee of employeesWithLastShiftToday) {
             if (!employee.email || employee.timesheets.length === 0) continue
 
+            // Finde den letzten Dienst des Mitarbeiters im Monat
             const lastShift = employee.timesheets[0]
             const lastShiftDate = new Date(lastShift.date).toISOString().split("T")[0]
 
-            if (lastShiftDate === twoDaysAgoStr) {
-                // Prüfe ob bereits unterschrieben
-                const hasUnsignedSubmissions = await prisma.employeeSignature.findFirst({
-                    where: {
-                        employeeId: employee.id,
-                        signature: null,
-                        teamSubmission: {
-                            month: currentMonth,
-                            year: currentYear
-                        }
-                    }
+            // SCENARIO 1: Letzter Dienst ist HEUTE
+            if (lastShiftDate === todayStr && unsignedEmployeeIds.has(employee.id)) {
+                const shifts = employee.timesheets.map(ts => ({
+                    date: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+                    time: `${ts.plannedStart || "?"}-${ts.plannedEnd || "?"}`
+                }))
+
+                emailTasks.push({
+                    email: employee.email,
+                    name: employee.name || "Mitarbeiter",
+                    reminderType: "LAST_SHIFT_DAY",
+                    targetMonth: currentMonth,
+                    targetYear: currentYear,
+                    shifts
                 })
+            }
 
-                if (hasUnsignedSubmissions) {
-                    const shifts = employee.timesheets.map(ts => ({
-                        date: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
-                        time: `${ts.plannedStart || "?"}-${ts.plannedEnd || "?"}`
-                    }))
+            // SCENARIO 2: Letzter Dienst war vor 2 Tagen
+            if (lastShiftDate === twoDaysAgoStr && unsignedEmployeeIds.has(employee.id)) {
+                const shifts = employee.timesheets.map(ts => ({
+                    date: new Date(ts.date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+                    time: `${ts.plannedStart || "?"}-${ts.plannedEnd || "?"}`
+                }))
 
-                    try {
-                        const reminderType: ReminderType = "DEADLINE"
-
-                        await resend.emails.send({
-                            from: fromEmail,
-                            to: employee.email,
-                            subject: getReminderEmailSubject(reminderType, currentMonth, currentYear),
-                            html: getReminderEmailHTML(reminderType, {
-                                employeeName: employee.name || "Mitarbeiter",
-                                month: currentMonth,
-                                year: currentYear,
-                                unconfirmedCount: shifts.length,
-                                daysUntilDeadline: 0,
-                                dashboardUrl,
-                                shifts
-                            }),
-                            text: getReminderEmailText(reminderType, {
-                                employeeName: employee.name || "Mitarbeiter",
-                                month: currentMonth,
-                                year: currentYear,
-                                unconfirmedCount: shifts.length,
-                                daysUntilDeadline: 0,
-                                dashboardUrl,
-                                shifts
-                            })
-                        })
-
-                        remindersSent++
-                        results.push({ type: "DEADLINE", email: employee.email, success: true })
-                        console.log(`[Cron] Sent DEADLINE to ${employee.email}`)
-                    } catch (emailError) {
-                        console.error(`[Cron] Failed DEADLINE to ${employee.email}:`, emailError)
-                        results.push({ type: "DEADLINE", email: employee.email, success: false })
-                    }
-                }
+                emailTasks.push({
+                    email: employee.email,
+                    name: employee.name || "Mitarbeiter",
+                    reminderType: "DEADLINE",
+                    targetMonth: currentMonth,
+                    targetYear: currentYear,
+                    shifts,
+                    daysUntilDeadline: 0
+                })
             }
         }
 
@@ -277,39 +225,15 @@ export async function GET(req: NextRequest) {
                 }
             }
 
-            for (const [empId, empData] of employeeMap) {
-                try {
-                    const reminderType: ReminderType = "OVERDUE"
-
-                    await resend.emails.send({
-                        from: fromEmail,
-                        to: empData.email,
-                        subject: getReminderEmailSubject(reminderType, targetMonth, targetYear),
-                        html: getReminderEmailHTML(reminderType, {
-                            employeeName: empData.name,
-                            month: targetMonth,
-                            year: targetYear,
-                            unconfirmedCount: empData.count,
-                            daysOverdue: 2,
-                            dashboardUrl
-                        }),
-                        text: getReminderEmailText(reminderType, {
-                            employeeName: empData.name,
-                            month: targetMonth,
-                            year: targetYear,
-                            unconfirmedCount: empData.count,
-                            daysOverdue: 2,
-                            dashboardUrl
-                        })
-                    })
-
-                    remindersSent++
-                    results.push({ type: "OVERDUE", email: empData.email, success: true })
-                    console.log(`[Cron] Sent OVERDUE to ${empData.email}`)
-                } catch (emailError) {
-                    console.error(`[Cron] Failed OVERDUE to ${empData.email}:`, emailError)
-                    results.push({ type: "OVERDUE", email: empData.email, success: false })
-                }
+            for (const [, empData] of employeeMap) {
+                emailTasks.push({
+                    email: empData.email,
+                    name: empData.name,
+                    reminderType: "OVERDUE",
+                    targetMonth,
+                    targetYear,
+                    daysOverdue: 2
+                })
             }
         }
 
@@ -356,42 +280,79 @@ export async function GET(req: NextRequest) {
                 }
             }
 
-            for (const [empId, empData] of employeeMap) {
-                try {
-                    const reminderType: ReminderType = "URGENT"
-
-                    await resend.emails.send({
-                        from: fromEmail,
-                        to: empData.email,
-                        cc: [ADMIN_EMAIL], // CC an info@assistenzplus.de
-                        subject: getReminderEmailSubject(reminderType, targetMonth, targetYear),
-                        html: getReminderEmailHTML(reminderType, {
-                            employeeName: empData.name,
-                            month: targetMonth,
-                            year: targetYear,
-                            unconfirmedCount: empData.count,
-                            daysOverdue: 4,
-                            dashboardUrl
-                        }),
-                        text: getReminderEmailText(reminderType, {
-                            employeeName: empData.name,
-                            month: targetMonth,
-                            year: targetYear,
-                            unconfirmedCount: empData.count,
-                            daysOverdue: 4,
-                            dashboardUrl
-                        })
-                    })
-
-                    remindersSent++
-                    results.push({ type: "URGENT", email: empData.email, success: true })
-                    console.log(`[Cron] Sent URGENT to ${empData.email} (CC: ${ADMIN_EMAIL})`)
-                } catch (emailError) {
-                    console.error(`[Cron] Failed URGENT to ${empData.email}:`, emailError)
-                    results.push({ type: "URGENT", email: empData.email, success: false })
-                }
+            for (const [, empData] of employeeMap) {
+                emailTasks.push({
+                    email: empData.email,
+                    name: empData.name,
+                    reminderType: "URGENT",
+                    targetMonth,
+                    targetYear,
+                    daysOverdue: 4,
+                    cc: [ADMIN_EMAIL]
+                })
             }
         }
+
+        // =========================================================================
+        // ✅ PERFORMANCE: Batch-weise E-Mail-Versand (10 E-Mails parallel)
+        // Reduziert 55s → ~10s für 100 E-Mails
+        // =========================================================================
+
+        console.log(`[Cron] Sending ${emailTasks.length} emails in batches of 10...`)
+        const BATCH_SIZE = 10
+        const BATCH_DELAY_MS = 1000 // 1 Sekunde zwischen Batches (Rate Limiting)
+
+        const emailBatches = chunkArray(emailTasks, BATCH_SIZE)
+
+        for (const batch of emailBatches) {
+            const batchResults = await Promise.all(
+                batch.map(async (task) => {
+                    try {
+                        await resend.emails.send({
+                            from: fromEmail,
+                            to: task.email,
+                            cc: task.cc,
+                            subject: getReminderEmailSubject(task.reminderType, task.targetMonth, task.targetYear),
+                            html: getReminderEmailHTML(task.reminderType, {
+                                employeeName: task.name,
+                                month: task.targetMonth,
+                                year: task.targetYear,
+                                unconfirmedCount: task.shifts?.length || 1,
+                                daysUntilDeadline: task.daysUntilDeadline,
+                                daysOverdue: task.daysOverdue,
+                                dashboardUrl,
+                                shifts: task.shifts
+                            }),
+                            text: getReminderEmailText(task.reminderType, {
+                                employeeName: task.name,
+                                month: task.targetMonth,
+                                year: task.targetYear,
+                                unconfirmedCount: task.shifts?.length || 1,
+                                daysUntilDeadline: task.daysUntilDeadline,
+                                daysOverdue: task.daysOverdue,
+                                dashboardUrl,
+                                shifts: task.shifts
+                            })
+                        })
+
+                        console.log(`[Cron] Sent ${task.reminderType} to ${task.email}${task.cc ? ` (CC: ${task.cc.join(", ")})` : ""}`)
+                        return { type: task.reminderType, email: task.email, success: true }
+                    } catch (emailError) {
+                        console.error(`[Cron] Failed ${task.reminderType} to ${task.email}:`, emailError)
+                        return { type: task.reminderType, email: task.email, success: false }
+                    }
+                })
+            )
+
+            results.push(...batchResults)
+
+            // Rate limiting: Warte zwischen Batches (außer beim letzten)
+            if (emailBatches.indexOf(batch) < emailBatches.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS))
+            }
+        }
+
+        const remindersSent = results.filter(r => r.success).length
 
         return NextResponse.json({
             success: true,

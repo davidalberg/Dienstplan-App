@@ -107,3 +107,44 @@ select option:hover {
 .admin-dark ::-webkit-scrollbar-thumb:hover {
   background: #525252;
 }
+
+/* ✅ Dark Mode Checkboxen - dezent und subtil */
+.admin-dark input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border: 1.5px solid #525252;
+  border-radius: 0.25rem;
+  background-color: #262626;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.admin-dark input[type="checkbox"]:hover {
+  border-color: #7c3aed;
+  background-color: #1f1f1f;
+}
+
+.admin-dark input[type="checkbox"]:checked {
+  background-color: #7c3aed;
+  border-color: #7c3aed;
+}
+
+.admin-dark input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.admin-dark input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+}

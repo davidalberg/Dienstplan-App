@@ -1218,7 +1218,7 @@ function SchedulePageContent() {
                                                                 type="checkbox"
                                                                 checked={group.shifts.length > 0 && group.shifts.every(s => selectedShiftIds.has(s.id))}
                                                                 onChange={() => toggleSelectTeam(group.shifts)}
-                                                                className="w-5 h-5 rounded bg-neutral-700 border-neutral-600 text-violet-600 focus:ring-2 focus:ring-violet-500 cursor-pointer"
+                                                                className="w-4 h-4 rounded border-neutral-600 bg-neutral-800 checked:bg-violet-600 checked:border-violet-600 accent-violet-600 focus:ring-1 focus:ring-violet-500/50 focus:ring-offset-0 cursor-pointer"
                                                                 aria-label={`Alle Schichten von ${clientName} auswählen`}
                                                             />
                                                         </th>
@@ -1247,7 +1247,7 @@ function SchedulePageContent() {
                                                                         type="checkbox"
                                                                         checked={isSelected}
                                                                         onChange={() => toggleShiftSelection(shift.id)}
-                                                                        className="w-5 h-5 rounded bg-neutral-700 border-neutral-600 text-violet-600 focus:ring-2 focus:ring-violet-500 cursor-pointer"
+                                                                        className="w-4 h-4 rounded border-neutral-600 bg-neutral-800 checked:bg-violet-600 checked:border-violet-600 accent-violet-600 focus:ring-1 focus:ring-violet-500/50 focus:ring-offset-0 cursor-pointer"
                                                                         aria-label={`Schicht vom ${format(new Date(shift.date), "dd.MM.")} auswählen`}
                                                                     />
                                                                 </td>
@@ -1662,7 +1662,7 @@ function SchedulePageContent() {
                                                         type="checkbox"
                                                         checked={formData.isRepeating}
                                                         onChange={(e) => setFormData({ ...formData, isRepeating: e.target.checked })}
-                                                        className="w-4 h-4 rounded bg-neutral-800 border-neutral-700 text-violet-600 focus:ring-violet-500"
+                                                        className="w-4 h-4 rounded border-neutral-600 bg-neutral-800 checked:bg-violet-600 checked:border-violet-600 accent-violet-600 focus:ring-1 focus:ring-violet-500/50 focus:ring-offset-0"
                                                     />
                                                     <span className="text-sm font-medium text-neutral-300">
                                                         Schicht wiederholen

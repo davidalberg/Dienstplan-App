@@ -162,6 +162,26 @@ export async function GET(req: NextRequest) {
             }
         }
 
+        // ✅ PERFORMANCE FIX: Vorbereitung einer Map für "Mitarbeiter pro Client via Timesheets"
+        // Statt O(n*m) Loop (clients × timesheets) → O(m) einmalig + O(1) Lookups
+        const employeesByClientViaTimesheets = new Map<string, Map<string, { id: string; name: string | null; email: string }>>()
+        for (const ts of timesheets) {
+            if (ts.team?.clientId && ts.employee) {
+                let clientEmployees = employeesByClientViaTimesheets.get(ts.team.clientId)
+                if (!clientEmployees) {
+                    clientEmployees = new Map()
+                    employeesByClientViaTimesheets.set(ts.team.clientId, clientEmployees)
+                }
+                if (!clientEmployees.has(ts.employeeId)) {
+                    clientEmployees.set(ts.employeeId, {
+                        id: ts.employee.id,
+                        name: ts.employee.name,
+                        email: ts.employee.email
+                    })
+                }
+            }
+        }
+
         // 7. Daten für jeden Klienten aufbereiten
         const clientsWithData = clients.map(client => {
             const submission = submissionsByClient.get(client.id)
@@ -183,16 +203,12 @@ export async function GET(req: NextRequest) {
                 }
             }
 
-            // 3. Mitarbeiter die Timesheets für diesen Client haben (über Team)
-            for (const ts of timesheets) {
-                if (ts.team?.clientId === client.id && ts.employee) {
-                    // Dieser Timesheet gehört zu diesem Client
-                    if (!employeeMap.has(ts.employeeId)) {
-                        employeeMap.set(ts.employeeId, {
-                            id: ts.employee.id,
-                            name: ts.employee.name,
-                            email: ts.employee.email
-                        })
+            // 3. ✅ OPTIMIERT: Mitarbeiter die Timesheets für diesen Client haben (O(1) Lookup)
+            const clientTimesheetEmployees = employeesByClientViaTimesheets.get(client.id)
+            if (clientTimesheetEmployees) {
+                for (const [empId, emp] of clientTimesheetEmployees) {
+                    if (!employeeMap.has(empId)) {
+                        employeeMap.set(empId, emp)
                     }
                 }
             }
