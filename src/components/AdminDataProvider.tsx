@@ -109,7 +109,7 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
         isLoading: isLoadingTeams,
         mutate: mutateTeams
     } = useSWR(
-        '/api/teams',
+        '/api/admin/teams',
         fetcher,
         preloadConfig
     )

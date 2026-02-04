@@ -89,7 +89,9 @@
       "Bash(cmd /c \"rmdir /s /q .next\")",
       "Bash(git tag:*)",
       "Bash(git checkout:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "WebFetch(domain:vercel.com)",
+      "Bash(printf:*)"
     ]
   }
 }

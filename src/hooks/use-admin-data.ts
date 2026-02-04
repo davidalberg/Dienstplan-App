@@ -101,7 +101,7 @@ export function useAdminEmployees() {
 // Teams
 export function useTeams() {
     const { data, error, isLoading, mutate } = useSWR(
-        '/api/teams',
+        '/api/admin/teams',
         fetcher,
         swrConfig
     )
