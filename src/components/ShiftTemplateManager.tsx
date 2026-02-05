@@ -379,19 +379,61 @@ export default function ShiftTemplateManager({
                                     <div>
                                         <label className="text-sm text-neutral-400">Start</label>
                                         <input
-                                            type="time"
+                                            type="text"
+                                            inputMode="numeric"
+                                            placeholder="08:00"
                                             value={formData.plannedStart}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, plannedStart: e.target.value }))}
-                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white mt-1"
+                                            onChange={(e) => {
+                                                let val = e.target.value.replace(/[^0-9:]/g, '')
+                                                if (val.length === 2 && !val.includes(':') && formData.plannedStart.length < 2) {
+                                                    val = val + ':'
+                                                }
+                                                if (val.length <= 5) {
+                                                    setFormData(prev => ({ ...prev, plannedStart: val }))
+                                                }
+                                            }}
+                                            onBlur={(e) => {
+                                                const val = e.target.value
+                                                const match = val.match(/^(\d{1,2}):?(\d{0,2})$/)
+                                                if (match) {
+                                                    const h = match[1].padStart(2, '0')
+                                                    const m = (match[2] || '00').padStart(2, '0')
+                                                    if (parseInt(h) <= 24 && parseInt(m) <= 59) {
+                                                        setFormData(prev => ({ ...prev, plannedStart: `${h}:${m}` }))
+                                                    }
+                                                }
+                                            }}
+                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white mt-1 font-mono"
                                         />
                                     </div>
                                     <div>
                                         <label className="text-sm text-neutral-400">Ende</label>
                                         <input
-                                            type="time"
+                                            type="text"
+                                            inputMode="numeric"
+                                            placeholder="16:00"
                                             value={formData.plannedEnd}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, plannedEnd: e.target.value }))}
-                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white mt-1"
+                                            onChange={(e) => {
+                                                let val = e.target.value.replace(/[^0-9:]/g, '')
+                                                if (val.length === 2 && !val.includes(':') && formData.plannedEnd.length < 2) {
+                                                    val = val + ':'
+                                                }
+                                                if (val.length <= 5) {
+                                                    setFormData(prev => ({ ...prev, plannedEnd: val }))
+                                                }
+                                            }}
+                                            onBlur={(e) => {
+                                                const val = e.target.value
+                                                const match = val.match(/^(\d{1,2}):?(\d{0,2})$/)
+                                                if (match) {
+                                                    const h = match[1].padStart(2, '0')
+                                                    const m = (match[2] || '00').padStart(2, '0')
+                                                    if (parseInt(h) <= 24 && parseInt(m) <= 59) {
+                                                        setFormData(prev => ({ ...prev, plannedEnd: `${h}:${m}` }))
+                                                    }
+                                                }
+                                            }}
+                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white mt-1 font-mono"
                                         />
                                     </div>
                                 </div>

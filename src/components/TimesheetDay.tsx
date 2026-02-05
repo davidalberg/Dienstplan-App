@@ -237,19 +237,61 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
                             <div>
                                 <label className="text-xs font-semibold text-black uppercase">Beginn</label>
                                 <input
-                                    type="time"
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="08:00"
                                     value={editData.actualStart}
-                                    onChange={e => setEditData({ ...editData, actualStart: e.target.value })}
-                                    className="w-full rounded-lg border border-gray-300 p-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    onChange={e => {
+                                        let val = e.target.value.replace(/[^0-9:]/g, '')
+                                        if (val.length === 2 && !val.includes(':') && editData.actualStart.length < 2) {
+                                            val = val + ':'
+                                        }
+                                        if (val.length <= 5) {
+                                            setEditData({ ...editData, actualStart: val })
+                                        }
+                                    }}
+                                    onBlur={e => {
+                                        const val = e.target.value
+                                        const match = val.match(/^(\d{1,2}):?(\d{0,2})$/)
+                                        if (match) {
+                                            const h = match[1].padStart(2, '0')
+                                            const m = (match[2] || '00').padStart(2, '0')
+                                            if (parseInt(h) <= 24 && parseInt(m) <= 59) {
+                                                setEditData({ ...editData, actualStart: `${h}:${m}` })
+                                            }
+                                        }
+                                    }}
+                                    className="w-full rounded-lg border border-gray-300 p-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
                                 />
                             </div>
                             <div>
                                 <label className="text-xs font-semibold text-black uppercase">Ende</label>
                                 <input
-                                    type="time"
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="16:00"
                                     value={editData.actualEnd}
-                                    onChange={e => setEditData({ ...editData, actualEnd: e.target.value })}
-                                    className="w-full rounded-lg border border-gray-300 p-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    onChange={e => {
+                                        let val = e.target.value.replace(/[^0-9:]/g, '')
+                                        if (val.length === 2 && !val.includes(':') && editData.actualEnd.length < 2) {
+                                            val = val + ':'
+                                        }
+                                        if (val.length <= 5) {
+                                            setEditData({ ...editData, actualEnd: val })
+                                        }
+                                    }}
+                                    onBlur={e => {
+                                        const val = e.target.value
+                                        const match = val.match(/^(\d{1,2}):?(\d{0,2})$/)
+                                        if (match) {
+                                            const h = match[1].padStart(2, '0')
+                                            const m = (match[2] || '00').padStart(2, '0')
+                                            if (parseInt(h) <= 24 && parseInt(m) <= 59) {
+                                                setEditData({ ...editData, actualEnd: `${h}:${m}` })
+                                            }
+                                        }
+                                    }}
+                                    className="w-full rounded-lg border border-gray-300 p-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
                                 />
                             </div>
                         </div>
