@@ -62,6 +62,8 @@ interface Shift {
     date: string
     plannedStart: string
     plannedEnd: string
+    actualStart: string | null
+    actualEnd: string | null
     status: string
     note: string | null
     absenceType: string | null
@@ -621,6 +623,8 @@ function SchedulePageContent() {
                             date: responseData.date || formData.date,
                             plannedStart: responseData.plannedStart || formData.plannedStart,
                             plannedEnd: responseData.plannedEnd || formData.plannedEnd,
+                            actualStart: responseData.actualStart || null,
+                            actualEnd: responseData.actualEnd || null,
                             status: responseData.status || "PLANNED",
                             note: responseData.note || null,
                             absenceType: responseData.absenceType || null,
@@ -1239,7 +1243,8 @@ function SchedulePageContent() {
                                                         </th>
                                                         <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Datum</th>
                                                         <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Mitarbeiter</th>
-                                                        <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Zeit</th>
+                                                        <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Geplant</th>
+                                                        <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Gearbeitet</th>
                                                         <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Backup</th>
                                                         <th className="px-3 py-2 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wide">Status</th>
                                                         <th className="px-3 py-2 text-right text-xs font-semibold text-neutral-400 uppercase tracking-wide">Aktionen</th>
@@ -1282,6 +1287,16 @@ function SchedulePageContent() {
                                                                     <span className="bg-neutral-800 px-2 py-0.5 rounded text-xs font-medium text-neutral-300">
                                                                         {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
                                                                     </span>
+                                                                </td>
+                                                                <td className="px-3 py-2 text-sm">
+                                                                    {shift.actualStart && shift.actualEnd &&
+                                                                     (shift.actualStart !== shift.plannedStart || shift.actualEnd !== shift.plannedEnd) ? (
+                                                                        <span className="bg-amber-900/50 text-amber-400 px-2 py-0.5 rounded text-xs font-medium">
+                                                                            {formatTimeRange(shift.actualStart, shift.actualEnd)}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-neutral-500">-</span>
+                                                                    )}
                                                                 </td>
                                                                 <td className="px-3 py-2 text-neutral-400 text-sm">
                                                                     {shift.backupEmployee?.name || "-"}
