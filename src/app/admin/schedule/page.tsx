@@ -480,11 +480,35 @@ function SchedulePageContent() {
             }
         }
 
-        setLoading(true)
         try {
             if (editingShift) {
-                // Update
-                const res = await fetch("/api/admin/schedule", {
+                // ✅ OPTIMISTIC UPDATE: Sofort UI aktualisieren und Modal schließen
+                const originalShift = shifts.find(s => s.id === editingShift.id)
+                const optimisticBackup = formData.backupEmployeeId
+                    ? { id: formData.backupEmployeeId, name: employees.find(e => e.id === formData.backupEmployeeId)?.name || "" }
+                    : null
+
+                // 1. Sofort UI aktualisieren
+                setShifts(prev => prev.map(s => {
+                    if (s.id === editingShift.id) {
+                        return {
+                            ...s,
+                            plannedStart: formData.plannedStart,
+                            plannedEnd: formData.plannedEnd,
+                            note: formData.note || null,
+                            absenceType: formData.absenceType || null,
+                            backupEmployee: optimisticBackup
+                        }
+                    }
+                    return s
+                }))
+
+                // 2. Modal sofort schließen
+                setShowModal(false)
+                showToast("success", "Schicht aktualisiert")
+
+                // 3. API-Call im Hintergrund (kein await blockiert UI)
+                fetch("/api/admin/schedule", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -495,51 +519,37 @@ function SchedulePageContent() {
                         note: formData.note || null,
                         absenceType: formData.absenceType || null
                     })
+                }).then(async (res) => {
+                    if (!res.ok) {
+                        // Rollback bei Fehler
+                        if (originalShift) {
+                            setShifts(prev => prev.map(s =>
+                                s.id === editingShift.id ? originalShift : s
+                            ))
+                        }
+                        const data = await res.json().catch(() => ({}))
+                        showToast("error", data.error || "Fehler beim Speichern")
+                    } else {
+                        // Background-Revalidierung für Konsistenz
+                        mutate()
+                    }
+                }).catch(() => {
+                    // Rollback bei Netzwerkfehler
+                    if (originalShift) {
+                        setShifts(prev => prev.map(s =>
+                            s.id === editingShift.id ? originalShift : s
+                        ))
+                    }
+                    showToast("error", "Netzwerkfehler")
                 })
 
-                // Robustes Response-Parsing
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                let responseData: any = {}
-                try {
-                    responseData = await res.json()
-                } catch {
-                    // JSON-Parsing fehlgeschlagen
-                    if (!res.ok) {
-                        showToast("error", `Server-Fehler (${res.status})`)
-                        return
-                    }
-                }
+                return // Früher Return, da async im Hintergrund läuft
+            }
 
-                if (res.ok) {
-                    // OPTIMISTIC UPDATE: Sofort im lokalen State aktualisieren
-                    setShifts(prev => prev.map(s => {
-                        if (s.id === editingShift.id) {
-                            return {
-                                ...s,
-                                plannedStart: formData.plannedStart,
-                                plannedEnd: formData.plannedEnd,
-                                note: formData.note || null,
-                                absenceType: formData.absenceType || null,
-                                backupEmployee: responseData.backupEmployee || (formData.backupEmployeeId
-                                    ? { id: formData.backupEmployeeId, name: employees.find(e => e.id === formData.backupEmployeeId)?.name || "" }
-                                    : null)
-                            }
-                        }
-                        return s
-                    }))
-                    showToast("success", "Schicht aktualisiert")
-                    setShowModal(false)
+            // CREATE: Hier bleibt loading wichtig für Feedback
+            setLoading(true)
 
-                    // Background-Revalidierung fuer Konsistenz (ohne Warten)
-                    mutate()
-                } else {
-                    const errorMessage = typeof responseData.error === "string"
-                        ? responseData.error
-                        : "Fehler beim Speichern"
-                    showToast("error", errorMessage)
-                }
-            } else {
-                // Create (Single oder Bulk)
+            // Create (Single oder Bulk)
                 const body: Record<string, unknown> = {
                     employeeId: formData.employeeId,
                     plannedStart: formData.plannedStart,
@@ -650,14 +660,13 @@ function SchedulePageContent() {
                         : "Fehler beim Erstellen"
                     showToast("error", errorMessage)
                 }
-            }
         } catch (err) {
             console.error("[handleCreateOrUpdate] Error:", err)
             showToast("error", "Netzwerkfehler - bitte pruefen Sie Ihre Verbindung")
         } finally {
             setLoading(false)
         }
-    }, [editingShift, formData, loading, fetchData, mutate, clients, employees, teams, selectedClientId])
+    }, [editingShift, formData, fetchData, mutate, clients, employees, teams, selectedClientId, shifts])
 
     // Cleanup-Funktion für Undo-Queue
     useEffect(() => {
