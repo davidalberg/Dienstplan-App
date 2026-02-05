@@ -1568,10 +1568,33 @@ function SchedulePageContent() {
                                                     Start
                                                 </label>
                                                 <input
-                                                    type="time"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    placeholder="08:00"
                                                     value={formData.plannedStart}
-                                                    onChange={(e) => setFormData({ ...formData, plannedStart: e.target.value })}
-                                                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+                                                    onChange={(e) => {
+                                                        let val = e.target.value.replace(/[^0-9:]/g, '')
+                                                        // Auto-format: Nach 2 Ziffern Doppelpunkt einfügen
+                                                        if (val.length === 2 && !val.includes(':') && formData.plannedStart.length < 2) {
+                                                            val = val + ':'
+                                                        }
+                                                        if (val.length <= 5) {
+                                                            setFormData({ ...formData, plannedStart: val })
+                                                        }
+                                                    }}
+                                                    onBlur={(e) => {
+                                                        // Format korrigieren beim Verlassen
+                                                        const val = e.target.value
+                                                        const match = val.match(/^(\d{1,2}):?(\d{0,2})$/)
+                                                        if (match) {
+                                                            const h = match[1].padStart(2, '0')
+                                                            const m = (match[2] || '00').padStart(2, '0')
+                                                            if (parseInt(h) <= 24 && parseInt(m) <= 59) {
+                                                                setFormData({ ...formData, plannedStart: `${h}:${m}` })
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors font-mono"
                                                 />
                                             </div>
                                             <div>
@@ -1579,10 +1602,33 @@ function SchedulePageContent() {
                                                     Ende
                                                 </label>
                                                 <input
-                                                    type="time"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    placeholder="16:00"
                                                     value={formData.plannedEnd}
-                                                    onChange={(e) => setFormData({ ...formData, plannedEnd: e.target.value })}
-                                                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors"
+                                                    onChange={(e) => {
+                                                        let val = e.target.value.replace(/[^0-9:]/g, '')
+                                                        // Auto-format: Nach 2 Ziffern Doppelpunkt einfügen
+                                                        if (val.length === 2 && !val.includes(':') && formData.plannedEnd.length < 2) {
+                                                            val = val + ':'
+                                                        }
+                                                        if (val.length <= 5) {
+                                                            setFormData({ ...formData, plannedEnd: val })
+                                                        }
+                                                    }}
+                                                    onBlur={(e) => {
+                                                        // Format korrigieren beim Verlassen
+                                                        const val = e.target.value
+                                                        const match = val.match(/^(\d{1,2}):?(\d{0,2})$/)
+                                                        if (match) {
+                                                            const h = match[1].padStart(2, '0')
+                                                            const m = (match[2] || '00').padStart(2, '0')
+                                                            if (parseInt(h) <= 24 && parseInt(m) <= 59) {
+                                                                setFormData({ ...formData, plannedEnd: `${h}:${m}` })
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors font-mono"
                                                 />
                                             </div>
                                         </div>
