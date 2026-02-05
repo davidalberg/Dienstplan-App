@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { logActivity } from "@/lib/activity-logger"
 
 // GET - Einzelnen Klienten abrufen
 export async function GET(
@@ -159,6 +160,18 @@ export async function PUT(
             }
         })
 
+        // Log activity
+        await logActivity({
+            type: "INFO",
+            category: "CLIENT",
+            action: `Klient bearbeitet: ${client.firstName} ${client.lastName}`,
+            details: { changedFields: Object.keys(updateData) },
+            userId: session.user.id,
+            userName: session.user.name || session.user.email || "Admin",
+            entityId: client.id,
+            entityType: "Client"
+        })
+
         return NextResponse.json({ client })
     } catch (error: any) {
         console.error("[PUT /api/clients/[id]] Error:", error)
@@ -193,6 +206,8 @@ export async function DELETE(
             return NextResponse.json({ error: "Klient nicht gefunden" }, { status: 404 })
         }
 
+        const clientName = `${existingClient.firstName} ${existingClient.lastName}`
+
         if (permanent) {
             // ✅ FIX: Permanent löschen mit CASCADE DELETE
             // Teams werden automatisch mitgelöscht dank onDelete: Cascade im Schema
@@ -209,12 +224,36 @@ export async function DELETE(
             await prisma.client.delete({
                 where: { id }
             })
+
+            // Log activity
+            await logActivity({
+                type: "WARNING",
+                category: "CLIENT",
+                action: `Klient permanent gelöscht: ${clientName}`,
+                details: { permanent: true },
+                userId: session.user.id,
+                userName: session.user.name || session.user.email || "Admin",
+                entityId: id,
+                entityType: "Client"
+            })
         } else {
             // Soft delete - setze isActive auf false
             // ⚠️ WARNUNG: Teams bleiben aktiv, aber Klient wird als inaktiv markiert
             await prisma.client.update({
                 where: { id },
                 data: { isActive: false }
+            })
+
+            // Log activity
+            await logActivity({
+                type: "INFO",
+                category: "CLIENT",
+                action: `Klient deaktiviert: ${clientName}`,
+                details: { permanent: false },
+                userId: session.user.id,
+                userName: session.user.name || session.user.email || "Admin",
+                entityId: id,
+                entityType: "Client"
             })
         }
 

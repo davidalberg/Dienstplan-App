@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import bcrypt from "bcryptjs"
+import { logActivity } from "@/lib/activity-logger"
 
 // Helper function to safely parse float values
 function safeParseFloat(value: any, defaultValue: number, fieldName: string): number {
@@ -206,6 +207,18 @@ export async function POST(req: NextRequest) {
                 }
             })
 
+            // Log activity
+            await logActivity({
+                type: "SUCCESS",
+                category: "EMPLOYEE",
+                action: `Mitarbeiter erstellt: ${name}`,
+                details: { email, employeeId },
+                userId: session.user.id,
+                userName: session.user.name || session.user.email || "Admin",
+                entityId: employee.id,
+                entityType: "User"
+            })
+
             return NextResponse.json({ employee })
         } catch (createError: any) {
             // Prisma P2002: Unique constraint violation
@@ -359,6 +372,18 @@ export async function PUT(req: NextRequest) {
             data: updateData
         })
 
+        // Log activity
+        await logActivity({
+            type: "INFO",
+            category: "EMPLOYEE",
+            action: `Mitarbeiter bearbeitet: ${employee.name}`,
+            details: { changedFields: Object.keys(updateData) },
+            userId: session.user.id,
+            userName: session.user.name || session.user.email || "Admin",
+            entityId: employee.id,
+            entityType: "User"
+        })
+
         return NextResponse.json({ employee })
     } catch (error: any) {
         console.error("[PUT /api/admin/employees] Error:", error)
@@ -409,6 +434,12 @@ export async function DELETE(req: NextRequest) {
             )
         }
 
+        // Hole Mitarbeiter-Name für das Log vor dem Löschen
+        const employeeToDelete = await prisma.user.findUnique({
+            where: { id },
+            select: { name: true, email: true }
+        })
+
         // Atomare Transaction: Prüfung + Löschung in einer Operation
         // Verhindert Race Condition zwischen Check und Delete
         await prisma.$transaction(async (tx) => {
@@ -432,6 +463,18 @@ export async function DELETE(req: NextRequest) {
             await tx.user.delete({
                 where: { id }
             })
+        })
+
+        // Log activity
+        await logActivity({
+            type: "WARNING",
+            category: "EMPLOYEE",
+            action: `Mitarbeiter gelöscht: ${employeeToDelete?.name || "Unbekannt"}`,
+            details: { email: employeeToDelete?.email, force },
+            userId: session.user.id,
+            userName: session.user.name || session.user.email || "Admin",
+            entityId: id,
+            entityType: "User"
         })
 
         return NextResponse.json({ success: true })

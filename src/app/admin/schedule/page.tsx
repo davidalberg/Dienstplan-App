@@ -105,12 +105,6 @@ function SchedulePageContent() {
     const { data: session, status } = useSession()
     const router = useRouter()
 
-    // ✅ AUTH FIX: Redirect to login if session expired
-    useEffect(() => {
-        if (status === "unauthenticated") {
-            router.push("/login")
-        }
-    }, [status, router])
     const searchParams = useSearchParams()
     const pathname = usePathname()
     const { mutate: globalMutate } = useSWRConfig()
@@ -1048,16 +1042,6 @@ function SchedulePageContent() {
     // Nach dem ersten Laden: SWR revalidiert im Hintergrund ohne UI-Freeze
     const isInitialLoad = status === "loading" || (loading && shifts.length === 0)
 
-    // ✅ AUTH FIX: Bei unauthenticated zeige Redirect-Message
-    if (status === "unauthenticated") {
-        return (
-            <div className="admin-dark min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
-                <div className="text-center">
-                    <p className="text-neutral-400 font-medium">Session abgelaufen. Weiterleitung zum Login...</p>
-                </div>
-            </div>
-        )
-    }
 
     if (isInitialLoad) {
         return (

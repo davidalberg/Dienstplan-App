@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { z } from "zod"
+import { logActivity } from "@/lib/activity-logger"
 
 // Hilfsfunktion: Zod-Fehler in lesbare Meldung umwandeln
 function formatZodError(error: z.ZodError<unknown>): string {
@@ -309,6 +310,23 @@ export async function POST(req: NextRequest) {
 
             }
 
+            // Log activity
+            await logActivity({
+                type: "SUCCESS",
+                category: "SHIFT",
+                action: `${createdShifts.length} Schichten erstellt (Wiederholung)`,
+                details: {
+                    employeeId,
+                    startDate,
+                    endDate,
+                    repeatDays,
+                    count: createdShifts.length
+                },
+                userId: session.user.id,
+                userName: session.user.name || session.user.email || "Admin",
+                entityType: "Timesheet"
+            })
+
             return NextResponse.json({
                 created: createdShifts.length,
                 shifts: createdShifts
@@ -425,6 +443,23 @@ export async function POST(req: NextRequest) {
             backupEmployee = backup
         }
 
+        // Log activity
+        await logActivity({
+            type: "SUCCESS",
+            category: "SHIFT",
+            action: `Schicht erstellt für ${rawShift.employee.name}`,
+            details: {
+                date,
+                plannedStart,
+                plannedEnd,
+                absenceType: absenceType || null
+            },
+            userId: session.user.id,
+            userName: session.user.name || session.user.email || "Admin",
+            entityId: rawShift.id,
+            entityType: "Timesheet"
+        })
+
         return NextResponse.json({ ...rawShift, backupEmployee })
     } catch (error: any) {
         console.error("[POST /api/admin/schedule] Error:", error)
@@ -477,6 +512,18 @@ export async function PUT(req: NextRequest) {
             })
             backupEmployee = backup
         }
+
+        // Log activity
+        await logActivity({
+            type: "INFO",
+            category: "SHIFT",
+            action: `Schicht bearbeitet für ${rawShift.employee.name}`,
+            details: cleanData,
+            userId: session.user.id,
+            userName: session.user.name || session.user.email || "Admin",
+            entityId: rawShift.id,
+            entityType: "Timesheet"
+        })
 
         return NextResponse.json({ ...rawShift, backupEmployee })
     } catch (error: any) {
@@ -553,6 +600,23 @@ export async function DELETE(req: NextRequest) {
                     }
                 }
             }
+        })
+
+        // Log activity
+        await logActivity({
+            type: "WARNING",
+            category: "SHIFT",
+            action: "Schicht gelöscht",
+            details: {
+                date: timesheet.date,
+                month: timesheet.month,
+                year: timesheet.year,
+                employeeId: timesheet.employeeId
+            },
+            userId: session.user.id,
+            userName: session.user.name || session.user.email || "Admin",
+            entityId: id,
+            entityType: "Timesheet"
         })
 
         return NextResponse.json({ success: true })

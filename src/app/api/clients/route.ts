@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { logActivity } from "@/lib/activity-logger"
 
 // GET - Liste aller Klienten
 export async function GET(req: NextRequest) {
@@ -78,6 +79,18 @@ export async function POST(req: NextRequest) {
                 state: state || null,
                 isActive: true
             }
+        })
+
+        // Log activity
+        await logActivity({
+            type: "SUCCESS",
+            category: "CLIENT",
+            action: `Klient erstellt: ${firstName} ${lastName}`,
+            details: { email, phone, state },
+            userId: session.user.id,
+            userName: session.user.name || session.user.email || "Admin",
+            entityId: client.id,
+            entityType: "Client"
         })
 
         return NextResponse.json({ client })
