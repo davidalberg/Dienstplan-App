@@ -548,66 +548,127 @@ function SchedulePageContent() {
                 return // Früher Return, da async im Hintergrund läuft
             }
 
-            // CREATE: Hier bleibt loading wichtig für Feedback
-            setLoading(true)
+            // ✅ CREATE: Optimistic UI - Modal sofort schließen, API im Hintergrund
+            const selectedClient = clients.find(c => c.id === selectedClientId)
+            const selectedEmployee = employees.find(e => e.id === formData.employeeId)
+            const team = teams.find(t => t.id === selectedEmployee?.teamId)
+            const backupEmp = formData.backupEmployeeId
+                ? { id: formData.backupEmployeeId, name: employees.find(e => e.id === formData.backupEmployeeId)?.name || "" }
+                : null
 
-            // Create (Single oder Bulk)
-                const body: Record<string, unknown> = {
-                    employeeId: formData.employeeId,
+            const employeeData = {
+                id: formData.employeeId,
+                name: selectedEmployee?.name || "Mitarbeiter",
+                team: team ? {
+                    id: team.id,
+                    name: team.name,
+                    client: selectedClient ? {
+                        id: selectedClient.id,
+                        firstName: selectedClient.firstName,
+                        lastName: selectedClient.lastName
+                    } : null
+                } : null
+            }
+
+            // Generate optimistic shifts with temp IDs
+            const tempPrefix = `temp_${Date.now()}_`
+            const optimisticShifts: Shift[] = []
+
+            if (formData.isRepeating && formData.repeatEndDate) {
+                // Bulk: generate dates from startDate to endDate filtered by repeatDays
+                const allDays = eachDayOfInterval({
+                    start: new Date(formData.date),
+                    end: new Date(formData.repeatEndDate)
+                })
+                const targetDays = formData.repeatDays // 0=Sun, 1=Mon, ...
+                const matchingDays = allDays.filter(d => targetDays.includes(getDay(d)))
+
+                matchingDays.forEach((day, idx) => {
+                    optimisticShifts.push({
+                        id: `${tempPrefix}${idx}`,
+                        date: format(day, "yyyy-MM-dd"),
+                        plannedStart: formData.plannedStart,
+                        plannedEnd: formData.plannedEnd,
+                        actualStart: null,
+                        actualEnd: null,
+                        status: "PLANNED",
+                        note: formData.note || null,
+                        absenceType: formData.absenceType || null,
+                        employee: employeeData,
+                        backupEmployee: backupEmp
+                    })
+                })
+            } else {
+                // Single shift
+                optimisticShifts.push({
+                    id: `${tempPrefix}0`,
+                    date: formData.date,
                     plannedStart: formData.plannedStart,
                     plannedEnd: formData.plannedEnd,
-                    backupEmployeeId: formData.backupEmployeeId || null,
+                    actualStart: null,
+                    actualEnd: null,
+                    status: "PLANNED",
                     note: formData.note || null,
                     absenceType: formData.absenceType || null,
-                }
-
-                if (formData.isRepeating && formData.repeatEndDate) {
-                    body.bulk = true
-                    body.startDate = formData.date
-                    body.endDate = formData.repeatEndDate
-                    body.repeatDays = formData.repeatDays
-                } else {
-                    body.date = formData.date
-                }
-
-                const res = await fetch("/api/admin/schedule", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body)
+                    employee: employeeData,
+                    backupEmployee: backupEmp
                 })
+            }
 
-                // Robustes Response-Parsing
-                let responseData: {
-                    created?: number
-                    shifts?: Shift[]
-                    id?: string
-                    date?: string
-                    plannedStart?: string
-                    plannedEnd?: string
-                    actualStart?: string | null
-                    actualEnd?: string | null
-                    status?: string
-                    note?: string | null
-                    absenceType?: string | null
-                    employee?: { id: string; name: string } | null
-                    backupEmployee?: { id: string; name: string } | null
-                    error?: string
-                } = {}
-                try {
-                    responseData = await res.json()
-                } catch {
-                    // JSON-Parsing fehlgeschlagen
-                    if (!res.ok) {
-                        showToast("error", `Server-Fehler (${res.status})`)
-                        return
-                    }
+            // 1. Sofort in State einfügen
+            setShifts(prev => [...prev, ...optimisticShifts].sort((a, b) =>
+                new Date(a.date).getTime() - new Date(b.date).getTime()
+            ))
+
+            // 2. Modal sofort schließen
+            setShowModal(false)
+            const toastMsg = optimisticShifts.length > 1
+                ? `${optimisticShifts.length} Schichten erstellt`
+                : "Schicht erstellt"
+            showToast("success", toastMsg)
+
+            // 3. API-Call im Hintergrund
+            const body: Record<string, unknown> = {
+                employeeId: formData.employeeId,
+                plannedStart: formData.plannedStart,
+                plannedEnd: formData.plannedEnd,
+                backupEmployeeId: formData.backupEmployeeId || null,
+                note: formData.note || null,
+                absenceType: formData.absenceType || null,
+            }
+
+            if (formData.isRepeating && formData.repeatEndDate) {
+                body.bulk = true
+                body.startDate = formData.date
+                body.endDate = formData.repeatEndDate
+                body.repeatDays = formData.repeatDays
+            } else {
+                body.date = formData.date
+            }
+
+            const tempIds = optimisticShifts.map(s => s.id)
+
+            fetch("/api/admin/schedule", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            }).then(async (res) => {
+                if (!res.ok) {
+                    // Rollback: remove optimistic shifts
+                    setShifts(prev => prev.filter(s => !tempIds.includes(s.id)))
+                    const data = await res.json().catch(() => ({}))
+                    showToast("error", data.error || "Fehler beim Erstellen")
+                    return
                 }
 
-                if (res.ok) {
-                    // OPTIMISTIC UPDATE: Sofort in den lokalen State einfuegen
-                    if (responseData.created !== undefined && responseData.shifts) {
-                        // Bulk-Erstellung: Alle neuen Schichten hinzufuegen
-                        const newShifts: Shift[] = responseData.shifts.map((s: Shift) => ({
+                const responseData = await res.json().catch(() => ({}))
+
+                // Replace temp IDs with real IDs from server
+                if (responseData.shifts && Array.isArray(responseData.shifts)) {
+                    // Bulk response - replace all temp shifts with real data
+                    setShifts(prev => {
+                        const withoutTemp = prev.filter(s => !tempIds.includes(s.id))
+                        const realShifts: Shift[] = responseData.shifts.map((s: Shift) => ({
                             id: s.id,
                             date: s.date,
                             plannedStart: s.plannedStart || formData.plannedStart,
@@ -617,69 +678,34 @@ function SchedulePageContent() {
                             status: s.status || "PLANNED",
                             note: s.note || null,
                             absenceType: s.absenceType || null,
-                            employee: s.employee || {
-                                id: formData.employeeId,
-                                name: employees.find(e => e.id === formData.employeeId)?.name || "Mitarbeiter",
-                                team: null
-                            },
-                            backupEmployee: s.backupEmployee || null
+                            employee: s.employee || employeeData,
+                            backupEmployee: s.backupEmployee || backupEmp
                         }))
-                        setShifts(prev => [...prev, ...newShifts].sort((a, b) =>
+                        return [...withoutTemp, ...realShifts].sort((a, b) =>
                             new Date(a.date).getTime() - new Date(b.date).getTime()
-                        ))
-                        showToast("success", `${responseData.created} Schichten erstellt`)
-                    } else if (responseData.id) {
-                        // Einzelne Schicht: Sofort hinzufuegen
-                        const selectedClient = clients.find(c => c.id === selectedClientId)
-                        const selectedEmployee = employees.find(e => e.id === formData.employeeId)
-                        const team = teams.find(t => t.id === selectedEmployee?.teamId)
-
-                        const newShift: Shift = {
+                        )
+                    })
+                } else if (responseData.id) {
+                    // Single response - replace temp shift with real data
+                    setShifts(prev => prev.map(s =>
+                        s.id === tempIds[0] ? {
+                            ...s,
                             id: responseData.id,
-                            date: responseData.date || formData.date,
-                            plannedStart: responseData.plannedStart || formData.plannedStart,
-                            plannedEnd: responseData.plannedEnd || formData.plannedEnd,
-                            actualStart: responseData.actualStart || null,
-                            actualEnd: responseData.actualEnd || null,
-                            status: responseData.status || "PLANNED",
-                            note: responseData.note || null,
-                            absenceType: responseData.absenceType || null,
-                            employee: {
-                                id: formData.employeeId,
-                                name: responseData.employee?.name || selectedEmployee?.name || "Mitarbeiter",
-                                team: team ? {
-                                    id: team.id,
-                                    name: team.name,
-                                    client: selectedClient ? {
-                                        id: selectedClient.id,
-                                        firstName: selectedClient.firstName,
-                                        lastName: selectedClient.lastName
-                                    } : null
-                                } : null
-                            },
-                            backupEmployee: responseData.backupEmployee || null
-                        }
-
-                        // Sofort zum lokalen State hinzufuegen (optimistisch)
-                        setShifts(prev => [...prev, newShift].sort((a, b) =>
-                            new Date(a.date).getTime() - new Date(b.date).getTime()
-                        ))
-                        showToast("success", "Schicht erstellt")
-                    } else {
-                        // Fallback: Altes Verhalten (sollte nicht passieren)
-                        showToast("success", "Schicht erstellt")
-                        fetchData()
-                    }
-                    setShowModal(false)
-
-                    // Background-Revalidierung fuer Konsistenz (ohne Warten)
-                    mutate()
-                } else {
-                    const errorMessage = typeof responseData.error === "string"
-                        ? responseData.error
-                        : "Fehler beim Erstellen"
-                    showToast("error", errorMessage)
+                            date: responseData.date || s.date,
+                            status: responseData.status || s.status,
+                        } : s
+                    ))
                 }
+
+                // Background-Revalidierung für Konsistenz
+                mutate()
+            }).catch(() => {
+                // Rollback bei Netzwerkfehler
+                setShifts(prev => prev.filter(s => !tempIds.includes(s.id)))
+                showToast("error", "Netzwerkfehler - bitte prüfen Sie Ihre Verbindung")
+            })
+
+            return // Früher Return, da async im Hintergrund läuft
         } catch (err) {
             console.error("[handleCreateOrUpdate] Error:", err)
             showToast("error", "Netzwerkfehler - bitte pruefen Sie Ihre Verbindung")

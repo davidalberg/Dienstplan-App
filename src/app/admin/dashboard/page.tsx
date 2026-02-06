@@ -78,7 +78,8 @@ export default function AdminDashboardPage() {
         }
     )
 
-    if (isLoading) {
+    // Nur beim allerersten Laden Spinner zeigen (kein data im Cache)
+    if (!data && isLoading) {
         return (
             <div className="admin-dark min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
                 <div className="text-neutral-400">Dashboard wird geladen...</div>
@@ -86,10 +87,18 @@ export default function AdminDashboardPage() {
         )
     }
 
-    if (error || !data) {
+    if (error && !data) {
         return (
             <div className="admin-dark min-h-screen bg-neutral-950 p-6">
                 <p className="text-red-400">Fehler beim Laden des Dashboards</p>
+            </div>
+        )
+    }
+
+    if (!data) {
+        return (
+            <div className="admin-dark min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
+                <div className="text-neutral-400">Dashboard wird geladen...</div>
             </div>
         )
     }

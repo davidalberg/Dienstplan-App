@@ -96,20 +96,16 @@ function formatTimeRangeForPdf(start: string | null, end: string | null): string
 
 /**
  * Ensure signature data is in a format jsPDF can handle.
- * Strips the data:image/png;base64, prefix if present and returns raw base64.
+ * jsPDF addImage() accepts both data URIs and raw base64.
+ * We ensure a valid data URI prefix is present for maximum compatibility.
  */
 function prepareSignatureForPdf(signature: string): string {
-    if (signature.startsWith("data:image/png;base64,")) {
-        return signature.substring("data:image/png;base64,".length)
-    }
+    // Already a valid data URI - return as-is
     if (signature.startsWith("data:image/")) {
-        // Handle other image formats
-        const commaIndex = signature.indexOf(",")
-        if (commaIndex !== -1) {
-            return signature.substring(commaIndex + 1)
-        }
+        return signature
     }
-    return signature
+    // Raw base64 without prefix - add PNG data URI prefix
+    return `data:image/png;base64,${signature}`
 }
 
 function formatDiff(planned: number, actual: number): string {

@@ -169,7 +169,7 @@ export default function EmployeeTimesheetsPage() {
 
             {/* Content */}
             <div className="px-6 py-4">
-                {isLoading ? (
+                {isLoading && employeeRows.length === 0 ? (
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="w-6 h-6 animate-spin text-neutral-500" />
                     </div>

@@ -298,8 +298,8 @@ function PayrollPageContent() {
                     />
                 </div>
 
-                {/* Loading State */}
-                {isLoading && (
+                {/* Loading State - nur beim allerersten Laden */}
+                {isLoading && payroll.length === 0 && (
                     <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-8">
                         <div className="flex items-center justify-center">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-400"></div>
@@ -322,7 +322,7 @@ function PayrollPageContent() {
                 )}
 
                 {/* Data Table */}
-                {!isLoading && payroll.length > 0 && (
+                {payroll.length > 0 && (
                     <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">

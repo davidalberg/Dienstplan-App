@@ -494,7 +494,7 @@ function AssistantsContent() {
 
     const totalEmployees = allEmployees.length
 
-    if (loading) {
+    if (loading && allEmployees.length === 0) {
         return (
             <div className="min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
                 <div className="text-neutral-500">Laden...</div>

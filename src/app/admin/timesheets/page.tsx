@@ -556,8 +556,8 @@ function TimesheetsPageContent() {
                     </div>
                 </div>
 
-                {/* Loading State */}
-                {isLoading && (
+                {/* Loading State - nur beim allerersten Laden */}
+                {isLoading && groupedByClient.length === 0 && (
                     <div className="space-y-3">
                         {[1, 2, 3].map(i => (
                             <div key={i} className="h-16 bg-neutral-800 animate-pulse rounded-lg" />
@@ -575,7 +575,7 @@ function TimesheetsPageContent() {
                 )}
 
                 {/* Client Groups */}
-                {!isLoading && groupedByClient.length > 0 && (
+                {groupedByClient.length > 0 && (
                     <div className="space-y-4">
                         {groupedByClient.map(group => {
                             const isExpanded = expandedClients.has(group.clientId)

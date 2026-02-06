@@ -202,13 +202,13 @@ export async function GET(req: NextRequest) {
 
         // Create employee name map (real names)
         const employeeNameMap = new Map<string, string>()
-        // Create anonymized name map for invoice template (Assistent A, B, C, ...)
+        // Create anonymized name map for invoice template (Assistent N, T, ... = first letter of first name)
         const anonymizedNameMap = new Map<string, string>()
-        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         for (let i = 0; i < employees.length; i++) {
             const emp = employees[i]
             employeeNameMap.set(emp.id, emp.name || "Unbekannt")
-            anonymizedNameMap.set(emp.id, `Assistent ${alphabet[i] || i + 1}`)
+            const firstLetter = emp.name ? emp.name.charAt(0).toUpperCase() : "?"
+            anonymizedNameMap.set(emp.id, `Assistent ${firstLetter}`)
         }
 
         // Helper: get display name (anonymized for invoice, real for standard)
