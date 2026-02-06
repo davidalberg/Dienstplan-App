@@ -60,6 +60,8 @@ interface GeneratePdfOptions {
     timesheets: TimesheetEntry[]
     stats: MonthlyStats
     signatures: SignatureData
+    /** If true, only show employee signature (no Assistenznehmer field) */
+    singleEmployee?: boolean
 }
 
 const MONTH_NAMES = [
@@ -99,7 +101,7 @@ function formatDiff(planned: number, actual: number): string {
 }
 
 export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
-    const { employeeName, teamName, month, year, timesheets, stats, signatures } = options
+    const { employeeName, teamName, month, year, timesheets, stats, signatures, singleEmployee = false } = options
 
     const doc = new jsPDF({
         orientation: "portrait",
@@ -473,38 +475,40 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
             )
         }
 
-        // Recipient signature (right side)
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.text("Assistenznehmer:", rightColX, yPos - 3)
+        // Recipient signature (right side) - only show if not singleEmployee mode
+        if (!singleEmployee) {
+            doc.setFontSize(9)
+            doc.setFont("helvetica", "bold")
+            doc.text("Assistenznehmer:", rightColX, yPos - 3)
 
-        if (signatures.recipientSignature) {
-            try {
-                doc.addImage(
-                    signatures.recipientSignature,
-                    "PNG",
-                    rightColX,
-                    yPos,
-                    signatureWidth,
-                    signatureHeight
-                )
-            } catch (e) {
-                console.error("Failed to add recipient signature image:", e)
+            if (signatures.recipientSignature) {
+                try {
+                    doc.addImage(
+                        signatures.recipientSignature,
+                        "PNG",
+                        rightColX,
+                        yPos,
+                        signatureWidth,
+                        signatureHeight
+                    )
+                } catch (e) {
+                    console.error("Failed to add recipient signature image:", e)
+                }
             }
-        }
 
-        // Draw signature line
-        doc.line(rightColX, yPos + signatureHeight + 2, rightColX + signatureWidth, yPos + signatureHeight + 2)
+            // Draw signature line
+            doc.line(rightColX, yPos + signatureHeight + 2, rightColX + signatureWidth, yPos + signatureHeight + 2)
 
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "normal")
-        doc.text(signatures.recipientName || "Ausstehend", rightColX, yPos + signatureHeight + 7)
-        if (signatures.recipientSignedAt) {
-            doc.text(
-                format(new Date(signatures.recipientSignedAt), "dd.MM.yyyy HH:mm", { locale: de }),
-                rightColX,
-                yPos + signatureHeight + 11
-            )
+            doc.setFontSize(8)
+            doc.setFont("helvetica", "normal")
+            doc.text(signatures.recipientName || "Ausstehend", rightColX, yPos + signatureHeight + 7)
+            if (signatures.recipientSignedAt) {
+                doc.text(
+                    format(new Date(signatures.recipientSignedAt), "dd.MM.yyyy HH:mm", { locale: de }),
+                    rightColX,
+                    yPos + signatureHeight + 11
+                )
+            }
         }
 
         // Update yPos

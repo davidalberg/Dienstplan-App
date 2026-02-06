@@ -322,15 +322,24 @@ export default function TimesheetDetail({
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {data.timesheets.map((ts, idx) => (
+                                            {data.timesheets.map((ts, idx) => {
+                                                const timeColor = ts.absenceType
+                                                    ? "text-amber-600"
+                                                    : ts.status === "PLANNED"
+                                                        ? "text-red-600"
+                                                        : ts.status === "CHANGED"
+                                                            ? "text-amber-600"
+                                                            : "text-green-600"
+
+                                                return (
                                                 <tr key={ts.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                                                     <td className="border border-gray-300 px-2 py-1">
                                                         {ts.formattedDate} {ts.weekday}
                                                     </td>
-                                                    <td className="border border-gray-300 px-2 py-1 text-red-600">
+                                                    <td className={`border border-gray-300 px-2 py-1 ${timeColor}`}>
                                                         {ts.actualStart || ts.plannedStart || "-"}
                                                     </td>
-                                                    <td className="border border-gray-300 px-2 py-1 text-red-600">
+                                                    <td className={`border border-gray-300 px-2 py-1 ${timeColor}`}>
                                                         {ts.actualEnd || ts.plannedEnd || "-"}
                                                     </td>
                                                     <td className="border border-gray-300 px-2 py-1 text-center">
@@ -342,7 +351,8 @@ export default function TimesheetDetail({
                                                                 ts.note || ""}
                                                     </td>
                                                 </tr>
-                                            ))}
+                                                )
+                                            })}
                                             <tr className="bg-gray-200 font-semibold">
                                                 <td colSpan={3} className="border border-gray-300 px-2 py-1">
                                                     Gesamtstunden

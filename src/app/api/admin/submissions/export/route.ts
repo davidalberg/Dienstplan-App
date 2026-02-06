@@ -204,6 +204,29 @@ export async function GET(req: NextRequest) {
             })
         } else {
             // PDF Export
+
+            // Load employee signature from TeamSubmission
+            let employeeSignatureData: { signature: string | null; signedAt: Date | null } | null = null
+            if (employeeId) {
+                const sig = await prisma.employeeSignature.findFirst({
+                    where: {
+                        employeeId,
+                        teamSubmission: {
+                            month,
+                            year,
+                            ...(clientId ? { clientId } : {})
+                        }
+                    },
+                    select: {
+                        signature: true,
+                        signedAt: true
+                    }
+                })
+                if (sig) {
+                    employeeSignatureData = sig
+                }
+            }
+
             const pdfTimesheets = timesheets.map(ts => ({
                 date: ts.date,
                 plannedStart: ts.plannedStart,
@@ -233,7 +256,13 @@ export async function GET(req: NextRequest) {
                     sundayHours: 0,
                     holidayHours: 0
                 },
-                signatures: {}
+                signatures: {
+                    employeeName: employee.name || "Unbekannt",
+                    employeeSignature: employeeSignatureData?.signature || null,
+                    employeeSignedAt: employeeSignatureData?.signedAt || null,
+                    // No recipient signature for single-employee PDF
+                },
+                singleEmployee: true
             })
 
             return new NextResponse(pdfBuffer, {

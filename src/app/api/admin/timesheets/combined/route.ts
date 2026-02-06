@@ -140,10 +140,42 @@ export async function GET(req: NextRequest) {
             getEmployeesInDienstplan(sheetFileName, month, year)
         ])
 
-        // Client is now optional - log warning but don't block
-        const clientMissing = !client && clientId
+        // If no client found via clientId, try to resolve from TeamSubmission's client relation
+        let resolvedClient = client
+        if (!resolvedClient && submission?.clientId) {
+            resolvedClient = await prisma.client.findUnique({
+                where: { id: submission.clientId },
+                select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true
+                }
+            })
+        }
+
+        // If still no client, try to find via team relation from timesheets
+        if (!resolvedClient) {
+            const timesheetWithTeam = await prisma.timesheet.findFirst({
+                where: { sheetFileName, month, year },
+                select: {
+                    team: {
+                        select: {
+                            client: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
+                            }
+                        }
+                    }
+                }
+            })
+            if (timesheetWithTeam?.team?.client) {
+                resolvedClient = timesheetWithTeam.team.client
+            }
+        }
+
+        const clientMissing = !resolvedClient
         if (clientMissing) {
-            console.warn(`[GET /api/admin/timesheets/combined] Client not found for clientId: ${clientId}`)
+            console.warn(`[GET /api/admin/timesheets/combined] Could not resolve client for sheetFileName: ${sheetFileName}`)
         }
 
         // Check if any employees found
@@ -325,12 +357,12 @@ export async function GET(req: NextRequest) {
 
         // Build final response
         const response = {
-            client: client ? {
-                id: client.id,
-                firstName: client.firstName,
-                lastName: client.lastName,
-                fullName: `${client.firstName} ${client.lastName}`,
-                email: client.email
+            client: resolvedClient ? {
+                id: resolvedClient.id,
+                firstName: resolvedClient.firstName,
+                lastName: resolvedClient.lastName,
+                fullName: `${resolvedClient.firstName} ${resolvedClient.lastName}`,
+                email: resolvedClient.email
             } : {
                 id: "",
                 firstName: "Unbekannt",
@@ -338,7 +370,7 @@ export async function GET(req: NextRequest) {
                 fullName: "Klient nicht zugeordnet",
                 email: null
             },
-            clientMissing: !client,
+            clientMissing: !resolvedClient,
             sheetFileName,
             month,
             year,

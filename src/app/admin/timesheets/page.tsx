@@ -11,7 +11,8 @@ import {
     Eye,
     Download,
     Check,
-    Mail
+    Mail,
+    RefreshCw
 } from "lucide-react"
 import { useAdminSubmissions } from "@/hooks/use-admin-data"
 import EmployeeAvatarStack from "@/components/EmployeeAvatarStack"
@@ -315,6 +316,7 @@ function TimesheetsPageContent() {
         // 3. Fallback: Aktueller Monat
         return new Date()
     })
+    const [isRefreshing, setIsRefreshing] = useState(false)
     const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
     const [showCombinedModal, setShowCombinedModal] = useState(false)
     const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null)
@@ -341,6 +343,12 @@ function TimesheetsPageContent() {
 
     // Fetch submissions data
     const { submissions, pendingDienstplaene, targetMonth, targetYear, isLoading, mutate } = useAdminSubmissions(month, year)
+
+    const handleRefresh = async () => {
+        setIsRefreshing(true)
+        await mutate()
+        setIsRefreshing(false)
+    }
 
     // Combine submissions and pending dienstplaene
     const allSubmissions = useMemo(() => {
@@ -524,6 +532,14 @@ function TimesheetsPageContent() {
                             aria-label="Nächster Monat"
                         >
                             <ChevronRight size={20} />
+                        </button>
+                        <button
+                            onClick={handleRefresh}
+                            disabled={isRefreshing}
+                            className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors duration-150 disabled:opacity-50"
+                            title="Daten aktualisieren"
+                        >
+                            <RefreshCw size={18} className={isRefreshing ? "animate-spin" : ""} />
                         </button>
                     </div>
                 </div>

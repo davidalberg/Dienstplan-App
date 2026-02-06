@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, RefreshCw } from "lucide-react"
 import { useAdminTimesheets } from "@/hooks/use-admin-data"
 import TimesheetDetail from "@/components/TimesheetDetail"
 
@@ -40,7 +40,14 @@ export default function EmployeeTimesheetsPage() {
         clientId: string
     } | null>(null)
 
-    const { timesheets, isLoading } = useAdminTimesheets(month, year)
+    const { timesheets, isLoading, mutate } = useAdminTimesheets(month, year)
+    const [isRefreshing, setIsRefreshing] = useState(false)
+
+    const handleRefresh = async () => {
+        setIsRefreshing(true)
+        await mutate()
+        setIsRefreshing(false)
+    }
 
     const navigateMonth = (direction: -1 | 1) => {
         let newMonth = month + direction
@@ -146,6 +153,16 @@ export default function EmployeeTimesheetsPage() {
                         className="px-3 py-1.5 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
                     >
                         Heute
+                    </button>
+
+                    {/* Refresh button */}
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors disabled:opacity-50"
+                        title="Daten aktualisieren"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
                     </button>
                 </div>
             </div>
