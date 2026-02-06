@@ -8,11 +8,14 @@ const prismaClientSingleton = () => {
     const databaseUrl = process.env.DATABASE_URL
 
     // Füge Connection Pool Parameter hinzu, falls nicht vorhanden
+    // WICHTIG: connection_limit=1 für Serverless (jede Lambda hat eigenen Prisma Client)
     let optimizedUrl = databaseUrl || ''
     if (optimizedUrl && !optimizedUrl.includes('pgbouncer=true')) {
         const separator = optimizedUrl.includes('?') ? '&' : '?'
-        optimizedUrl += `${separator}pgbouncer=true&connection_limit=10&pool_timeout=10`
+        optimizedUrl += `${separator}pgbouncer=true&connection_limit=1&pool_timeout=10`
     }
+    // Falls connection_limit bereits gesetzt, auf 1 reduzieren
+    optimizedUrl = optimizedUrl.replace(/connection_limit=\d+/, 'connection_limit=1')
 
     return new PrismaClient({
         datasources: {

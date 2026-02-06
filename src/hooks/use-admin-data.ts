@@ -7,14 +7,15 @@ const fetcher = (url: string) => fetch(url).then(res => {
 })
 
 // SWR configuration for admin pages - Optimized for INSTANT navigation
+// WICHTIG: Keine automatischen Retries! Bei Supabase Session Mode Connection Pool Overflow
+// würden Retries das Problem nur verschlimmern.
 const swrConfig = {
     revalidateOnFocus: false,       // NICHT bei jedem Tab-Wechsel
     revalidateOnReconnect: false,   // Kein Refetch bei Reconnect
     dedupingInterval: 60000,        // 1 MINUTE Cache - verhindert doppelte Requests
     revalidateIfStale: false,       // Kein Background-Refetch
     keepPreviousData: true,         // Show cached data while loading new data (better UX)
-    errorRetryInterval: 5000,       // Retry failed requests after 5s
-    errorRetryCount: 2,             // Max 2 retries for failed requests
+    errorRetryCount: 0,             // KEINE Retries - verhindert Connection Pool Overflow
 }
 
 // Dashboard / Timesheets

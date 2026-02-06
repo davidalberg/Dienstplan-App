@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, ReactNode, useMemo, useEffect, useRef } from 'react'
+import { createContext, useContext, ReactNode, useMemo, useState, useEffect, useCallback } from 'react'
 import useSWR, { useSWRConfig } from 'swr'
 
 // SWR fetcher function
@@ -71,17 +71,19 @@ const AdminDataContext = createContext<AdminDataContextType | null>(null)
 /**
  * AdminDataProvider - Zentrale Datenverwaltung für Admin-Bereich
  *
- * Lädt alle Master-Daten (Employees, Clients, Teams) beim ersten Mount
- * und cached sie aggressiv für die gesamte Session.
+ * Lädt Master-Daten (Employees, Clients, Teams) SEQUENTIELL beim ersten Mount
+ * um den Supabase Connection Pool nicht zu überlasten.
  *
- * Vorteile:
- * - Reduziert API-Calls drastisch (nur 1x pro Session)
- * - Alle Admin-Seiten teilen sich dieselben gecachten Daten
- * - Schnellere Navigation zwischen Seiten
- * - Konsistente Daten über alle Komponenten hinweg
+ * WICHTIG: Kein aggressives Prefetching! Supabase Session Mode hat
+ * einen kleinen Connection Pool (pool_size). Jede Serverless-Funktion
+ * belegt eine Connection - zu viele parallele Requests = Pool Overflow.
  */
 export function AdminDataProvider({ children }: { children: ReactNode }) {
-    // Preload Employees
+    // Sequentielles Laden: Erst Employees, dann Clients, dann Teams
+    // Verhindert 3 parallele DB-Connections beim Start
+    const [loadPhase, setLoadPhase] = useState(0) // 0=employees, 1=clients, 2=teams, 3=done
+
+    // Phase 0: Lade Employees sofort
     const {
         data: employeesData,
         isLoading: isLoadingEmployees,
@@ -92,27 +94,46 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
         preloadConfig
     )
 
-    // Preload Clients
+    // Phase 1: Lade Clients erst wenn Employees fertig sind
     const {
         data: clientsData,
         isLoading: isLoadingClients,
         mutate: mutateClients
     } = useSWR(
-        '/api/clients',
+        loadPhase >= 1 ? '/api/clients' : null,
         fetcher,
         preloadConfig
     )
 
-    // Preload Teams
+    // Phase 2: Lade Teams erst wenn Clients fertig sind
     const {
         data: teamsData,
         isLoading: isLoadingTeams,
         mutate: mutateTeams
     } = useSWR(
-        '/api/admin/teams',
+        loadPhase >= 2 ? '/api/admin/teams' : null,
         fetcher,
         preloadConfig
     )
+
+    // Sequentieller Load: Nächste Phase starten wenn aktuelle fertig
+    useEffect(() => {
+        if (loadPhase === 0 && employeesData && !isLoadingEmployees) {
+            setLoadPhase(1)
+        }
+    }, [loadPhase, employeesData, isLoadingEmployees])
+
+    useEffect(() => {
+        if (loadPhase === 1 && clientsData && !isLoadingClients) {
+            setLoadPhase(2)
+        }
+    }, [loadPhase, clientsData, isLoadingClients])
+
+    useEffect(() => {
+        if (loadPhase === 2 && teamsData && !isLoadingTeams) {
+            setLoadPhase(3)
+        }
+    }, [loadPhase, teamsData, isLoadingTeams])
 
     // Extrahiere Daten aus Response
     const employees = employeesData?.employees || []
@@ -120,65 +141,11 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
     const teams = teamsData?.teams || []
 
     // Combined loading state
-    const isLoading = isLoadingEmployees || isLoadingClients || isLoadingTeams
+    const isLoading = loadPhase < 3
 
-    // ✅ INSTANT UI: Prefetch ALLE Admin-Seiten-Daten im Hintergrund
-    const { mutate: globalMutate } = useSWRConfig()
-    const hasPrefetched = useRef(false)
-
-    useEffect(() => {
-        // Nur einmal prefetchen, nachdem Master-Daten geladen sind
-        if (isLoading || hasPrefetched.current) return
-        hasPrefetched.current = true
-
-        const currentMonth = new Date().getMonth() + 1
-        const currentYear = new Date().getFullYear()
-
-        // Alle Admin-Seiten-Daten im Hintergrund laden
-        const prefetchUrls = [
-            // Dashboard
-            `/api/admin/dashboard`,
-            // Stundennachweise-Seite
-            `/api/admin/submissions?month=${currentMonth}&year=${currentYear}`,
-            `/api/admin/submissions/overview?month=${currentMonth}&year=${currentYear}`,
-            // Urlaub/Krank-Seite
-            `/api/admin/vacations/absences?month=${currentMonth}&year=${currentYear}`,
-            // Lohnliste-Seite
-            `/api/admin/payroll?month=${currentMonth}&year=${currentYear}`,
-            // Dienstplan-Seite
-            `/api/admin/schedule?month=${currentMonth}&year=${currentYear}`,
-            // Timesheets-Seite (Employee-Timesheets + Gesamtstundennachweise)
-            `/api/admin/timesheets?month=${currentMonth}&year=${currentYear}`,
-        ]
-
-        // Prefetch sequentiell um DB Connection Pool nicht zu überlasten
-        // Supabase Session Mode hat begrenzte Connections
-        const prefetchAll = async () => {
-            for (const url of prefetchUrls) {
-                await globalMutate(url, fetch(url).then(res => res.ok ? res.json() : null), { revalidate: false })
-                    .catch(() => null)
-                await new Promise(resolve => setTimeout(resolve, 300))
-            }
-
-            // Prefetch Mitarbeiter-Details für Stundennachweise (sequentiell)
-            if (clients.length > 0 && employees.length > 0) {
-                for (const client of clients as Client[]) {
-                    for (const emp of (client.employees || [])) {
-                        const url = `/api/admin/submissions/detail?employeeId=${emp.id}&clientId=${client.id}&month=${currentMonth}&year=${currentYear}`
-                        await globalMutate(url, fetch(url).then(res => res.ok ? res.json() : null), { revalidate: false })
-                            .catch(() => null)
-                        await new Promise(resolve => setTimeout(resolve, 200))
-                    }
-                }
-            }
-
-            console.log('[AdminDataProvider] Alle Seiten-Daten vorgeladen')
-        }
-
-        // Starte Prefetch nach Verzögerung (UI-Priorität + DB Connection Cooldown)
-        const timer = setTimeout(prefetchAll, 2000)
-        return () => clearTimeout(timer)
-    }, [isLoading, globalMutate, clients, employees])
+    // Prefetch: Nur die aktuelle Seite wird vom SWR-Hook der Seite selbst geladen.
+    // Kein aggressives Background-Prefetching mehr - das hat den Connection Pool gesprengt.
+    // Die Seiten laden ihre Daten on-demand über ihre eigenen SWR-Hooks.
 
     // Memoize utility functions to prevent re-renders
     const getClientById = useMemo(() => {
