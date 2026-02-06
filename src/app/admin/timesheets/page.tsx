@@ -436,10 +436,6 @@ function TimesheetsPageContent() {
         // Versuche clientId aus verschiedenen Quellen zu bekommen
         const resolvedClientId = submission.clientId || submission.client?.id
 
-        if (!resolvedClientId) {
-            showToast("warning", "Klient-Zuordnung fehlt - einige Funktionen eingeschränkt")
-        }
-
         setSelectedSubmission({ ...submission, clientId: resolvedClientId || null })
         setShowCombinedModal(true)
     }

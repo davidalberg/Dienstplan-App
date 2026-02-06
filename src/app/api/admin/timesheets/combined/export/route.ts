@@ -22,7 +22,7 @@ const QueryParamsSchema = z.object({
     sheetFileName: z.string().min(1, "sheetFileName ist erforderlich"),
     month: z.coerce.number().int().min(1).max(12),
     year: z.coerce.number().int().min(2020).max(2030),
-    clientId: z.string().min(1, "clientId ist erforderlich"),
+    clientId: z.string().optional().default(""),
     format: z.enum(["pdf", "xlsx"]).default("pdf"),
     template: z.enum(["standard", "invoice"]).default("standard")
 })
@@ -72,18 +72,20 @@ export async function GET(req: NextRequest) {
     const exportTemplate = getTemplateByIdOrDefault(templateId)
 
     try {
-        // Parallel fetch: Client data, TeamSubmission, and employee IDs
+        // Parallel fetch: Client data (if clientId provided), TeamSubmission, and employee IDs
         const [client, submission, employeeIds] = await Promise.all([
-            // Fetch client data
-            prisma.client.findUnique({
-                where: { id: clientId },
-                select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    email: true
-                }
-            }),
+            // Fetch client data (only if clientId provided)
+            clientId
+                ? prisma.client.findUnique({
+                    where: { id: clientId },
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true
+                    }
+                })
+                : Promise.resolve(null),
             // Fetch team submission with employee signatures
             prisma.teamSubmission.findUnique({
                 where: {
@@ -111,14 +113,39 @@ export async function GET(req: NextRequest) {
             getEmployeesInDienstplan(sheetFileName, month, year)
         ])
 
-        // Validate client exists
-        if (!client) {
+        // Resolve client: try direct lookup, then submission.clientId, then team relation
+        let resolvedClient = client
+        if (!resolvedClient && submission?.clientId) {
+            resolvedClient = await prisma.client.findUnique({
+                where: { id: submission.clientId },
+                select: { id: true, firstName: true, lastName: true, email: true }
+            })
+        }
+        if (!resolvedClient) {
+            const timesheetWithTeam = await prisma.timesheet.findFirst({
+                where: { sheetFileName, month, year },
+                select: {
+                    team: {
+                        select: {
+                            client: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
+                            }
+                        }
+                    }
+                }
+            })
+            if (timesheetWithTeam?.team?.client) {
+                resolvedClient = timesheetWithTeam.team.client
+            }
+        }
+
+        if (!resolvedClient) {
             return NextResponse.json({
                 error: "Klient nicht gefunden"
             }, { status: 404 })
         }
 
-        const clientName = `${client.firstName} ${client.lastName}`
+        const clientName = `${resolvedClient.firstName} ${resolvedClient.lastName}`
 
         // Check if any employees found
         if (employeeIds.length === 0) {

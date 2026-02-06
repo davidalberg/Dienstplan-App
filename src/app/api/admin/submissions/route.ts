@@ -415,14 +415,23 @@ export async function GET(req: NextRequest) {
                 submission.year
             )
 
-            // Get recipient info from dienstplanConfig or client
-            const recipientEmail = submission.dienstplanConfig?.assistantRecipientEmail || submission.client?.email || null
-            const recipientName = submission.dienstplanConfig?.assistantRecipientName ||
-                (submission.client ? `${submission.client.firstName} ${submission.client.lastName}` : null)
+            // Resolve client: prefer submission.client, fallback to timesheet-based lookup
+            const resolvedClient = submission.client
+                ? {
+                    id: submission.client.id,
+                    firstName: submission.client.firstName,
+                    lastName: submission.client.lastName,
+                    email: submission.client.email
+                }
+                : getClientForKey(submission.sheetFileName, submission.month, submission.year)
 
-            // BUGFIX: Prefer submission.client.id over submission.clientId
-            // This ensures consistency when Client record is updated but TeamSubmission.clientId is stale
-            const resolvedClientId = submission.client?.id || submission.clientId
+            // Get recipient info from dienstplanConfig or resolved client
+            const recipientEmail = submission.dienstplanConfig?.assistantRecipientEmail || resolvedClient?.email || null
+            const recipientName = submission.dienstplanConfig?.assistantRecipientName ||
+                (resolvedClient ? `${resolvedClient.firstName} ${resolvedClient.lastName}` : null)
+
+            // Use resolved clientId from client relation or timesheet fallback
+            const resolvedClientId = resolvedClient?.id || submission.clientId
 
             return {
                 id: submission.id,
@@ -433,7 +442,7 @@ export async function GET(req: NextRequest) {
                 status: submission.status,
                 createdAt: submission.createdAt,
                 updatedAt: submission.updatedAt,
-                clientId: resolvedClientId, // BUGFIX: Use resolved clientId from client relation
+                clientId: resolvedClientId,
                 recipientEmail,
                 recipientName,
                 recipientSignedAt: submission.recipientSignedAt,
@@ -449,12 +458,7 @@ export async function GET(req: NextRequest) {
                     employeeEmail: sig.employee.email,
                     signedAt: sig.signedAt
                 })),
-                client: submission.client ? {
-                    id: submission.client.id,
-                    firstName: submission.client.firstName,
-                    lastName: submission.client.lastName,
-                    email: submission.client.email
-                } : null
+                client: resolvedClient
             }
         })
 

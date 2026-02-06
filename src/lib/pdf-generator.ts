@@ -94,6 +94,24 @@ function formatTimeRangeForPdf(start: string | null, end: string | null): string
     return `${start}-${displayEnd}`
 }
 
+/**
+ * Ensure signature data is in a format jsPDF can handle.
+ * Strips the data:image/png;base64, prefix if present and returns raw base64.
+ */
+function prepareSignatureForPdf(signature: string): string {
+    if (signature.startsWith("data:image/png;base64,")) {
+        return signature.substring("data:image/png;base64,".length)
+    }
+    if (signature.startsWith("data:image/")) {
+        // Handle other image formats
+        const commaIndex = signature.indexOf(",")
+        if (commaIndex !== -1) {
+            return signature.substring(commaIndex + 1)
+        }
+    }
+    return signature
+}
+
 function formatDiff(planned: number, actual: number): string {
     const diff = actual - planned
     if (diff === 0) return "±0"
@@ -353,8 +371,9 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
             // Add signature image
             if (empSig.signature) {
                 try {
+                    const sigData = prepareSignatureForPdf(empSig.signature)
                     doc.addImage(
-                        empSig.signature,
+                        sigData,
                         "PNG",
                         leftColX,
                         leftYPos,
@@ -402,8 +421,9 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
 
         if (signatures.recipientSignature) {
             try {
+                const sigData = prepareSignatureForPdf(signatures.recipientSignature)
                 doc.addImage(
-                    signatures.recipientSignature,
+                    sigData,
                     "PNG",
                     rightColX,
                     recipientYPos,
@@ -447,8 +467,9 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
 
         if (signatures.employeeSignature) {
             try {
+                const sigData = prepareSignatureForPdf(signatures.employeeSignature)
                 doc.addImage(
-                    signatures.employeeSignature,
+                    sigData,
                     "PNG",
                     leftColX,
                     yPos,
@@ -483,8 +504,9 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
 
             if (signatures.recipientSignature) {
                 try {
+                    const sigData = prepareSignatureForPdf(signatures.recipientSignature)
                     doc.addImage(
-                        signatures.recipientSignature,
+                        sigData,
                         "PNG",
                         rightColX,
                         yPos,
@@ -902,8 +924,9 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
             // Add signature image if available
             if (empSig.signature) {
                 try {
+                    const sigData = prepareSignatureForPdf(empSig.signature)
                     doc.addImage(
-                        empSig.signature,
+                        sigData,
                         "PNG",
                         xPos + 2,
                         yPos + 2,
@@ -966,8 +989,9 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
     // Add client signature image if available
     if (signatures.client.signature && signatures.client.signedAt) {
         try {
+            const sigData = prepareSignatureForPdf(signatures.client.signature)
             doc.addImage(
-                signatures.client.signature,
+                sigData,
                 "PNG",
                 margin + 2,
                 yPos + 2,
