@@ -200,18 +200,49 @@ export async function GET(req: NextRequest) {
             }, { status: 404 })
         }
 
-        // Helper function to anonymize employee names (e.g., "Najra Fejzovic" -> "Assistent N")
-        const anonymizeName = (name: string): string => {
-            if (templateId !== "invoice") return name
-            const firstChar = name.trim().charAt(0).toUpperCase()
-            return `Assistent ${firstChar || "?"}`
+        // Create employee name map (real names)
+        const employeeNameMap = new Map<string, string>()
+        // Create anonymized name map for invoice template (Assistent A, B, C, ...)
+        const anonymizedNameMap = new Map<string, string>()
+        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        for (let i = 0; i < employees.length; i++) {
+            const emp = employees[i]
+            employeeNameMap.set(emp.id, emp.name || "Unbekannt")
+            anonymizedNameMap.set(emp.id, `Assistent ${alphabet[i] || i + 1}`)
         }
 
-        // Create employee name map (anonymized if invoice template)
-        const employeeNameMap = new Map<string, string>()
-        for (const emp of employees) {
-            const fullName = emp.name || "Unbekannt"
-            employeeNameMap.set(emp.id, anonymizeName(fullName))
+        // Helper: get display name (anonymized for invoice, real for standard)
+        const getDisplayName = (employeeId: string): string => {
+            if (templateId === "invoice") {
+                return anonymizedNameMap.get(employeeId) || "Assistent ?"
+            }
+            return employeeNameMap.get(employeeId) || "Unbekannt"
+        }
+
+        // Helper: anonymize note content for invoice (remove employee names)
+        const anonymizeNote = (note: string | null): string | null => {
+            if (!note || templateId !== "invoice") return note
+            let anonymized = note
+            for (const emp of employees) {
+                if (emp.name) {
+                    // Replace full name
+                    anonymized = anonymized.replace(new RegExp(emp.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonymizedNameMap.get(emp.id) || "Assistent")
+                    // Replace first name only
+                    const firstName = emp.name.split(' ')[0]
+                    if (firstName && firstName.length > 2) {
+                        anonymized = anonymized.replace(new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonymizedNameMap.get(emp.id) || "Assistent")
+                    }
+                    // Replace last name only
+                    const nameParts = emp.name.split(' ')
+                    if (nameParts.length > 1) {
+                        const lastName = nameParts[nameParts.length - 1]
+                        if (lastName && lastName.length > 2) {
+                            anonymized = anonymized.replace(new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonymizedNameMap.get(emp.id) || "Assistent")
+                        }
+                    }
+                }
+            }
+            return anonymized
         }
 
         // Process timesheets and calculate hours
@@ -312,13 +343,13 @@ export async function GET(req: NextRequest) {
                 formattedDate,
                 weekday,
                 employeeId: ts.employeeId,
-                employeeName: employeeNameMap.get(ts.employeeId) || "Unbekannt",
+                employeeName: getDisplayName(ts.employeeId),
                 plannedStart: ts.plannedStart,
                 plannedEnd: ts.plannedEnd,
                 actualStart: ts.actualStart,
                 actualEnd: ts.actualEnd,
                 hours,
-                note: ts.note,
+                note: anonymizeNote(ts.note),
                 absenceType: ts.absenceType,
                 status: ts.status
             })
@@ -394,7 +425,7 @@ export async function GET(req: NextRequest) {
                 const stats = employeeStatsMap.get(emp.id)
                 if (stats) {
                     const empRow: Record<string, unknown> = {}
-                    const displayName = anonymizeName(emp.name || "Unbekannt")
+                    const displayName = getDisplayName(emp.id)
                     for (let i = 0; i < template.columns.length; i++) {
                         const col = template.columns[i]
                         if (i === 0) {
@@ -447,7 +478,7 @@ export async function GET(req: NextRequest) {
         // PDF Export (default)
         // =========================================================================
 
-        // Build employee stats array
+        // Build employee stats array (use anonymized names for invoice)
         const employeeStats = employees.map(emp => {
             const stats = employeeStatsMap.get(emp.id) || {
                 totalHours: 0,
@@ -458,7 +489,7 @@ export async function GET(req: NextRequest) {
             }
             return {
                 employeeId: emp.id,
-                employeeName: emp.name || "Unbekannt",
+                employeeName: getDisplayName(emp.id),
                 totalHours: Math.round(stats.totalHours * 100) / 100,
                 plannedHours: Math.round(stats.plannedHours * 100) / 100,
                 sickDays: stats.sickDays,

@@ -635,13 +635,8 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
         isInvoice = false
     } = options
 
-    // Helper function to anonymize employee names (e.g., "Najra Fejzovic" -> "Assistent N")
-    const anonymizeName = (name: string): string => {
-        if (!isInvoice) return name
-        // Get first letter of first name only and prefix with "Assistent"
-        const firstChar = name.trim().charAt(0).toUpperCase()
-        return `Assistent ${firstChar || "?"}`
-    }
+    // Employee names are already anonymized by the export route when isInvoice=true
+    // No additional anonymization needed here
 
     const doc = new jsPDF({
         orientation: "portrait",
@@ -742,7 +737,7 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
 
         tableData.push([
             `${dayName} ${dateStr}`,
-            anonymizeName(ts.employeeName),
+            ts.employeeName,
             plannedStr,
             actualStr,
             hoursStr,
@@ -848,8 +843,8 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
     for (const empStat of employeeStats) {
         let line: string
         if (isInvoice) {
-            // DSGVO-compliant: anonymized name, no sick/vacation days
-            line = `- ${anonymizeName(empStat.employeeName)}:  ${empStat.totalHours.toFixed(2)} Std.`
+            // DSGVO-compliant: name already anonymized by export route, no sick/vacation days
+            line = `- ${empStat.employeeName}:  ${empStat.totalHours.toFixed(2)} Std.`
         } else {
             const sickText = empStat.sickDays === 1 ? "Krankheitstag" : "Krankheitstage"
             const vacationText = empStat.vacationDays === 1 ? "Urlaubstag" : "Urlaubstage"
