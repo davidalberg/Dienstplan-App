@@ -30,7 +30,12 @@ export async function GET(req: NextRequest) {
                         select: { name: true, email: true }
                     },
                     team: {
-                        select: { name: true }
+                        select: {
+                            name: true,
+                            client: {
+                                select: { id: true, firstName: true, lastName: true }
+                            }
+                        }
                     }
                 },
                 orderBy: [{ date: "asc" }, { plannedStart: "asc" }]
@@ -110,7 +115,7 @@ export async function PUT(req: NextRequest) {
             },
             include: {
                 employee: { select: { name: true, email: true } },
-                team: { select: { name: true } }
+                team: { select: { name: true, client: { select: { id: true, firstName: true, lastName: true } } } }
             }
         })
 

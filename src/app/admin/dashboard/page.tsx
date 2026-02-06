@@ -90,8 +90,7 @@ export default function AdminDashboardPage() {
     }
 
     const totalPending = data.pendingActions.submissions +
-        data.pendingActions.unsignedEmployees +
-        data.pendingActions.vacationRequests
+        data.pendingActions.unsignedEmployees
 
     return (
         <div className="admin-dark min-h-screen bg-neutral-950 p-6">
@@ -135,9 +134,6 @@ export default function AdminDashboardPage() {
                         <div className="text-xs text-neutral-500 mt-1 space-y-0.5">
                             {data.pendingActions.submissions > 0 && (
                                 <p>{data.pendingActions.submissions} Stundennachweise</p>
-                            )}
-                            {data.pendingActions.vacationRequests > 0 && (
-                                <p>{data.pendingActions.vacationRequests} Urlaubsantraege</p>
                             )}
                         </div>
                     </div>
@@ -254,13 +250,9 @@ export default function AdminDashboardPage() {
                                 <CalendarCheck size={18} className="text-violet-400" />
                                 <span className="text-sm text-neutral-200">Schicht erstellen</span>
                             </Link>
-                            <Link href="/admin/submissions" className="flex items-center gap-3 p-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors">
+                            <Link href="/admin/employee-timesheets" className="flex items-center gap-3 p-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors">
                                 <CheckCircle2 size={18} className="text-green-400" />
                                 <span className="text-sm text-neutral-200">Nachweise pruefen</span>
-                            </Link>
-                            <Link href="/admin/overtime" className="flex items-center gap-3 p-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors">
-                                <Clock size={18} className="text-amber-400" />
-                                <span className="text-sm text-neutral-200">Ueberstunden</span>
                             </Link>
                             <Link href="/admin/vacations" className="flex items-center gap-3 p-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors">
                                 <Palmtree size={18} className="text-cyan-400" />

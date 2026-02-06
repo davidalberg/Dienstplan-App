@@ -253,20 +253,6 @@ export default function DashboardPage() {
                             year={currentDate.getFullYear()}
                         />
 
-                        {/* Quick Actions */}
-                        <div className="mt-6 grid grid-cols-1 gap-4">
-                            <a
-                                href="/dashboard/vacation"
-                                className="flex items-center justify-between rounded-xl bg-white p-4 shadow-sm border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all"
-                            >
-                                <div>
-                                    <h3 className="font-bold text-black">Urlaubsantrag</h3>
-                                    <p className="text-sm text-gray-600">Urlaubstage beantragen und verwalten</p>
-                                </div>
-                                <ChevronRight size={20} className="text-gray-400" />
-                            </a>
-                        </div>
-
                         {/* Backup-Schichten Sektion (eingeklappt) */}
                         {potentialBackupShifts.length > 0 && (
                             <div className="mt-6 rounded-xl bg-gray-100 overflow-hidden border border-gray-200">
