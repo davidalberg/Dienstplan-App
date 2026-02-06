@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import {
     Users,
     Clock,
@@ -13,6 +12,12 @@ import {
     ChevronRight
 } from "lucide-react"
 import Link from "next/link"
+import useSWR from "swr"
+
+const fetcher = (url: string) => fetch(url).then(res => {
+    if (!res.ok) throw new Error('Failed to fetch')
+    return res.json()
+})
 
 interface TodayShift {
     id: string
@@ -62,18 +67,18 @@ const MONTH_NAMES = [
 ]
 
 export default function AdminDashboardPage() {
-    const [data, setData] = useState<DashboardData | null>(null)
-    const [loading, setLoading] = useState(true)
+    const { data, isLoading, error } = useSWR<DashboardData>(
+        '/api/admin/dashboard',
+        fetcher,
+        {
+            revalidateOnFocus: false,
+            dedupingInterval: 60000,
+            revalidateIfStale: false,
+            keepPreviousData: true,
+        }
+    )
 
-    useEffect(() => {
-        fetch("/api/admin/dashboard")
-            .then(res => res.json())
-            .then(setData)
-            .catch(console.error)
-            .finally(() => setLoading(false))
-    }, [])
-
-    if (loading) {
+    if (isLoading) {
         return (
             <div className="admin-dark min-h-screen bg-neutral-950 p-6 flex items-center justify-center">
                 <div className="text-neutral-400">Dashboard wird geladen...</div>
@@ -81,7 +86,7 @@ export default function AdminDashboardPage() {
         )
     }
 
-    if (!data) {
+    if (error || !data) {
         return (
             <div className="admin-dark min-h-screen bg-neutral-950 p-6">
                 <p className="text-red-400">Fehler beim Laden des Dashboards</p>

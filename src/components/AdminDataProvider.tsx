@@ -136,6 +136,8 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
 
         // Alle Admin-Seiten-Daten im Hintergrund laden
         const prefetchUrls = [
+            // Dashboard
+            `/api/admin/dashboard`,
             // Stundennachweise-Seite
             `/api/admin/submissions?month=${currentMonth}&year=${currentYear}`,
             `/api/admin/submissions/overview?month=${currentMonth}&year=${currentYear}`,
@@ -145,7 +147,7 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
             `/api/admin/payroll?month=${currentMonth}&year=${currentYear}`,
             // Dienstplan-Seite
             `/api/admin/schedule?month=${currentMonth}&year=${currentYear}`,
-            // Timesheets-Seite
+            // Timesheets-Seite (Employee-Timesheets + Gesamtstundennachweise)
             `/api/admin/timesheets?month=${currentMonth}&year=${currentYear}`,
         ]
 
