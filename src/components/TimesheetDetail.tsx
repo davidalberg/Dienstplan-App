@@ -92,14 +92,14 @@ export default function TimesheetDetail({
     const [showDownloadMenu, setShowDownloadMenu] = useState(false)
     const [withdrawing, setWithdrawing] = useState<string | null>(null)
 
-    // Daten laden - nutze SWR Cache vom Prefetch
+    // Daten laden - clientId optional (API resolved aus Team-Relation)
+    const apiUrl = `/api/admin/submissions/detail?employeeId=${employeeId}&month=${month}&year=${year}${clientId ? `&clientId=${clientId}` : ''}`
     const { data, isLoading, error, mutate } = useSWR<DetailData>(
-        `/api/admin/submissions/detail?employeeId=${employeeId}&clientId=${clientId}&month=${month}&year=${year}`,
+        apiUrl,
         fetcher,
         {
             fallbackData: initialData,
             revalidateOnFocus: false,       // Nicht bei Tab-Wechsel neu laden
-            revalidateOnMount: false,       // WICHTIG: Nutze Cache wenn vorhanden
             dedupingInterval: 600000,       // 10 Minuten Cache
             revalidateIfStale: false,       // Kein Background-Refetch
         }

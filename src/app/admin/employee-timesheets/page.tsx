@@ -199,18 +199,12 @@ export default function EmployeeTimesheetsPage() {
                                         <tr
                                             key={row.employeeId}
                                             onClick={() => {
-                                                if (row.clientId) {
-                                                    setSelectedEmployee({
-                                                        employeeId: row.employeeId,
-                                                        clientId: row.clientId,
-                                                    })
-                                                }
+                                                setSelectedEmployee({
+                                                    employeeId: row.employeeId,
+                                                    clientId: row.clientId || "",
+                                                })
                                             }}
-                                            className={`border-b border-neutral-800/50 transition-colors ${
-                                                row.clientId
-                                                    ? "hover:bg-neutral-800/50 cursor-pointer"
-                                                    : "opacity-60"
-                                            }`}
+                                            className="border-b border-neutral-800/50 transition-colors hover:bg-neutral-800/50 cursor-pointer"
                                         >
                                             {/* Employee name */}
                                             <td className="px-4 py-3">

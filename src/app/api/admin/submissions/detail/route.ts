@@ -16,9 +16,9 @@ export async function GET(req: NextRequest) {
     const month = parseInt(searchParams.get("month") || "")
     const year = parseInt(searchParams.get("year") || "")
 
-    if (!employeeId || !clientId || isNaN(month) || isNaN(year)) {
+    if (!employeeId || isNaN(month) || isNaN(year)) {
         return NextResponse.json({
-            error: "employeeId, clientId, month und year sind erforderlich"
+            error: "employeeId, month und year sind erforderlich"
         }, { status: 400 })
     }
 
@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
                 team: {
                     select: {
                         name: true,
-                        client: { select: { id: true } }
+                        client: {
+                            select: { id: true, firstName: true, lastName: true, email: true }
+                        }
                     }
                 }
             }
@@ -65,16 +67,29 @@ export async function GET(req: NextRequest) {
             sheetFileName = `Team_${userTimesheet.team.name.replace(/\s+/g, '_')}_${year}`
         }
 
-        // Klient laden
-        const client = await prisma.client.findUnique({
-            where: { id: clientId },
-            select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true
-            }
-        })
+        // Klient laden - clientId ist jetzt optional, wird aus Team-Relation aufgeloest
+        let resolvedClientId = clientId
+        if (!resolvedClientId && userTimesheet?.team?.client) {
+            resolvedClientId = userTimesheet.team.client.id
+        }
+
+        let client = null
+        if (resolvedClientId) {
+            client = await prisma.client.findUnique({
+                where: { id: resolvedClientId },
+                select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true
+                }
+            })
+        }
+
+        // Fallback: Client aus Team-Relation wenn DB-Lookup fehlschlaegt
+        if (!client && userTimesheet?.team?.client) {
+            client = userTimesheet.team.client
+        }
 
         if (!client) {
             return NextResponse.json({ error: "Klient nicht gefunden" }, { status: 404 })
