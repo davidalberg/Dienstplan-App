@@ -7,7 +7,19 @@ import { CheckCircle2, AlertCircle, Clock, Edit3, RotateCcw, Loader2 } from "luc
 import { showToast } from '@/lib/toast-utils'
 import { formatTimeRange } from '@/lib/time-utils'
 
-export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesheet: any, onUpdate: (updatedTimesheet: any) => void, onDelete?: (id: string) => void }) {
+interface TimesheetDayData {
+    id: string
+    date: string
+    plannedStart: string | null
+    plannedEnd: string | null
+    actualStart: string | null
+    actualEnd: string | null
+    note: string | null
+    absenceType: string | null
+    status: string
+}
+
+export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesheet: TimesheetDayData, onUpdate: (updatedTimesheet: TimesheetDayData) => void, onDelete?: (id: string) => void }) {
     const [isEditing, setIsEditing] = useState(false)
     const [loading, setLoading] = useState(false)
     const [editData, setEditData] = useState({
@@ -34,8 +46,8 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
             setIsOptimistic(true)
             setEditData({
                 ...editData,
-                actualStart: timesheet.plannedStart,
-                actualEnd: timesheet.plannedEnd,
+                actualStart: timesheet.plannedStart || "",
+                actualEnd: timesheet.plannedEnd || "",
             })
         } else if (action === "UNCONFIRM") {
             setOptimisticStatus("PLANNED")
@@ -133,7 +145,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
         if (isBackupShift) {
             // Extrahiere Original-Mitarbeiter-Namen und Grund aus Note
             // Format: "Backup-Schicht anfallend wegen Krankheit von Maria Witton"
-            const match = timesheet.note.match(/Backup-Schicht anfallend wegen (Krankheit|Urlaub) von (.+)/)
+            const match = timesheet.note?.match(/Backup-Schicht anfallend wegen (Krankheit|Urlaub) von (.+)/)
             if (match) {
                 const reason = match[1] === "Krankheit" ? "Krank" : "Urlaub"
                 const originalEmployeeName = match[2]

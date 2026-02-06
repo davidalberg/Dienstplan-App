@@ -244,7 +244,7 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
     })
 
     // Get the final Y position after the table
-    yPos = (doc as any).lastAutoTable.finalY + 10
+    yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
 
     // Check if we need a new page for summary
     if (yPos > 220) {
@@ -763,7 +763,7 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
     })
 
     // Get the final Y position after the table
-    yPos = (doc as any).lastAutoTable.finalY + 10
+    yPos = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
 
     // -------------------------------------------------------------------------
     // SUMMARY SECTION

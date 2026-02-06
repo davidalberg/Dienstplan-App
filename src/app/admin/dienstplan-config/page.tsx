@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { toast } from "sonner"
+import { showToast } from "@/lib/toast-utils"
 
 interface DienstplanConfig {
     sheetFileName: string
@@ -35,11 +35,11 @@ export default function DienstplanConfigPage() {
                 const data = await res.json()
                 setDienstplaene(data.dienstplaene || [])
             } else {
-                toast.error("Fehler beim Laden der Dienstpläne")
+                showToast("error", "Fehler beim Laden der Dienstpläne")
             }
         } catch (error) {
             console.error("Error fetching dienstplaene:", error)
-            toast.error("Fehler beim Laden")
+            showToast("error", "Fehler beim Laden")
         } finally {
             setLoading(false)
         }
@@ -66,7 +66,7 @@ export default function DienstplanConfigPage() {
 
         // Validierung
         if (!formData.assistantRecipientEmail || !formData.assistantRecipientName) {
-            toast.error("Bitte alle Felder ausfüllen")
+            showToast("error", "Bitte alle Felder ausfüllen")
             return
         }
 
@@ -83,16 +83,16 @@ export default function DienstplanConfigPage() {
             })
 
             if (res.ok) {
-                toast.success("Konfiguration gespeichert")
+                showToast("success", "Konfiguration gespeichert")
                 closeModal()
                 await fetchDienstplaene() // Reload data
             } else {
                 const error = await res.json()
-                toast.error(error.error || "Fehler beim Speichern")
+                showToast("error", error.error || "Fehler beim Speichern")
             }
         } catch (error) {
             console.error("Error saving config:", error)
-            toast.error("Fehler beim Speichern")
+            showToast("error", "Fehler beim Speichern")
         } finally {
             setSaving(false)
         }

@@ -6,12 +6,47 @@ import Link from "next/link"
 import { ArrowLeft, Download, CheckCircle, AlertCircle, Clock, ChevronDown, ChevronUp } from "lucide-react"
 import StatisticsDetails from "@/components/StatisticsDetails"
 
+interface Discrepancy {
+    date: string
+    planned: string
+    actual: string
+    diffText: string
+}
+
+interface EmployeeStats {
+    plannedHours: number
+    actualHours: number
+    difference: number
+    discrepancies: Discrepancy[]
+    totalHours?: number
+    nightHours?: number
+    sundayHours?: number
+    holidayHours?: number
+    backupDays?: number
+    sickDays?: number
+    sickHours?: number
+    vacationDays?: number
+    vacationHours?: number
+}
+
+interface TeamEmployee {
+    id: string
+    name: string
+    email: string
+    hasSubmitted: boolean
+    stats: EmployeeStats
+}
+
+interface TeamData {
+    employees: TeamEmployee[]
+}
+
 export default function TeamDetailPage() {
     const params = useParams()
     const router = useRouter()
     const source = decodeURIComponent(params.source as string)
 
-    const [data, setData] = useState<any>(null)
+    const [data, setData] = useState<TeamData | null>(null)
     const [loading, setLoading] = useState(true)
     const [filters, setFilters] = useState({
         month: new Date().getMonth() + 1,
@@ -33,7 +68,7 @@ export default function TeamDetailPage() {
 
     const expandAll = () => {
         if (data?.employees) {
-            setExpandedEmployees(new Set(data.employees.map((e: any) => e.id)))
+            setExpandedEmployees(new Set(data.employees.map((e: TeamEmployee) => e.id)))
         }
     }
 
@@ -154,7 +189,7 @@ export default function TeamDetailPage() {
                 </div>
 
                 <div className="space-y-4">
-                    {data.employees.map((emp: any) => {
+                    {data.employees.map((emp: TeamEmployee) => {
                         const isExpanded = expandedEmployees.has(emp.id)
                         return (
                             <div key={emp.id} className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 overflow-hidden">
@@ -241,7 +276,7 @@ export default function TeamDetailPage() {
                                                     </p>
                                                 </div>
                                                 <div className="space-y-2">
-                                                    {emp.stats.discrepancies.map((disc: any, idx: number) => (
+                                                    {emp.stats.discrepancies.map((disc: Discrepancy, idx: number) => (
                                                         <div key={idx} className="text-sm text-red-900">
                                                             <span className="font-bold">{disc.date}:</span> Geplant {disc.planned}, Tatsächlich {disc.actual} ({disc.diffText})
                                                         </div>

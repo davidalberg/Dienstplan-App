@@ -169,9 +169,10 @@ export default function TimesheetDetail({
 
             showToast("success", "Unterschrift erfolgreich übersprungen")
             mutate() // SWR Revalidation
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Skip signature error:", error)
-            showToast("error", error.message || "Fehler beim Überspringen der Unterschrift")
+            const message = error instanceof Error ? error.message : "Fehler beim Überspringen der Unterschrift"
+            showToast("error", message)
         }
     }
 
@@ -204,8 +205,9 @@ export default function TimesheetDetail({
 
             showToast("success", `${typeLabel}-Unterschrift erfolgreich zurückgezogen`)
             mutate() // Revalidate data
-        } catch (error: any) {
-            showToast("error", error.message || "Fehler beim Zurückziehen der Unterschrift")
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Fehler beim Zurückziehen der Unterschrift"
+            showToast("error", message)
         } finally {
             setWithdrawing(null)
         }

@@ -14,12 +14,18 @@ import { getEmployeesInDienstplan } from "@/lib/team-submission-utils"
  * 2. Legacy mode: { employeeId, clientId, month, year, type: "client" }
  */
 export async function POST(req: NextRequest) {
+    try {
     const session = await auth()
     if (!session?.user || (session.user as any).role !== "ADMIN") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await req.json()
+    let body
+    try {
+        body = await req.json()
+    } catch {
+        return NextResponse.json({ error: "Ungültiger JSON-Body" }, { status: 400 })
+    }
     const { employeeId, clientId, month, year, type, sheetFileName } = body
 
     // Validate RESEND_API_KEY is configured
@@ -241,6 +247,10 @@ export async function POST(req: NextRequest) {
 
     } catch (error: any) {
         console.error("[POST /api/admin/submissions/send-email] Error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    }
+    } catch (outerError: any) {
+        console.error("[POST /api/admin/submissions/send-email] Outer Error:", outerError)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

@@ -11,7 +11,7 @@ const prismaClientSingleton = () => {
     let optimizedUrl = databaseUrl || ''
     if (optimizedUrl && !optimizedUrl.includes('pgbouncer=true')) {
         const separator = optimizedUrl.includes('?') ? '&' : '?'
-        optimizedUrl += `${separator}pgbouncer=true&connection_limit=1&pool_timeout=10`
+        optimizedUrl += `${separator}pgbouncer=true&connection_limit=10&pool_timeout=10`
     }
 
     return new PrismaClient({

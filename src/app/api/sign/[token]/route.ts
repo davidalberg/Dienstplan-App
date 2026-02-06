@@ -5,6 +5,7 @@ import { sendCompletionEmails } from "@/lib/email"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
 import { uploadTimesheetPdf, uploadToClientFolder } from "@/lib/google-drive"
 import { headers } from "next/headers"
+import { checkRateLimit } from "@/lib/rate-limiter"
 
 /**
  * GET /api/sign/[token]
@@ -116,7 +117,7 @@ export async function GET(
             })),
             timesheets
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[GET /api/sign/[token]] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
@@ -134,6 +135,16 @@ export async function POST(
 ) {
     try {
         const { token } = await params
+
+        // Rate Limiting: 10 POST requests pro Minute pro Token (Brute-Force Schutz)
+        const rl = checkRateLimit(`sign-post:${token}`, 10, 60_000)
+        if (rl.limited) {
+            return NextResponse.json(
+                { error: "Zu viele Anfragen. Bitte warten Sie einen Moment." },
+                { status: 429, headers: rl.headers }
+            )
+        }
+
         const body = await req.json()
         const { signature } = body
 
@@ -141,9 +152,12 @@ export async function POST(
             return NextResponse.json({ error: "Signature required" }, { status: 400 })
         }
 
-        // Validate signature format
+        // Validate signature format and size
         if (!signature.startsWith("data:image/png;base64,")) {
             return NextResponse.json({ error: "Invalid signature format" }, { status: 400 })
+        }
+        if (signature.length > 500_000) {
+            return NextResponse.json({ error: "Signatur zu groß (max 500KB)" }, { status: 400 })
         }
 
         const teamSubmission = await prisma.teamSubmission.findUnique({
@@ -246,7 +260,7 @@ export async function POST(
         })
 
         // Group timesheets by employee
-        const timesheetsByEmployee = new Map<string, any[]>()
+        const timesheetsByEmployee = new Map<string, typeof timesheets>()
         for (const ts of timesheets) {
             if (!timesheetsByEmployee.has(ts.employeeId)) {
                 timesheetsByEmployee.set(ts.employeeId, [])
@@ -386,8 +400,8 @@ export async function POST(
 
                     googleDriveFileId = uploadResult.fileId
                     console.log(`[RECIPIENT SIGN] PDF uploaded to client folder: ${uploadResult.webViewLink}`)
-                } catch (driveError: any) {
-                    console.error("[RECIPIENT SIGN] Client folder upload failed:", driveError.message)
+                } catch (driveError: unknown) {
+                    console.error("[RECIPIENT SIGN] Client folder upload failed:", driveError instanceof Error ? driveError.message : driveError)
 
                     // Fallback: Try legacy upload method for backup
                     try {
@@ -405,15 +419,15 @@ export async function POST(
 
                         googleDriveFileId = fallbackResult.fileId
                         console.log("[RECIPIENT SIGN] Fallback upload succeeded")
-                    } catch (fallbackError: any) {
-                        console.error("[RECIPIENT SIGN] Fallback upload also failed:", fallbackError.message)
+                    } catch (fallbackError: unknown) {
+                        console.error("[RECIPIENT SIGN] Fallback upload also failed:", fallbackError instanceof Error ? fallbackError.message : fallbackError)
                         // Continue without Google Drive - we have the app link
                     }
                 }
             } else {
                 console.warn("[RECIPIENT SIGN] No client name available for folder upload")
             }
-        } catch (uploadError: any) {
+        } catch (uploadError: unknown) {
             console.error("[RECIPIENT SIGN] PDF URL generation failed:", uploadError)
             // Continue without PDF link
         }
@@ -494,7 +508,7 @@ export async function POST(
                     recipientEmail: completionRecipientEmail,
                     recipientName: completionRecipientName,
                     // Employer
-                    employerEmail: process.env.EMPLOYER_EMAIL!,
+                    employerEmail: process.env.EMPLOYER_EMAIL || "",
                     month: teamSubmission.month,
                     year: teamSubmission.year,
                     pdfUrl: pdfUrl || "",
@@ -509,9 +523,9 @@ export async function POST(
                     recipientSignedAt
                 })
             }
-        } catch (emailError: any) {
+        } catch (emailError: unknown) {
             emailSuccess = false
-            emailErrorMessage = emailError.message || "Unbekannter Fehler"
+            emailErrorMessage = emailError instanceof Error ? emailError.message : "Unbekannter Fehler"
             console.error("[RECIPIENT SIGN] Completion emails failed:", emailError)
         }
 
@@ -530,7 +544,7 @@ export async function POST(
                 emailError: emailErrorMessage
             }, { status: 207 }) // 207 Multi-Status: Partial success
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[POST /api/sign/[token]] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }

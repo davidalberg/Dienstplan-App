@@ -161,7 +161,7 @@ export interface ApiError {
 /**
  * API Success Response
  */
-export interface ApiSuccess<T = any> {
+export interface ApiSuccess<T = unknown> {
     success: boolean
     data?: T
     message?: string

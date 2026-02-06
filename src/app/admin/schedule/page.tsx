@@ -35,6 +35,7 @@ import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
 import { toast } from "sonner"
 import { useSWRConfig } from "swr"
+import { getHinweise } from "@/lib/arbeitszeit-hinweise"
 
 // Loading fallback component
 function ScheduleLoadingFallback() {
@@ -231,6 +232,27 @@ function SchedulePageContent() {
         }
     }, [shifts.length])
 
+    // Arbeitszeit-Hinweise berechnen (rein informativ)
+    const arbeitszeitHinweise = useMemo(() => {
+        if (!shifts || shifts.length === 0) return []
+        return getHinweise(shifts.map(s => ({
+            date: s.date,
+            plannedStart: s.plannedStart,
+            plannedEnd: s.plannedEnd,
+            actualStart: s.actualStart,
+            actualEnd: s.actualEnd,
+            employeeId: s.employee.id
+        })))
+    }, [shifts])
+
+    // Helper-Funktion: Hinweise für eine bestimmte Schicht filtern
+    const getShiftHinweise = useCallback((shiftDate: string, employeeId: string) => {
+        return arbeitszeitHinweise.filter(h => h.date === shiftDate && h.employeeId === employeeId)
+    }, [arbeitszeitHinweise])
+
+    // State für Hinweise-Box (collapsed by default)
+    const [showHinweiseBox, setShowHinweiseBox] = useState(false)
+
     // ✅ INSTANT UI: Prefetch ALLE Stundennachweise in EINEM Request
     // Skalierbar für 200+ Mitarbeiter - nur 1 API-Call statt 200
     // Nutzt sessionStorage um Prefetch über Seitenwechsel zu persistieren
@@ -255,7 +277,7 @@ function SchedulePageContent() {
                 if (!res.ok) throw new Error("Prefetch failed")
 
                 const data = await res.json()
-                const details = data.details as Record<string, any>
+                const details = data.details as Record<string, unknown>
 
                 // Schreibe jedes Detail in den SWR-Cache unter dem Original-URL-Key
                 Object.entries(details).forEach(([key, detailData]) => {
@@ -577,8 +599,22 @@ function SchedulePageContent() {
                 })
 
                 // Robustes Response-Parsing
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                let responseData: any = {}
+                let responseData: {
+                    created?: number
+                    shifts?: Shift[]
+                    id?: string
+                    date?: string
+                    plannedStart?: string
+                    plannedEnd?: string
+                    actualStart?: string | null
+                    actualEnd?: string | null
+                    status?: string
+                    note?: string | null
+                    absenceType?: string | null
+                    employee?: { id: string; name: string } | null
+                    backupEmployee?: { id: string; name: string } | null
+                    error?: string
+                } = {}
                 try {
                     responseData = await res.json()
                 } catch {
@@ -598,6 +634,8 @@ function SchedulePageContent() {
                             date: s.date,
                             plannedStart: s.plannedStart || formData.plannedStart,
                             plannedEnd: s.plannedEnd || formData.plannedEnd,
+                            actualStart: s.actualStart || null,
+                            actualEnd: s.actualEnd || null,
                             status: s.status || "PLANNED",
                             note: s.note || null,
                             absenceType: s.absenceType || null,
@@ -1137,6 +1175,50 @@ function SchedulePageContent() {
                     </div>
                 </div>
 
+                {/* Arbeitszeit-Hinweise Box (rein informativ) */}
+                {arbeitszeitHinweise.length > 0 && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl mb-6 overflow-hidden">
+                        <button
+                            onClick={() => setShowHinweiseBox(!showHinweiseBox)}
+                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-amber-500/5 transition-colors"
+                        >
+                            <div className="flex items-center gap-3">
+                                <AlertTriangle className="text-amber-400" size={20} />
+                                <span className="text-amber-400 font-semibold">
+                                    {arbeitszeitHinweise.length} Arbeitszeit-Hinweis{arbeitszeitHinweise.length !== 1 ? 'e' : ''} (nur Info)
+                                </span>
+                            </div>
+                            {showHinweiseBox ? (
+                                <ChevronUp className="text-amber-400" size={20} />
+                            ) : (
+                                <ChevronDown className="text-amber-400" size={20} />
+                            )}
+                        </button>
+
+                        {showHinweiseBox && (
+                            <div className="px-4 pb-4 space-y-2">
+                                <div className="bg-amber-500/10 border-l-2 border-amber-500 rounded px-3 py-2 mb-3">
+                                    <p className="text-sm text-amber-300">
+                                        <strong>Hinweise sind rein informativ</strong> - keine Einschränkungen.
+                                        In der Persönlichen Assistenz sind 24h-Schichten und flexible Arbeitszeiten erlaubt (Sonderbewilligung).
+                                    </p>
+                                </div>
+                                <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                                    {arbeitszeitHinweise.map((hinweis, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="flex items-start gap-2 bg-neutral-900/50 rounded px-3 py-2 text-sm"
+                                        >
+                                            <Info className="text-amber-400 flex-shrink-0 mt-0.5" size={14} />
+                                            <span className="text-neutral-300">{hinweis.message}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Filter Bar */}
                 <div className="bg-neutral-900 rounded-xl p-4 mb-6 flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -1284,9 +1366,25 @@ function SchedulePageContent() {
                                                                     </button>
                                                                 </td>
                                                                 <td className="px-3 py-2">
-                                                                    <span className="bg-neutral-800 px-2 py-0.5 rounded text-xs font-medium text-neutral-300">
-                                                                        {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
-                                                                    </span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="bg-neutral-800 px-2 py-0.5 rounded text-xs font-medium text-neutral-300">
+                                                                            {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
+                                                                        </span>
+                                                                        {(() => {
+                                                                            const shiftHinweise = getShiftHinweise(shift.date, shift.employee.id)
+                                                                            if (shiftHinweise.length > 0) {
+                                                                                return (
+                                                                                    <div
+                                                                                        className="relative group cursor-help"
+                                                                                        title={shiftHinweise.map(h => h.message).join('\n')}
+                                                                                    >
+                                                                                        <Info className="text-amber-400" size={14} />
+                                                                                    </div>
+                                                                                )
+                                                                            }
+                                                                            return null
+                                                                        })()}
+                                                                    </div>
                                                                 </td>
                                                                 <td className="px-3 py-2 text-sm">
                                                                     {shift.actualStart && shift.actualEnd &&
@@ -1411,19 +1509,30 @@ function SchedulePageContent() {
                                             {format(day, "d")}
                                         </div>
                                         <div className="space-y-0.5">
-                                            {dayShifts.slice(0, 3).map(shift => (
-                                                <div
-                                                    key={shift.id}
-                                                    className="text-[10px] bg-blue-900/50 text-blue-300 px-1 py-0.5 rounded truncate cursor-pointer hover:bg-blue-900"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        openEditModal(shift)
-                                                    }}
-                                                    title={`${shift.employee.name} ${shift.plannedStart}-${shift.plannedEnd}`}
-                                                >
-                                                    {shift.employee.name.split(" ")[0]}
-                                                </div>
-                                            ))}
+                                            {dayShifts.slice(0, 3).map(shift => {
+                                                const shiftHinweise = getShiftHinweise(shift.date, shift.employee.id)
+                                                const hasHinweise = shiftHinweise.length > 0
+                                                return (
+                                                    <div
+                                                        key={shift.id}
+                                                        className="text-[10px] bg-blue-900/50 text-blue-300 px-1 py-0.5 rounded cursor-pointer hover:bg-blue-900 flex items-center gap-1"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            openEditModal(shift)
+                                                        }}
+                                                        title={
+                                                            hasHinweise
+                                                                ? `${shift.employee.name} ${shift.plannedStart}-${shift.plannedEnd}\n\n⚠️ ${shiftHinweise.map(h => h.message).join('\n')}`
+                                                                : `${shift.employee.name} ${shift.plannedStart}-${shift.plannedEnd}`
+                                                        }
+                                                    >
+                                                        <span className="truncate flex-1">{shift.employee.name.split(" ")[0]}</span>
+                                                        {hasHinweise && (
+                                                            <Info className="text-amber-400 flex-shrink-0" size={10} />
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
                                             {dayShifts.length > 3 && (
                                                 <div className="text-[10px] text-neutral-500">
                                                     +{dayShifts.length - 3} mehr

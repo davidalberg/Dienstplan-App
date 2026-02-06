@@ -7,7 +7,7 @@ interface LogActivityParams {
     type: ActivityType
     category: ActivityCategory
     action: string
-    details?: Record<string, any>
+    details?: Record<string, unknown>
     userId?: string
     userName?: string
     entityId?: string
@@ -43,7 +43,7 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
  */
 export async function logShiftActivity(
     action: string,
-    details: Record<string, any>,
+    details: Record<string, unknown>,
     userId?: string,
     userName?: string
 ) {
@@ -65,7 +65,7 @@ export async function logError(
     category: ActivityCategory,
     action: string,
     error: Error | string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
 ) {
     return logActivity({
         type: "ERROR",

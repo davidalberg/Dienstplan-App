@@ -1,5 +1,6 @@
 import { google } from "googleapis"
 import { randomUUID } from "crypto"
+import { Readable } from "stream"
 
 /**
  * Escape special characters in Google Drive query strings
@@ -202,7 +203,6 @@ export async function uploadTimesheetPdf(params: UploadTimesheetPdfParams): Prom
  * Convert Buffer to readable stream for Google API
  */
 function bufferToStream(buffer: Buffer) {
-    const { Readable } = require("stream")
     const stream = new Readable()
     stream.push(buffer)
     stream.push(null)

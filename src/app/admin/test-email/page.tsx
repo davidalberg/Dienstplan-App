@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { toast } from "sonner"
+import { showToast } from "@/lib/toast-utils"
 
 export default function TestEmailPage() {
     const router = useRouter()
@@ -26,13 +26,13 @@ export default function TestEmailPage() {
             const data = await res.json()
 
             if (res.ok) {
-                toast.success("Test-E-Mail erfolgreich versendet!")
+                showToast("success", "Test-E-Mail erfolgreich versendet!")
                 setResult({
                     success: true,
                     message: data.message
                 })
             } else {
-                toast.error("E-Mail-Versand fehlgeschlagen")
+                showToast("error", "E-Mail-Versand fehlgeschlagen")
                 setResult({
                     success: false,
                     error: data.error,
@@ -42,7 +42,7 @@ export default function TestEmailPage() {
             }
         } catch (error: any) {
             console.error("Error testing email:", error)
-            toast.error("Fehler beim Testen")
+            showToast("error", "Fehler beim Testen")
             setResult({
                 success: false,
                 error: "Network error",

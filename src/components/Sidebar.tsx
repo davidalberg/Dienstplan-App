@@ -15,7 +15,10 @@ import {
     Search,
     UserCog,
     Wallet,
-    Palmtree
+    Palmtree,
+    LayoutDashboard,
+    Clock,
+    CalendarCheck
 } from "lucide-react"
 
 interface NavItem {
@@ -36,11 +39,14 @@ export function Sidebar({ onExportClick }: SidebarProps) {
     const [collapsed, setCollapsed] = useState(false)
 
     const navItems: NavItem[] = [
+        { icon: LayoutDashboard, label: "Dashboard", href: "/admin/dashboard" },
         { icon: Calendar, label: "Kalender", href: "/admin/schedule" },
         { icon: UserCog, label: "Assistenten", href: "/admin/assistants" },
         { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
         { icon: FileText, label: "Stundennachweise", href: "/admin/timesheets" },
+        { icon: Clock, label: "Ueberstunden", href: "/admin/overtime" },
         { icon: Palmtree, label: "Urlaub / Krank", href: "/admin/vacations" },
+        { icon: CalendarCheck, label: "Urlaubsantraege", href: "/admin/vacation-requests" },
         { icon: Wallet, label: "Lohnliste", href: "/admin/payroll" },
         { icon: Settings, label: "Einstellungen", href: "/admin/settings" },
     ]
@@ -59,11 +65,14 @@ export function Sidebar({ onExportClick }: SidebarProps) {
 
         // Map routes to their API endpoints
         const routeToApi: Record<string, string> = {
+            "/admin/dashboard": "/api/admin/dashboard",
             "/admin/schedule": `/api/admin/schedule?month=${month}&year=${year}`,
             "/admin/assistants": "/api/admin/employees",
             "/admin/clients": "/api/clients",
             "/admin/timesheets": `/api/admin/timesheets?month=${month}&year=${year}`,
+            "/admin/overtime": `/api/admin/overtime?month=${month}&year=${year}`,
             "/admin/vacations": `/api/admin/vacations/absences?month=${month}&year=${year}`,
+            "/admin/vacation-requests": "/api/admin/vacation-requests?status=PENDING",
             "/admin/payroll": `/api/admin/payroll?month=${month}&year=${year}`,
         }
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { UserCircle, Edit2, Trash2, Plus, X, Save, Search, ArrowUpDown, Users, Check } from "lucide-react"
 import { useClients } from "@/hooks/use-admin-data"
-import { toast } from "sonner"
+import { showToast } from "@/lib/toast-utils"
 
 interface Employee {
     id: string
@@ -142,7 +142,7 @@ export default function ClientsPage() {
 
     const handleSave = async () => {
         if (!formData.firstName || !formData.lastName) {
-            toast.error("Vorname und Nachname sind erforderlich")
+            showToast("error", "Vorname und Nachname sind erforderlich")
             return
         }
 
@@ -157,12 +157,12 @@ export default function ClientsPage() {
                 })
 
                 if (res.ok) {
-                    toast.success("Klient aktualisiert")
+                    showToast("success", "Klient aktualisiert")
                     setShowModal(false)
                     fetchClients()
                 } else {
                     const err = await res.json()
-                    toast.error(err.error)
+                    showToast("error", err.error)
                 }
             } else {
                 // Create
@@ -173,16 +173,16 @@ export default function ClientsPage() {
                 })
 
                 if (res.ok) {
-                    toast.success("Klient erstellt")
+                    showToast("success", "Klient erstellt")
                     setShowModal(false)
                     fetchClients()
                 } else {
                     const err = await res.json()
-                    toast.error(err.error)
+                    showToast("error", err.error)
                 }
             }
         } catch {
-            toast.error("Fehler beim Speichern")
+            showToast("error", "Fehler beim Speichern")
         } finally {
             setLoading(false)
         }
@@ -200,14 +200,14 @@ export default function ClientsPage() {
             })
 
             if (res.ok) {
-                toast.success("Klient deaktiviert")
+                showToast("success", "Klient deaktiviert")
                 fetchClients()
             } else {
                 const err = await res.json()
-                toast.error(err.error)
+                showToast("error", err.error)
             }
         } catch {
-            toast.error("Fehler beim Deaktivieren")
+            showToast("error", "Fehler beim Deaktivieren")
         } finally {
             setLoading(false)
         }
@@ -223,14 +223,14 @@ export default function ClientsPage() {
             })
 
             if (res.ok) {
-                toast.success("Klient reaktiviert")
+                showToast("success", "Klient reaktiviert")
                 fetchClients()
             } else {
                 const err = await res.json()
-                toast.error(err.error)
+                showToast("error", err.error)
             }
         } catch {
-            toast.error("Fehler beim Reaktivieren")
+            showToast("error", "Fehler beim Reaktivieren")
         } finally {
             setLoading(false)
         }

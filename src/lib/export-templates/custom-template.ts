@@ -22,7 +22,7 @@ export const customTemplate: ExportTemplate = {
         {
             header: "Date",
             field: "date",
-            transform: (value) => formatDate(value, "YYYY-MM-DD")
+            transform: (value) => formatDate(value as string | Date, "YYYY-MM-DD")
         },
         {
             header: "Weekday",
@@ -31,27 +31,27 @@ export const customTemplate: ExportTemplate = {
         {
             header: "Planned Start",
             field: "plannedStart",
-            transform: (value) => value || "-"
+            transform: (value) => (value as string) || "-"
         },
         {
             header: "Planned End",
             field: "plannedEnd",
-            transform: (value) => value || "-"
+            transform: (value) => (value as string) || "-"
         },
         {
             header: "Actual Start",
             field: "actualStart",
-            transform: (value) => value || "-"
+            transform: (value) => (value as string) || "-"
         },
         {
             header: "Actual End",
             field: "actualEnd",
-            transform: (value) => value || "-"
+            transform: (value) => (value as string) || "-"
         },
         {
             header: "Hours",
             field: "hours",
-            transform: (value) => formatNumber(value, ".", 2)
+            transform: (value) => formatNumber(value as number, ".", 2)
         },
         {
             header: "Absence Type",
@@ -69,7 +69,7 @@ export const customTemplate: ExportTemplate = {
         {
             header: "Note",
             field: "note",
-            transform: (value) => value || ""
+            transform: (value) => (value as string) || ""
         }
     ],
     options: {

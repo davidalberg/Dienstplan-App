@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logActivity } from "@/lib/activity-logger"
+import { z } from "zod"
+
+const createClientSchema = z.object({
+    firstName: z.string().min(1, "Vorname ist erforderlich"),
+    lastName: z.string().min(1, "Nachname ist erforderlich"),
+    email: z.string().email("Ungültige E-Mail-Adresse").optional().or(z.literal("")),
+    phone: z.string().optional().or(z.literal("")),
+    state: z.string().optional().or(z.literal("")),
+})
 
 // GET - Liste aller Klienten
 export async function GET(req: NextRequest) {
@@ -53,21 +62,17 @@ export async function POST(req: NextRequest) {
 
     try {
         const body = await req.json()
-        const {
-            firstName,
-            lastName,
-            email,
-            phone,
-            state
-        } = body
+        const result = createClientSchema.safeParse(body)
 
-        // Validierung
-        if (!firstName || !lastName) {
+        if (!result.success) {
+            const firstError = result.error.issues[0]?.message || "Ungültige Eingabe"
             return NextResponse.json(
-                { error: "Vorname und Nachname sind erforderlich" },
+                { error: firstError },
                 { status: 400 }
             )
         }
+
+        const { firstName, lastName, email, phone, state } = result.data
 
         // Klient erstellen
         const client = await prisma.client.create({

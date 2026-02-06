@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
 const timesheetUpdateSchema = z.object({
@@ -27,8 +28,8 @@ export async function GET(req: NextRequest) {
 
         // If requesting available months, return distinct month/year combinations
         if (getAvailableMonths) {
-        const user = session.user as any
-        let where: any = {}
+        const user = session.user
+        const where: Prisma.TimesheetWhereInput = {}
 
         if (user.role === "EMPLOYEE" || user.role === "ADMIN") {
             // Include months where user has own shifts OR backup shifts
@@ -68,40 +69,41 @@ export async function GET(req: NextRequest) {
     }
 
     // Role based filtering
-    const user = session.user as any
+    const user = session.user
 
     if (user.role === "EMPLOYEE" || user.role === "ADMIN") {
-        // Eigene Schichten (inkl. aktivierte Backup-Schichten mit "Eingesprungen" Note)
-        const ownTimesheets = await prisma.timesheet.findMany({
-            where: { month, year, employeeId: user.id },
-            include: { team: { include: { client: true } } },
-            orderBy: { date: "asc" },
-        })
-
-        // Potenzielle Backup-Schichten (Schichten anderer, wo ich als Backup eingetragen bin)
-        // NUR wenn der Hauptmitarbeiter NICHT krank/Urlaub ist (sonst ist es bereits aktiviert)
-        const potentialBackupShifts = await prisma.timesheet.findMany({
+        // Kombinierte Query: Eigene Schichten + potenzielle Backup-Schichten in 1 DB-Call
+        const allShifts = await prisma.timesheet.findMany({
             where: {
                 month,
                 year,
-                backupEmployeeId: user.id,
-                absenceType: null, // Nur wenn Hauptmitarbeiter NICHT abwesend
+                OR: [
+                    { employeeId: user.id },
+                    { backupEmployeeId: user.id, absenceType: null },
+                ],
             },
             include: {
+                team: { include: { client: true } },
                 employee: { select: { name: true } }
             },
             orderBy: { date: "asc" },
         })
 
-        return NextResponse.json({
-            timesheets: ownTimesheets,
-            potentialBackupShifts: potentialBackupShifts.map(s => ({
+        // Aufteilen in eigene Schichten und Backup-Schichten
+        const ownTimesheets = allShifts.filter(s => s.employeeId === user.id)
+        const potentialBackupShifts = allShifts
+            .filter(s => s.backupEmployeeId === user.id && s.employeeId !== user.id)
+            .map(s => ({
                 id: s.id,
                 date: s.date,
                 plannedStart: s.plannedStart,
                 plannedEnd: s.plannedEnd,
                 employeeName: s.employee?.name || "Unbekannt",
             }))
+
+        return NextResponse.json({
+            timesheets: ownTimesheets,
+            potentialBackupShifts
         })
     } else if (user.role === "TEAMLEAD") {
         // Validate teamId from database to prevent token manipulation
@@ -125,7 +127,7 @@ export async function GET(req: NextRequest) {
 
     // Fallback für unbekannte Rollen
     return NextResponse.json({ timesheets: [], potentialBackupShifts: [] })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[GET /api/timesheets] Error:", error)
         return NextResponse.json(
             { error: "Internal server error" },
@@ -144,7 +146,7 @@ export async function POST(req: NextRequest) {
         if (!validated.success) return NextResponse.json({ error: validated.error }, { status: 400 })
 
         const { id, actualStart, actualEnd, note, absenceType, action } = validated.data
-        const user = session.user as any
+        const user = session.user
 
     const existing = await prisma.timesheet.findUnique({
         where: { id },
@@ -189,7 +191,7 @@ export async function POST(req: NextRequest) {
         })
     }
 
-    let updateData: any = {
+    const updateData: Prisma.TimesheetUpdateInput = {
         actualStart,
         actualEnd,
         note,
@@ -344,7 +346,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(updated)
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[POST /api/timesheets] Error:", error)
         return NextResponse.json(
             { error: "Internal server error" },

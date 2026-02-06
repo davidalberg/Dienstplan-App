@@ -230,6 +230,28 @@ export function calculateNightHours(start: string, end: string, date: Date): num
     return nightMinutes / 60
 }
 
+/** Timesheet entry shape used for backup calculation */
+interface BackupTimesheetEntry {
+    date: Date | string
+    backupEmployeeId?: string | null
+    absenceType?: string | null
+    actualStart?: string | null
+    plannedStart?: string | null
+    actualEnd?: string | null
+    plannedEnd?: string | null
+}
+
+/** Timesheet entry shape used for monthly aggregation */
+interface AggregateTimesheetEntry {
+    date: Date | string
+    absenceType?: string | null
+    actualStart?: string | null
+    plannedStart?: string | null
+    actualEnd?: string | null
+    plannedEnd?: string | null
+    status: string
+}
+
 /**
  * Berechnet Backup-Statistiken für einen Mitarbeiter
  *
@@ -239,7 +261,7 @@ export function calculateNightHours(start: string, end: string, date: Date): num
  * - Berechnet auch Zuschläge (Nacht/Sonntag/Feiertag) für eingesprungene Schichten
  */
 export function calculateBackupStats(
-    allTimesheets: any[],
+    allTimesheets: BackupTimesheetEntry[],
     userId: string,
     employee: {
         nightPremiumEnabled: boolean
@@ -260,16 +282,11 @@ export function calculateBackupStats(
 
     const backupDates = new Set<string>()
 
-    // Debug: Zähle wie viele Timesheets überhaupt backupEmployeeId haben
-    const sheetsWithBackup = allTimesheets.filter(ts => ts.backupEmployeeId)
-    console.log(`[BACKUP DEBUG] userId: ${userId}, totalSheets: ${allTimesheets.length}, sheetsWithBackupId: ${sheetsWithBackup.length}`)
-
     allTimesheets.forEach(ts => {
         // Prüfen ob dieser User als Backup eingetragen ist
         if (ts.backupEmployeeId === userId) {
             const dateStr = new Date(ts.date).toISOString().split('T')[0]
             backupDates.add(dateStr)
-            console.log(`[BACKUP DEBUG] Found backup match for userId ${userId} on ${dateStr}`)
 
             // Stunden NUR zählen wenn Haupt-Person abwesend ist
             if (ts.absenceType === "SICK" || ts.absenceType === "VACATION") {
@@ -280,7 +297,6 @@ export function calculateBackupStats(
                     const date = new Date(ts.date)
                     const hours = calculateTotalHours(start, end)
                     backupHours += hours
-                    console.log(`[BACKUP DEBUG] Main person absent (${ts.absenceType}), crediting ${hours}h to backup`)
 
                     // Zuschläge berechnen
                     if (employee.nightPremiumEnabled) {
@@ -299,8 +315,6 @@ export function calculateBackupStats(
         }
     })
 
-    console.log(`[BACKUP DEBUG] Result for userId ${userId}: backupDays=${backupDates.size}, backupHours=${backupHours}`)
-
     return {
         backupDays: backupDates.size,
         backupHours: Math.round(backupHours * 100) / 100,
@@ -314,7 +328,7 @@ export function calculateBackupStats(
  * Aggregiert monatliche Daten für einen Mitarbeiter
  */
 export function aggregateMonthlyData(
-    timesheets: any[],
+    timesheets: AggregateTimesheetEntry[],
     employee: {
         id?: string
         hourlyWage: number
@@ -325,7 +339,7 @@ export function aggregateMonthlyData(
         holidayPremiumEnabled: boolean
         holidayPremiumPercent: number
     },
-    allTimesheetsForBackup?: any[]
+    allTimesheetsForBackup?: BackupTimesheetEntry[]
 ): {
     totalHours: number
     nightHours: number

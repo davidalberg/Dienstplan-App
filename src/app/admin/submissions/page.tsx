@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { toast } from "sonner"
+import { showToast } from "@/lib/toast-utils"
 import {
     ChevronLeft,
     ChevronRight,
@@ -228,7 +228,7 @@ export default function AdminSubmissionsPage() {
 
     const handleRelease = async () => {
         if (!selectedSubmission || !releaseNote.trim() || !selectedSubmission.id) {
-            toast.error("Bitte geben Sie einen Grund ein")
+            showToast("error", "Bitte geben Sie einen Grund ein")
             return
         }
 
@@ -243,17 +243,17 @@ export default function AdminSubmissionsPage() {
             const data = await res.json()
 
             if (res.ok) {
-                toast.success(data.message || "Einreichung freigegeben")
+                showToast("success", data.message || "Einreichung freigegeben")
                 setShowReleaseModal(false)
                 setSelectedSubmission(null)
                 setReleaseNote("")
                 await mutate()
             } else {
-                toast.error(data.error || "Fehler beim Freigeben")
+                showToast("error", data.error || "Fehler beim Freigeben")
             }
         } catch (error) {
             console.error("Error releasing submission:", error)
-            toast.error("Fehler beim Freigeben")
+            showToast("error", "Fehler beim Freigeben")
         } finally {
             setProcessing(false)
         }
@@ -273,14 +273,14 @@ export default function AdminSubmissionsPage() {
             const data = await res.json()
 
             if (res.ok) {
-                toast.success("Freigabe erfolgreich widerrufen")
+                showToast("success", "Freigabe erfolgreich widerrufen")
                 await mutate()
             } else {
-                toast.error(data.error || "Fehler beim Widerrufen")
+                showToast("error", data.error || "Fehler beim Widerrufen")
             }
         } catch (error) {
             console.error("Error reverting release:", error)
-            toast.error("Fehler beim Widerrufen")
+            showToast("error", "Fehler beim Widerrufen")
         } finally {
             setProcessing(false)
         }
@@ -305,16 +305,16 @@ export default function AdminSubmissionsPage() {
             const data = await res.json()
 
             if (res.ok) {
-                toast.success(`Unterschrift gelöscht`)
+                showToast("success", "Unterschrift gelöscht")
                 setShowSignatureModal(false)
                 setSelectedSubmission(null)
                 await mutate()
             } else {
-                toast.error(data.error || "Fehler beim Löschen")
+                showToast("error", data.error || "Fehler beim Löschen")
             }
         } catch (error) {
             console.error("Error deleting signature:", error)
-            toast.error("Fehler beim Löschen")
+            showToast("error", "Fehler beim Löschen")
         } finally {
             setProcessing(false)
         }
@@ -334,16 +334,16 @@ export default function AdminSubmissionsPage() {
             const data = await res.json()
 
             if (res.ok) {
-                toast.success("Assistenznehmer-Unterschrift gelöscht")
+                showToast("success", "Assistenznehmer-Unterschrift gelöscht")
                 setShowSignatureModal(false)
                 setSelectedSubmission(null)
                 await mutate()
             } else {
-                toast.error(data.error || "Fehler beim Löschen")
+                showToast("error", data.error || "Fehler beim Löschen")
             }
         } catch (error) {
             console.error("Error deleting recipient signature:", error)
-            toast.error("Fehler beim Löschen")
+            showToast("error", "Fehler beim Löschen")
         } finally {
             setProcessing(false)
         }
@@ -368,14 +368,14 @@ export default function AdminSubmissionsPage() {
             const data = await res.json()
 
             if (res.ok) {
-                toast.success(`Einreichung zurückgesetzt`)
+                showToast("success", "Einreichung zurückgesetzt")
                 await mutate()
             } else {
-                toast.error(data.error || "Fehler beim Zurücksetzen")
+                showToast("error", data.error || "Fehler beim Zurücksetzen")
             }
         } catch (error) {
             console.error("Error resetting submission:", error)
-            toast.error("Fehler beim Zurücksetzen")
+            showToast("error", "Fehler beim Zurücksetzen")
         } finally {
             setProcessing(false)
         }
@@ -396,12 +396,12 @@ export default function AdminSubmissionsPage() {
                 const data = await res.json()
                 setPreviewData(data)
             } else {
-                toast.error("Fehler beim Laden der Vorschau")
+                showToast("error", "Fehler beim Laden der Vorschau")
                 setShowPreviewModal(false)
             }
         } catch (error) {
             console.error("Error loading preview:", error)
-            toast.error("Fehler beim Laden der Vorschau")
+            showToast("error", "Fehler beim Laden der Vorschau")
             setShowPreviewModal(false)
         } finally {
             setPreviewLoading(false)
@@ -422,7 +422,7 @@ export default function AdminSubmissionsPage() {
 
     const handleDeleteSubmission = async (submission: Submission) => {
         if (!submission.id) {
-            toast.error("Submission-ID fehlt")
+            showToast("error", "Submission-ID fehlt")
             return
         }
 
@@ -443,14 +443,14 @@ export default function AdminSubmissionsPage() {
             const data = await res.json()
 
             if (res.ok) {
-                toast.success("Stundennachweis erfolgreich gelöscht")
+                showToast("success", "Stundennachweis erfolgreich gelöscht")
                 await mutate()
             } else {
-                toast.error(data.error || "Fehler beim Löschen")
+                showToast("error", data.error || "Fehler beim Löschen")
             }
         } catch (error) {
             console.error("Error deleting submission:", error)
-            toast.error("Fehler beim Löschen")
+            showToast("error", "Fehler beim Löschen")
         } finally {
             setProcessing(false)
         }

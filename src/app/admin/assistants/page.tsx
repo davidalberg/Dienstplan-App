@@ -6,7 +6,7 @@ import {
     Users, Edit2, Trash2, X, Save, Search,
     GripVertical, UserPlus, ChevronDown, ChevronRight
 } from "lucide-react"
-import { toast } from "sonner"
+import { showToast } from "@/lib/toast-utils"
 import { useClients, useAdminEmployees } from "@/hooks/use-admin-data"
 
 interface Employee {
@@ -266,11 +266,11 @@ function AssistantsContent() {
             const targetName = toClientId
                 ? clients.find(c => c.id === toClientId)?.firstName + " " + clients.find(c => c.id === toClientId)?.lastName
                 : "Ohne Klient"
-            toast.success(`${employee.name || employee.email} → ${targetName}`)
+            showToast("success", `${employee.name || employee.email} → ${targetName}`)
         } catch {
             // Rollback on error
             mutateEmployees()
-            toast.error("Fehler beim Verschieben")
+            showToast("error", "Fehler beim Verschieben")
         }
     }
 
@@ -331,21 +331,21 @@ function AssistantsContent() {
                 throw new Error("Failed to reorder")
             }
 
-            toast.success("Reihenfolge gespeichert")
+            showToast("success", "Reihenfolge gespeichert")
         } catch {
             // Rollback on error
             mutateClients()
-            toast.error("Fehler beim Speichern der Reihenfolge")
+            showToast("error", "Fehler beim Speichern der Reihenfolge")
         }
     }
 
     const handleCreateEmployee = async () => {
         if (!employeeForm.email || !employeeForm.name) {
-            toast.error("Email und Name sind erforderlich")
+            showToast("error", "Email und Name sind erforderlich")
             return
         }
         if (!employeeForm.password) {
-            toast.error("Passwort ist erforderlich")
+            showToast("error", "Passwort ist erforderlich")
             return
         }
 
@@ -357,22 +357,22 @@ function AssistantsContent() {
             })
 
             if (res.ok) {
-                toast.success("Assistent erstellt")
+                showToast("success", "Assistent erstellt")
                 setShowCreateEmployee(false)
                 resetEmployeeForm()
                 mutateEmployees()
             } else {
                 const err = await res.json()
-                toast.error(err.error)
+                showToast("error", err.error)
             }
         } catch {
-            toast.error("Fehler beim Erstellen")
+            showToast("error", "Fehler beim Erstellen")
         }
     }
 
     const handleEditEmployee = async () => {
         if (!employeeForm.email || !employeeForm.name) {
-            toast.error("Email und Name sind erforderlich")
+            showToast("error", "Email und Name sind erforderlich")
             return
         }
 
@@ -384,16 +384,16 @@ function AssistantsContent() {
             })
 
             if (res.ok) {
-                toast.success("Assistent aktualisiert")
+                showToast("success", "Assistent aktualisiert")
                 setShowEditEmployee(null)
                 resetEmployeeForm()
                 mutateEmployees()
             } else {
                 const err = await res.json()
-                toast.error(err.error)
+                showToast("error", err.error)
             }
         } catch {
-            toast.error("Fehler beim Speichern")
+            showToast("error", "Fehler beim Speichern")
         }
     }
 
@@ -406,14 +406,14 @@ function AssistantsContent() {
             })
 
             if (res.ok) {
-                toast.success("Assistent gelöscht")
+                showToast("success", "Assistent gelöscht")
                 mutateEmployees()
             } else {
                 const err = await res.json()
-                toast.error(err.error)
+                showToast("error", err.error)
             }
         } catch {
-            toast.error("Fehler beim Löschen")
+            showToast("error", "Fehler beim Löschen")
         }
     }
 
@@ -422,7 +422,7 @@ function AssistantsContent() {
         const fullEmployee = allEmployees.find(e => e.id === employee.id)
 
         if (!fullEmployee) {
-            toast.error("Mitarbeiter nicht gefunden")
+            showToast("error", "Mitarbeiter nicht gefunden")
             return
         }
 
@@ -865,18 +865,18 @@ function AssistantsContent() {
                                                 <label className="flex items-center gap-2 cursor-pointer min-w-[180px]">
                                                     <input
                                                         type="checkbox"
-                                                        checked={(employeeForm as any)[item.enabled]}
+                                                        checked={(employeeForm as Record<string, boolean | number | string>)[item.enabled] as boolean}
                                                         onChange={(e) => setEmployeeForm({ ...employeeForm, [item.enabled]: e.target.checked })}
                                                         className="w-4 h-4 text-blue-600 rounded"
                                                     />
                                                     <span className="text-sm text-neutral-300">{item.label}</span>
                                                 </label>
-                                                {(employeeForm as any)[item.enabled] && (
+                                                {(employeeForm as Record<string, boolean | number | string>)[item.enabled] && (
                                                     <div className="flex items-center gap-2">
                                                         <input
                                                             type="number"
                                                             step="0.1"
-                                                            value={(employeeForm as any)[item.percent]}
+                                                            value={(employeeForm as Record<string, boolean | number | string>)[item.percent] as number}
                                                             onChange={(e) => setEmployeeForm({ ...employeeForm, [item.percent]: parseFloat(e.target.value) || 0 })}
                                                             className="w-20 px-3 py-1 bg-neutral-800 border border-neutral-700 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         />

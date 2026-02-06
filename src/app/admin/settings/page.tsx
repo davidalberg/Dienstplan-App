@@ -16,7 +16,7 @@ import {
     RefreshCw,
     Database
 } from "lucide-react"
-import { toast } from "sonner"
+import { showToast } from "@/lib/toast-utils"
 
 type ActivityType = "INFO" | "WARNING" | "ERROR" | "SUCCESS"
 type ActivityCategory = "SHIFT" | "SUBMISSION" | "CLIENT" | "EMPLOYEE" | "SYSTEM"
@@ -111,11 +111,11 @@ export default function SettingsPage() {
                 setOrphanedTeams(data.orphanedTeams || [])
                 setStats(data.stats)
             } else {
-                toast.error("Fehler beim Laden der Teams")
+                showToast("error", "Fehler beim Laden der Teams")
             }
         } catch (err) {
             console.error(err)
-            toast.error("Fehler beim Laden")
+            showToast("error", "Fehler beim Laden")
         } finally {
             setDbLoading(false)
         }
@@ -138,14 +138,14 @@ export default function SettingsPage() {
 
             if (res.ok) {
                 const data = await res.json()
-                toast.success(`${data.deletedCount} Teams gelöscht`)
+                showToast("success", `${data.deletedCount} Teams gelöscht`)
                 loadOrphanedTeams()
             } else {
                 const err = await res.json()
-                toast.error(err.error)
+                showToast("error", err.error)
             }
         } catch {
-            toast.error("Fehler beim Löschen")
+            showToast("error", "Fehler beim Löschen")
         } finally {
             setDbLoading(false)
         }
@@ -159,10 +159,10 @@ export default function SettingsPage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            toast.success(`${data.deleted} Einträge gelöscht`)
+            showToast("success", `${data.deleted} Einträge gelöscht`)
             mutate()
         } catch {
-            toast.error("Fehler beim Löschen")
+            showToast("error", "Fehler beim Löschen")
         }
     }
 
@@ -188,7 +188,7 @@ export default function SettingsPage() {
         })
     }
 
-    const parseDetails = (details: string | null): Record<string, any> | null => {
+    const parseDetails = (details: string | null): Record<string, unknown> | null => {
         if (!details) return null
         try {
             return JSON.parse(details)
@@ -339,7 +339,7 @@ export default function SettingsPage() {
                                                         <div className="mt-2 text-sm text-neutral-400 bg-neutral-800/50 rounded p-2 font-mono">
                                                             {details.error ? (
                                                                 <span className="text-red-400">
-                                                                    {details.error}
+                                                                    {String(details.error)}
                                                                 </span>
                                                             ) : (
                                                                 <pre className="whitespace-pre-wrap">
@@ -423,9 +423,9 @@ export default function SettingsPage() {
                                         Team-Namen korrigieren
                                     </h2>
                                     <p className="text-neutral-400 text-sm mb-4">
-                                        Entfernt "Team " Präfix aus Team-Namen und löscht fehlerhafte DienstplanConfigs.
+                                        Entfernt &quot;Team &quot; Präfix aus Team-Namen und löscht fehlerhafte DienstplanConfigs.
                                         <br />
-                                        <span className="text-yellow-400">⚠️ Führe dies aus wenn "Klient-Zuordnung fehlt" Fehler auftreten!</span>
+                                        <span className="text-yellow-400">⚠️ Führe dies aus wenn &quot;Klient-Zuordnung fehlt&quot; Fehler auftreten!</span>
                                     </p>
                                     <button
                                         onClick={async () => {
@@ -443,13 +443,13 @@ export default function SettingsPage() {
                                                 const result = await res.json();
 
                                                 if (res.ok) {
-                                                    toast.success(`✅ ${result.results.fixed} Team-Namen korrigiert!`);
+                                                    showToast("success", `${result.results.fixed} Team-Namen korrigiert!`);
                                                     setTimeout(() => window.location.reload(), 1500);
                                                 } else {
-                                                    toast.error(result.error || 'Fehler beim Korrigieren');
+                                                    showToast("error", result.error || 'Fehler beim Korrigieren');
                                                 }
                                             } catch (err) {
-                                                toast.error('Netzwerkfehler');
+                                                showToast("error", 'Netzwerkfehler');
                                             } finally {
                                                 btn.disabled = false;
                                                 btn.textContent = 'Jetzt korrigieren';
@@ -476,7 +476,7 @@ export default function SettingsPage() {
                                     <p className="text-neutral-400 text-sm mb-4">
                                         Behebt NULL clientId in TeamSubmissions durch Zuordnung über Mitarbeiter-Teams.
                                         <br />
-                                        <span className="text-red-400 font-semibold">🚨 KRITISCH: Führe dies aus wenn "Klient-Zuordnung fehlt für diese Einreichung" auftritt!</span>
+                                        <span className="text-red-400 font-semibold">🚨 KRITISCH: Führe dies aus wenn &quot;Klient-Zuordnung fehlt für diese Einreichung&quot; auftritt!</span>
                                     </p>
                                     <button
                                         onClick={async () => {
@@ -494,16 +494,16 @@ export default function SettingsPage() {
                                                 const result = await res.json();
 
                                                 if (res.ok) {
-                                                    toast.success(`✅ ${result.results.fixed} Submission(s) repariert!`);
+                                                    showToast("success", `${result.results.fixed} Submission(s) repariert!`);
                                                     if (result.results.skipped > 0) {
-                                                        toast.warning(`⚠️ ${result.results.skipped} konnten nicht repariert werden`);
+                                                        showToast("warning", `${result.results.skipped} konnten nicht repariert werden`);
                                                     }
                                                     setTimeout(() => window.location.reload(), 1500);
                                                 } else {
-                                                    toast.error(result.error || 'Fehler beim Reparieren');
+                                                    showToast("error", result.error || 'Fehler beim Reparieren');
                                                 }
                                             } catch (err) {
-                                                toast.error('Netzwerkfehler');
+                                                showToast("error", 'Netzwerkfehler');
                                             } finally {
                                                 btn.disabled = false;
                                                 btn.textContent = '🚨 JETZT REPARIEREN';

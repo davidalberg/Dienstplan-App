@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
 
         const body = await req.json()
         const { month, year } = body
-        const user = session.user as any
+        const user = session.user
 
         if (user.role !== "EMPLOYEE") {
             return NextResponse.json({ error: "Only employees can submit their month" }, { status: 403 })
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[POST /api/timesheets/submit] Error:", error)
         return NextResponse.json(
             { error: "Internal server error" },

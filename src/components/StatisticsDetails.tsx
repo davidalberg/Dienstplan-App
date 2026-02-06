@@ -4,14 +4,14 @@ import { Moon, Sun, Calendar, Shield, HeartPulse, Palmtree } from "lucide-react"
 
 interface StatisticsDetailsProps {
   stats: {
-    nightHours: number
-    sundayHours: number
-    holidayHours: number
-    backupDays: number
-    sickDays: number
-    sickHours: number
-    vacationDays: number
-    vacationHours: number
+    nightHours?: number
+    sundayHours?: number
+    holidayHours?: number
+    backupDays?: number
+    sickDays?: number
+    sickHours?: number
+    vacationDays?: number
+    vacationHours?: number
   }
   variant?: 'compact' | 'detailed'
 }
@@ -20,43 +20,52 @@ export default function StatisticsDetails({
   stats,
   variant = 'compact'
 }: StatisticsDetailsProps) {
+  const nightHours = stats.nightHours ?? 0
+  const sundayHours = stats.sundayHours ?? 0
+  const holidayHours = stats.holidayHours ?? 0
+  const backupDays = stats.backupDays ?? 0
+  const sickDays = stats.sickDays ?? 0
+  const sickHours = stats.sickHours ?? 0
+  const vacationDays = stats.vacationDays ?? 0
+  const vacationHours = stats.vacationHours ?? 0
+
   if (variant === 'compact') {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
         <StatItem
           icon={<Moon size={16} />}
           label="Nachtstunden"
-          value={`${stats.nightHours.toFixed(1)} Std`}
+          value={`${nightHours.toFixed(1)} Std`}
           color="purple"
         />
         <StatItem
           icon={<Sun size={16} />}
           label="Sonntagsstunden"
-          value={`${stats.sundayHours.toFixed(1)} Std`}
+          value={`${sundayHours.toFixed(1)} Std`}
           color="blue"
         />
         <StatItem
           icon={<Calendar size={16} />}
           label="Feiertagsstunden"
-          value={`${stats.holidayHours.toFixed(1)} Std`}
+          value={`${holidayHours.toFixed(1)} Std`}
           color="red"
         />
         <StatItem
           icon={<Shield size={16} />}
           label="BackUp-Tage"
-          value={stats.backupDays}
+          value={backupDays}
           color="orange"
         />
         <StatItem
           icon={<HeartPulse size={16} />}
           label="Krankmeldung"
-          value={`${stats.sickDays} Tage (${stats.sickHours.toFixed(1)} Std)`}
+          value={`${sickDays} Tage (${sickHours.toFixed(1)} Std)`}
           color="red"
         />
         <StatItem
           icon={<Palmtree size={16} />}
           label="Urlaub"
-          value={`${stats.vacationDays} Tage (${stats.vacationHours.toFixed(1)} Std)`}
+          value={`${vacationDays} Tage (${vacationHours.toFixed(1)} Std)`}
           color="green"
         />
       </div>
@@ -69,36 +78,36 @@ export default function StatisticsDetails({
       <div className="grid grid-cols-3 gap-6">
         <DetailCard
           label="Nachtstunden"
-          value={`${stats.nightHours.toFixed(1)} Std`}
+          value={`${nightHours.toFixed(1)} Std`}
           color="purple"
         />
         <DetailCard
           label="Sonntagsstunden"
-          value={`${stats.sundayHours.toFixed(1)} Std`}
+          value={`${sundayHours.toFixed(1)} Std`}
           color="blue"
         />
         <DetailCard
           label="Feiertagsstunden"
-          value={`${stats.holidayHours.toFixed(1)} Std`}
+          value={`${holidayHours.toFixed(1)} Std`}
           color="red"
         />
       </div>
       <div className="grid grid-cols-3 gap-6">
         <DetailCard
           label="Krankmeldung"
-          value={`${stats.sickDays} Tage`}
-          subValue={`${stats.sickHours.toFixed(1)} Std`}
+          value={`${sickDays} Tage`}
+          subValue={`${sickHours.toFixed(1)} Std`}
           color="red"
         />
         <DetailCard
           label="Urlaub"
-          value={`${stats.vacationDays} Tage`}
-          subValue={`${stats.vacationHours.toFixed(1)} Std`}
+          value={`${vacationDays} Tage`}
+          subValue={`${vacationHours.toFixed(1)} Std`}
           color="green"
         />
         <DetailCard
           label="BackUp-Tage"
-          value={stats.backupDays}
+          value={backupDays}
           color="orange"
         />
       </div>

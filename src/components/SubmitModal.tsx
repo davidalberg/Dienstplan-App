@@ -31,6 +31,56 @@ interface SubmissionData {
     message?: string
 }
 
+interface TimesheetPreview {
+    id?: string
+    date: string
+    plannedStart: string | null
+    plannedEnd: string | null
+    actualStart: string | null
+    actualEnd: string | null
+    shiftType?: string | null
+    notes?: string | null
+    team?: {
+        client?: {
+            firstName: string
+            lastName: string
+        }
+    }
+}
+
+interface SignResponse {
+    allSigned?: boolean
+    totalCount?: number
+    signedCount?: number
+    pendingCount?: number
+    message?: string
+    warning?: string
+    employees?: Employee[]
+}
+
+interface SubmissionApiResponse {
+    submission: { id: string }
+    error?: string
+    isTeamSubmission?: boolean
+    totalCount?: number
+    signedCount?: number
+    allEmployees?: Employee[]
+    signedEmployees?: Employee[]
+    currentUserSigned?: boolean
+    message?: string
+}
+
+interface SignApiResponse {
+    allSigned?: boolean
+    totalCount?: number
+    signedCount?: number
+    pendingCount?: number
+    message?: string
+    warning?: string
+    employees?: Employee[]
+    error?: string
+}
+
 const MONTH_NAMES = [
     "Januar", "Februar", "März", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember"
@@ -64,8 +114,8 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
     const [error, setError] = useState<string | null>(null)
     const [submissionId, setSubmissionId] = useState<string | null>(null)
     const [submissionData, setSubmissionData] = useState<SubmissionData | null>(null)
-    const [signResponse, setSignResponse] = useState<any>(null)
-    const [timesheets, setTimesheets] = useState<any[]>([])
+    const [signResponse, setSignResponse] = useState<SignResponse | null>(null)
+    const [timesheets, setTimesheets] = useState<TimesheetPreview[]>([])
     const [totalHours, setTotalHours] = useState(0)
     const [clientName, setClientName] = useState<string>("Klient")
 
@@ -84,7 +134,7 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
                 setTimesheets(sheets)
 
                 // Berechne Gesamtstunden
-                const total = sheets.reduce((sum: number, ts: any) => {
+                const total = sheets.reduce((sum: number, ts: TimesheetPreview) => {
                     const hours = calculateHours(ts)
                     return sum + hours
                 }, 0)
@@ -134,7 +184,7 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
 
             console.log("[SubmitModal] Response status:", res.status, res.statusText)
 
-            let data: any
+            let data: SubmissionApiResponse
             try {
                 const responseText = await res.text()
                 console.log("[SubmitModal] Raw response text:", responseText.substring(0, 500))
@@ -158,11 +208,12 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
             setSubmissionId(data.submission.id)
             setSubmissionData(data)
             setStep("signature")
-        } catch (err: any) {
-            console.error("[SubmitModal] CATCH block - Network/Fetch error:", err)
-            console.error("[SubmitModal] Error name:", err?.name)
-            console.error("[SubmitModal] Error message:", err?.message)
-            console.error("[SubmitModal] Error stack:", err?.stack)
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err))
+            console.error("[SubmitModal] CATCH block - Network/Fetch error:", error)
+            console.error("[SubmitModal] Error name:", error.name)
+            console.error("[SubmitModal] Error message:", error.message)
+            console.error("[SubmitModal] Error stack:", error.stack)
             setError("Netzwerkfehler. Bitte erneut versuchen.")
             setStep("error")
         }
@@ -192,7 +243,7 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
 
             console.log("[SubmitModal] Sign response status:", res.status, res.statusText)
 
-            let data: any
+            let data: SignApiResponse
             try {
                 const responseText = await res.text()
                 console.log("[SubmitModal] Sign raw response text:", responseText.substring(0, 500))
@@ -232,11 +283,12 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
             }
 
             // Parent component handles refresh via onSuccess() in handleClose()
-        } catch (err: any) {
-            console.error("[SubmitModal] CATCH block - Sign Network/Fetch error:", err)
-            console.error("[SubmitModal] Sign Error name:", err?.name)
-            console.error("[SubmitModal] Sign Error message:", err?.message)
-            console.error("[SubmitModal] Sign Error stack:", err?.stack)
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err))
+            console.error("[SubmitModal] CATCH block - Sign Network/Fetch error:", error)
+            console.error("[SubmitModal] Sign Error name:", error.name)
+            console.error("[SubmitModal] Sign Error message:", error.message)
+            console.error("[SubmitModal] Sign Error stack:", error.stack)
             setError("Netzwerkfehler. Bitte erneut versuchen.")
             setStep("error")
         }
@@ -514,14 +566,14 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
                                             Der Assistenznehmer wurde per E-Mail benachrichtigt und kann nun gegenzeichnen.
                                         </p>
                                     </div>
-                                ) : signResponse?.totalCount > 1 ? (
+                                ) : (signResponse?.totalCount ?? 0) > 1 ? (
                                     // Not all employees have signed yet
                                     <div className="space-y-2">
                                         <p className="text-sm text-gray-600 mt-1">
                                             Ihre Unterschrift wurde gespeichert.
                                         </p>
                                         <p className="text-sm text-amber-700 font-medium">
-                                            Warten auf {signResponse.pendingCount || (signResponse.totalCount - signResponse.signedCount)} weitere Teammitglieder.
+                                            Warten auf {signResponse?.pendingCount || ((signResponse?.totalCount ?? 0) - (signResponse?.signedCount ?? 0))} weitere Teammitglieder.
                                         </p>
                                         <div className="rounded-lg bg-gray-50 p-3 mt-3 text-left">
                                             <p className="text-xs text-gray-500 mb-2">Status:</p>

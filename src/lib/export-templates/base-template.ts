@@ -8,7 +8,7 @@
 export interface ExportColumn {
     header: string
     field: string // Nested path supported: "employee.name", "timesheet.date"
-    transform?: (value: any, row?: any) => string // Optional transformation function
+    transform?: (value: unknown, row?: Record<string, unknown>) => string // Optional transformation function
 }
 
 export interface ExportOptions {
@@ -31,15 +31,15 @@ export interface ExportTemplate {
  * Helper function to get nested field value from object
  * Supports dot notation: "employee.name", "team.client.fullName"
  */
-export function getNestedValue(obj: any, path: string): any {
+export function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
     if (!path || !obj) return null
 
     const parts = path.split(".")
-    let value = obj
+    let value: unknown = obj
 
     for (const part of parts) {
         if (value === null || value === undefined) return null
-        value = value[part]
+        value = (value as Record<string, unknown>)[part]
     }
 
     return value

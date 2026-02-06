@@ -38,6 +38,9 @@ model User {
   holidayPremiumEnabled    Boolean      @default(true)
   holidayPremiumPercent    Float        @default(125)
 
+  // Arbeitszeit-Soll
+  weeklyHours              Float?       @default(40)
+
   // Dienstplan-Zuweisung
   assignedSheetId          String?
   assignedPlanTab          String?
@@ -115,6 +118,8 @@ model Timesheet {
   @@index([teamId, month, year])     // ✅ PERFORMANCE FIX: Alternative für team-based queries
   @@index([absenceType, month, year]) // ✅ PERFORMANCE: Für Urlaub/Krank-Reports
   @@index([status, month, year])      // ✅ PERFORMANCE: Für Submissions-Filter
+  @@index([employeeId])               // ✅ PERFORMANCE: Für Employee-Dashboard Queries
+  @@index([sheetFileName, month, year]) // ✅ PERFORMANCE: Für Dienstplan-Lookups
 }
 
 model AuditLog {
@@ -281,6 +286,7 @@ model ActivityLog {
   @@index([createdAt])
   @@index([type])
   @@index([category])
+  @@index([userId, createdAt])  // ✅ PERFORMANCE: Für User-spezifische Aktivitäts-Abfragen
 }
 
 // Urlaubsantrag - Integration mit Urlaubs-App

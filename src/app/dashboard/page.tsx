@@ -10,6 +10,57 @@ import MonthlySummary from "@/components/MonthlySummary"
 import { ChevronDown, ChevronRight, Shield } from "lucide-react"
 import { formatTimeRange } from "@/lib/time-utils"
 
+interface DashboardClient {
+    id: string
+    firstName: string
+    lastName: string
+    email: string | null
+    phone: string | null
+    state: string | null
+    isActive: boolean
+}
+
+interface DashboardTeam {
+    id: string
+    name: string
+    assistantRecipientEmail: string | null
+    assistantRecipientName: string | null
+    clientId: string | null
+    client: DashboardClient | null
+}
+
+interface DashboardTimesheet {
+    id: string
+    date: string
+    plannedStart: string | null
+    plannedEnd: string | null
+    actualStart: string | null
+    actualEnd: string | null
+    breakMinutes: number
+    note: string | null
+    absenceType: string | null
+    status: string
+    employeeId: string
+    teamId: string | null
+    month: number
+    year: number
+    lastUpdatedAt: string
+    lastUpdatedBy: string | null
+    source: string | null
+    sheetFileName: string | null
+    backupEmployeeId: string | null
+    team: DashboardTeam | null
+    employee: { name: string | null }
+}
+
+interface BackupShift {
+    id: string
+    date: string
+    plannedStart: string | null
+    plannedEnd: string | null
+    employeeName: string
+}
+
 export default function DashboardPage() {
     const { data: session, status } = useSession()
 
@@ -17,8 +68,8 @@ export default function DashboardPage() {
     if (status === "authenticated" && (session?.user as any)?.role === "ADMIN") {
         redirect("/admin")
     }
-    const [timesheets, setTimesheets] = useState<any[]>([])
-    const [potentialBackupShifts, setPotentialBackupShifts] = useState<any[]>([])
+    const [timesheets, setTimesheets] = useState<DashboardTimesheet[]>([])
+    const [potentialBackupShifts, setPotentialBackupShifts] = useState<BackupShift[]>([])
     const [isBackupCollapsed, setIsBackupCollapsed] = useState(true)
     const [loading, setLoading] = useState(true)
     const [currentDate, setCurrentDate] = useState(new Date())
@@ -96,7 +147,7 @@ export default function DashboardPage() {
                 setTimesheets(data.timesheets || data)
                 setPotentialBackupShifts(data.potentialBackupShifts || [])
                 // Restore scroll position after state update
-                setTimeout(() => window.scrollTo(0, scrollY), 0)
+                requestAnimationFrame(() => window.scrollTo(0, scrollY))
             }
         } catch (err) {
             console.error("Failed to fetch timesheets", err)
@@ -201,6 +252,20 @@ export default function DashboardPage() {
                             month={currentDate.getMonth() + 1}
                             year={currentDate.getFullYear()}
                         />
+
+                        {/* Quick Actions */}
+                        <div className="mt-6 grid grid-cols-1 gap-4">
+                            <a
+                                href="/dashboard/vacation"
+                                className="flex items-center justify-between rounded-xl bg-white p-4 shadow-sm border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all"
+                            >
+                                <div>
+                                    <h3 className="font-bold text-black">Urlaubsantrag</h3>
+                                    <p className="text-sm text-gray-600">Urlaubstage beantragen und verwalten</p>
+                                </div>
+                                <ChevronRight size={20} className="text-gray-400" />
+                            </a>
+                        </div>
 
                         {/* Backup-Schichten Sektion (eingeklappt) */}
                         {potentialBackupShifts.length > 0 && (

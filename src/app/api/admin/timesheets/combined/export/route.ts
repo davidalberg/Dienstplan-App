@@ -320,14 +320,14 @@ export async function GET(req: NextRequest) {
             })
 
             // Build Excel data using template
-            const excelData: any[] = sortedTimesheets.map(ts => {
-                const row: any = {}
+            const excelData: Record<string, unknown>[] = sortedTimesheets.map(ts => {
+                const row: Record<string, unknown> = {}
                 for (const col of template.columns) {
-                    let value = getNestedValue(ts, col.field)
+                    let value = getNestedValue(ts as unknown as Record<string, unknown>, col.field)
 
                     // Apply transformation if defined
                     if (col.transform) {
-                        value = col.transform(value, ts)
+                        value = col.transform(value, ts as unknown as Record<string, unknown>)
                     }
 
                     row[col.header] = value
@@ -336,7 +336,7 @@ export async function GET(req: NextRequest) {
             })
 
             // Add totals row - use field-based lookup instead of index-based
-            const totalsRow: any = {}
+            const totalsRow: Record<string, unknown> = {}
             const hoursColumnIndex = template.columns.findIndex(col => col.field === "hours")
 
             for (let i = 0; i < template.columns.length; i++) {
@@ -354,7 +354,7 @@ export async function GET(req: NextRequest) {
             excelData.push(totalsRow)
 
             // Add empty row
-            const emptyRow: any = {}
+            const emptyRow: Record<string, unknown> = {}
             for (const col of template.columns) {
                 emptyRow[col.header] = ""
             }
@@ -366,7 +366,7 @@ export async function GET(req: NextRequest) {
             for (const emp of employees) {
                 const stats = employeeStatsMap.get(emp.id)
                 if (stats) {
-                    const empRow: any = {}
+                    const empRow: Record<string, unknown> = {}
                     const displayName = anonymizeName(emp.name || "Unbekannt")
                     for (let i = 0; i < template.columns.length; i++) {
                         const col = template.columns[i]

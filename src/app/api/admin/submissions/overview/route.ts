@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
             where: {
                 month,
                 year,
-                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED"] }
+                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
             },
             select: {
                 id: true,

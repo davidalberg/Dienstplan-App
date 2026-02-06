@@ -13,7 +13,7 @@ export const standardTemplate: ExportTemplate = {
         {
             header: "Datum",
             field: "date",
-            transform: (value) => formatDate(value, "DD.MM.YYYY")
+            transform: (value) => formatDate(value as string | Date, "DD.MM.YYYY")
         },
         {
             header: "Wochentag",
@@ -26,22 +26,22 @@ export const standardTemplate: ExportTemplate = {
         {
             header: "Geplant Start",
             field: "plannedStart",
-            transform: (value) => value || "-"
+            transform: (value) => (value as string) || "-"
         },
         {
             header: "Geplant Ende",
             field: "plannedEnd",
-            transform: (value) => value || "-"
+            transform: (value) => (value as string) || "-"
         },
         {
             header: "Tatsächlich Start",
             field: "actualStart",
-            transform: (value) => value || "-"
+            transform: (value) => (value as string) || "-"
         },
         {
             header: "Tatsächlich Ende",
             field: "actualEnd",
-            transform: (value) => value || "-"
+            transform: (value) => (value as string) || "-"
         },
         {
             header: "Stunden",
@@ -49,13 +49,13 @@ export const standardTemplate: ExportTemplate = {
             transform: (value, row) => {
                 if (row?.absenceType === "SICK") return "Krank"
                 if (row?.absenceType === "VACATION") return "Urlaub"
-                return formatNumber(value, ".", 2)
+                return formatNumber(value as number, ".", 2)
             }
         },
         {
             header: "Bemerkung",
             field: "note",
-            transform: (value) => value || ""
+            transform: (value) => (value as string) || ""
         }
     ],
     options: {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { logActivity } from "@/lib/activity-logger"
 
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
     const startTime = performance.now()
 
     const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
+    if (!session?.user || session.user.role !== "ADMIN") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const where: any = { month, year }
+        const where: Prisma.TimesheetWhereInput = { month, year }
         if (teamId) {
             where.teamId = teamId
         }
@@ -180,7 +181,7 @@ export async function GET(req: NextRequest) {
         console.log(`[API] GET /api/admin/schedule - ${duration}ms (${shifts.length} shifts, ${employees.length} employees)`)
 
         return NextResponse.json({ shifts, employees, teams })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[GET /api/admin/schedule] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
@@ -189,7 +190,7 @@ export async function GET(req: NextRequest) {
 // POST - Neue Schicht erstellen
 export async function POST(req: NextRequest) {
     const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
+    if (!session?.user || session.user.role !== "ADMIN") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -461,7 +462,7 @@ export async function POST(req: NextRequest) {
         })
 
         return NextResponse.json({ ...rawShift, backupEmployee })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[POST /api/admin/schedule] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
@@ -470,7 +471,7 @@ export async function POST(req: NextRequest) {
 // PUT - Schicht bearbeiten
 export async function PUT(req: NextRequest) {
     const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
+    if (!session?.user || session.user.role !== "ADMIN") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -526,7 +527,7 @@ export async function PUT(req: NextRequest) {
         })
 
         return NextResponse.json({ ...rawShift, backupEmployee })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[PUT /api/admin/schedule] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
@@ -535,7 +536,7 @@ export async function PUT(req: NextRequest) {
 // DELETE - Schicht löschen
 export async function DELETE(req: NextRequest) {
     const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
+    if (!session?.user || session.user.role !== "ADMIN") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -620,7 +621,7 @@ export async function DELETE(req: NextRequest) {
         })
 
         return NextResponse.json({ success: true })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[DELETE /api/admin/schedule] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }

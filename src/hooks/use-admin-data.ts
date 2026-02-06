@@ -10,7 +10,7 @@ const fetcher = (url: string) => fetch(url).then(res => {
 const swrConfig = {
     revalidateOnFocus: false,       // NICHT bei jedem Tab-Wechsel
     revalidateOnReconnect: false,   // Kein Refetch bei Reconnect
-    dedupingInterval: 600000,       // 10 MINUTEN Cache - verhindert doppelte Requests
+    dedupingInterval: 60000,        // 1 MINUTE Cache - verhindert doppelte Requests
     revalidateIfStale: false,       // Kein Background-Refetch
     keepPreviousData: true,         // Show cached data while loading new data (better UX)
     errorRetryInterval: 5000,       // Retry failed requests after 5s
@@ -148,7 +148,7 @@ export function useActivityLog(limit = 50, type?: string, category?: string) {
         fetcher,
         {
             ...swrConfig,
-            refreshInterval: 30000, // Auto-refresh alle 30 Sekunden
+            refreshInterval: 300000, // Auto-refresh alle 5 Minuten
         }
     )
 

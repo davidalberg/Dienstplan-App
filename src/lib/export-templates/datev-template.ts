@@ -20,7 +20,7 @@ export const datevTemplate: ExportTemplate = {
         {
             header: "Personalnummer",
             field: "employeeId",
-            transform: (value) => value || ""
+            transform: (value) => (value as string) || ""
         },
         {
             header: "Name",
@@ -29,14 +29,14 @@ export const datevTemplate: ExportTemplate = {
         {
             header: "Datum",
             field: "date",
-            transform: (value) => formatDate(value, "DD.MM.YYYY")
+            transform: (value) => formatDate(value as string | Date, "DD.MM.YYYY")
         },
         {
             header: "Von",
             field: "actualStart",
             transform: (value, row) => {
                 if (row?.absenceType) return ""
-                return value || row?.plannedStart || ""
+                return (value as string) || (row?.plannedStart as string) || ""
             }
         },
         {
@@ -44,7 +44,7 @@ export const datevTemplate: ExportTemplate = {
             field: "actualEnd",
             transform: (value, row) => {
                 if (row?.absenceType) return ""
-                return value || row?.plannedEnd || ""
+                return (value as string) || (row?.plannedEnd as string) || ""
             }
         },
         {
@@ -53,7 +53,7 @@ export const datevTemplate: ExportTemplate = {
             transform: (value, row) => {
                 if (row?.absenceType === "SICK") return "0"
                 if (row?.absenceType === "VACATION") return "0"
-                return formatNumber(value, ",", 2) // German comma separator
+                return formatNumber(value as number, ",", 2) // German comma separator
             }
         },
         {
@@ -72,7 +72,7 @@ export const datevTemplate: ExportTemplate = {
         {
             header: "Bemerkung",
             field: "note",
-            transform: (value) => value || ""
+            transform: (value) => (value as string) || ""
         }
     ],
     options: {
