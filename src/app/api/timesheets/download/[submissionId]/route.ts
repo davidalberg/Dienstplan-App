@@ -62,7 +62,7 @@ export async function GET(
                 sheetFileName: teamSubmission.sheetFileName,
                 month: teamSubmission.month,
                 year: teamSubmission.year,
-                status: { in: ["SUBMITTED", "COMPLETED"] }
+                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
             },
             include: {
                 employee: {
@@ -165,15 +165,27 @@ export async function GET(
         })
 
         // Prepare employee stats for the PDF
-        const employeeStats = allEmployeeData.map(empData => ({
-            employeeId: empData.employee.id,
-            employeeName: empData.employee.name || empData.employee.email,
-            totalHours: empData.stats.totalHours,
-            plannedHours: empData.stats.totalHours,
-            workDays: empData.timesheets.filter((ts: any) => !ts.absenceType).length,
-            sickDays: empData.timesheets.filter((ts: any) => ts.absenceType === "SICK").length,
-            vacationDays: empData.timesheets.filter((ts: any) => ts.absenceType === "VACATION").length
-        }))
+        const employeeStats = allEmployeeData.map(empData => {
+            // Calculate planned hours from planned times
+            let plannedHours = 0
+            for (const ts of empData.timesheets) {
+                if (ts.plannedStart && ts.plannedEnd && !ts.absenceType) {
+                    const minutes = calculateMinutesBetween(ts.plannedStart, ts.plannedEnd)
+                    if (minutes !== null && minutes > 0) {
+                        plannedHours += Math.round(minutes / 60 * 100) / 100
+                    }
+                }
+            }
+            return {
+                employeeId: empData.employee.id,
+                employeeName: empData.employee.name || empData.employee.email,
+                totalHours: empData.stats.totalHours,
+                plannedHours,
+                workDays: empData.timesheets.filter((ts: any) => !ts.absenceType).length,
+                sickDays: empData.timesheets.filter((ts: any) => ts.absenceType === "SICK").length,
+                vacationDays: empData.timesheets.filter((ts: any) => ts.absenceType === "VACATION").length
+            }
+        })
 
         // Generate combined PDF (same format as admin export)
         const pdfBuffer = generateCombinedTeamPdf({

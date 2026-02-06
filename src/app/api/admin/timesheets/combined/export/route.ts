@@ -223,21 +223,27 @@ export async function GET(req: NextRequest) {
         const anonymizeNote = (note: string | null): string | null => {
             if (!note || templateId !== "invoice") return note
             let anonymized = note
-            for (const emp of employees) {
+            // Sort by name length (longest first) to avoid partial overlaps
+            // e.g., "Anna Müller" must be replaced before "Anna"
+            const sortedEmployees = [...employees]
+                .filter(emp => emp.name)
+                .sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0))
+            for (const emp of sortedEmployees) {
                 if (emp.name) {
-                    // Replace full name
-                    anonymized = anonymized.replace(new RegExp(emp.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonymizedNameMap.get(emp.id) || "Assistent")
+                    const anonName = anonymizedNameMap.get(emp.id) || "Assistent"
+                    // Replace full name FIRST (before partial names)
+                    anonymized = anonymized.replace(new RegExp(emp.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonName)
                     // Replace first name only
                     const firstName = emp.name.split(' ')[0]
                     if (firstName && firstName.length > 2) {
-                        anonymized = anonymized.replace(new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonymizedNameMap.get(emp.id) || "Assistent")
+                        anonymized = anonymized.replace(new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonName)
                     }
                     // Replace last name only
                     const nameParts = emp.name.split(' ')
                     if (nameParts.length > 1) {
                         const lastName = nameParts[nameParts.length - 1]
                         if (lastName && lastName.length > 2) {
-                            anonymized = anonymized.replace(new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonymizedNameMap.get(emp.id) || "Assistent")
+                            anonymized = anonymized.replace(new RegExp(lastName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonName)
                         }
                     }
                 }
@@ -511,7 +517,10 @@ export async function GET(req: NextRequest) {
                 if (sig.signature && sig.signedAt) {
                     employeeSignatures.push({
                         employeeId: sig.employeeId,
-                        employeeName: sig.employee.name || "Unbekannt",
+                        // DSGVO: Use anonymized name for invoice template
+                        employeeName: templateId === "invoice"
+                            ? (anonymizedNameMap.get(sig.employeeId) || "Assistent ?")
+                            : (sig.employee.name || "Unbekannt"),
                         signature: sig.signature,
                         signedAt: sig.signedAt
                     })

@@ -59,9 +59,9 @@ export async function POST(
             }, { status: 400 })
         }
 
-        // Update status to PENDING_RECIPIENT
-        await prisma.teamSubmission.update({
-            where: { id },
+        // Atomic update: only update if status is still PENDING_EMPLOYEES (prevents race condition)
+        const updateResult = await prisma.teamSubmission.updateMany({
+            where: { id, status: "PENDING_EMPLOYEES" },
             data: {
                 status: "PENDING_RECIPIENT",
                 manuallyReleasedAt: new Date(),
@@ -69,6 +69,12 @@ export async function POST(
                 releaseNote
             }
         })
+
+        if (updateResult.count === 0) {
+            return NextResponse.json({
+                error: "Diese Einreichung wurde bereits von jemand anderem freigegeben."
+            }, { status: 409 })
+        }
 
         // Send email to recipient with note about manual release
         const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"

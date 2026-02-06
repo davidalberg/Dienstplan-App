@@ -246,12 +246,11 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
         },
         margin: { left: margin, right: margin },
         didDrawPage: (data) => {
-            // Footer on each page
-            const pageCount = doc.internal.pages.length - 1
+            // Footer on each page (without "von X" since total pages is not final during drawing)
             doc.setFontSize(8)
             doc.setFont("helvetica", "normal")
             doc.text(
-                `Seite ${data.pageNumber} von ${pageCount}`,
+                `Seite ${data.pageNumber}`,
                 pageWidth / 2,
                 doc.internal.pageSize.getHeight() - 10,
                 { align: "center" }

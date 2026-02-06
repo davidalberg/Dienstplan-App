@@ -208,13 +208,15 @@ export async function GET(req: NextRequest) {
             // Load employee signature from TeamSubmission
             let employeeSignatureData: { signature: string | null; signedAt: Date | null } | null = null
             if (employeeId) {
+                // Use sheetFileName from timesheets for more reliable matching
+                const sheetFileName = timesheets[0]?.sheetFileName
                 const sig = await prisma.employeeSignature.findFirst({
                     where: {
                         employeeId,
                         teamSubmission: {
                             month,
                             year,
-                            ...(clientId ? { clientId } : {})
+                            ...(sheetFileName ? { sheetFileName } : clientId ? { clientId } : {})
                         }
                     },
                     select: {
@@ -249,9 +251,25 @@ export async function GET(req: NextRequest) {
                     totalHours,                   // Tatsaechlich geleistet (nur CONFIRMED+)
                     plannedHours: totalPlannedHours,  // Geplante Stunden (alle)
                     sickDays: timesheets.filter(ts => ts.absenceType === "SICK").length,
-                    sickHours: 0,
+                    sickHours: timesheets
+                        .filter(ts => ts.absenceType === "SICK")
+                        .reduce((sum, ts) => {
+                            if (ts.plannedStart && ts.plannedEnd) {
+                                const m = calculateMinutesBetween(ts.plannedStart, ts.plannedEnd)
+                                return sum + (m ? Math.round(m / 60 * 100) / 100 : 0)
+                            }
+                            return sum
+                        }, 0),
                     vacationDays: timesheets.filter(ts => ts.absenceType === "VACATION").length,
-                    vacationHours: 0,
+                    vacationHours: timesheets
+                        .filter(ts => ts.absenceType === "VACATION")
+                        .reduce((sum, ts) => {
+                            if (ts.plannedStart && ts.plannedEnd) {
+                                const m = calculateMinutesBetween(ts.plannedStart, ts.plannedEnd)
+                                return sum + (m ? Math.round(m / 60 * 100) / 100 : 0)
+                            }
+                            return sum
+                        }, 0),
                     nightHours: 0,
                     sundayHours: 0,
                     holidayHours: 0

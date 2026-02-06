@@ -45,7 +45,7 @@ export async function GET(
         }
 
         // Check if token is expired
-        if (new Date() > teamSubmission.tokenExpiresAt) {
+        if (teamSubmission.tokenExpiresAt && new Date() > teamSubmission.tokenExpiresAt) {
             return NextResponse.json({ error: "Dieser Link ist abgelaufen" }, { status: 410 })
         }
 
@@ -192,7 +192,7 @@ export async function POST(
         }
 
         // Check if token is expired
-        if (new Date() > teamSubmission.tokenExpiresAt) {
+        if (teamSubmission.tokenExpiresAt && new Date() > teamSubmission.tokenExpiresAt) {
             return NextResponse.json({ error: "Dieser Link ist abgelaufen" }, { status: 410 })
         }
 
