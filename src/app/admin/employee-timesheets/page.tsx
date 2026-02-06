@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { ChevronLeft, ChevronRight, Check, Loader2, FileText } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { useAdminTimesheets } from "@/hooks/use-admin-data"
 import TimesheetDetail from "@/components/TimesheetDetail"
 
@@ -10,17 +10,25 @@ const MONTH_NAMES = [
     "Juli", "August", "September", "Oktober", "November", "Dezember"
 ]
 
+function calcHours(start: string | null, end: string | null): number {
+    if (!start || !end) return 0
+    const [sh, sm] = start.split(":").map(Number)
+    const [eh, em] = end.split(":").map(Number)
+    let minutes = (eh * 60 + em) - (sh * 60 + sm)
+    if (minutes < 0) minutes += 24 * 60
+    return minutes / 60
+}
+
 interface EmployeeRow {
     employeeId: string
     employeeName: string
     clientId: string | null
     clientName: string | null
-    teamName: string | null
-    totalHours: number
+    plannedHours: number
+    actualHours: number
     shiftCount: number
     sickDays: number
     vacationDays: number
-    hasActualTimes: boolean
 }
 
 export default function EmployeeTimesheetsPage() {
@@ -64,12 +72,11 @@ export default function EmployeeTimesheetsPage() {
                     clientName: ts.team?.client
                         ? `${ts.team.client.firstName} ${ts.team.client.lastName}`
                         : null,
-                    teamName: ts.team?.name || null,
-                    totalHours: 0,
+                    plannedHours: 0,
+                    actualHours: 0,
                     shiftCount: 0,
                     sickDays: 0,
                     vacationDays: 0,
-                    hasActualTimes: false,
                 }
                 map.set(key, row)
             }
@@ -81,20 +88,12 @@ export default function EmployeeTimesheetsPage() {
             } else if (ts.absenceType === "VACATION") {
                 row.vacationDays++
             } else {
-                // Calculate hours from actual or planned times
-                const start = ts.actualStart || ts.plannedStart
-                const end = ts.actualEnd || ts.plannedEnd
-                if (start && end) {
-                    const [sh, sm] = start.split(":").map(Number)
-                    const [eh, em] = end.split(":").map(Number)
-                    let minutes = (eh * 60 + em) - (sh * 60 + sm)
-                    if (minutes < 0) minutes += 24 * 60 // overnight
-                    row.totalHours += minutes / 60
+                // Soll = geplante Stunden
+                row.plannedHours += calcHours(ts.plannedStart, ts.plannedEnd)
+                // Ist = tatsaechliche Stunden (falls vorhanden)
+                if (ts.actualStart && ts.actualEnd) {
+                    row.actualHours += calcHours(ts.actualStart, ts.actualEnd)
                 }
-            }
-
-            if (ts.actualStart || ts.actualEnd) {
-                row.hasActualTimes = true
             }
         }
 
@@ -102,6 +101,11 @@ export default function EmployeeTimesheetsPage() {
             a.employeeName.localeCompare(b.employeeName, "de")
         )
     }, [timesheets])
+
+    const totals = useMemo(() => ({
+        planned: employeeRows.reduce((s, r) => s + r.plannedHours, 0),
+        actual: employeeRows.reduce((s, r) => s + r.actualHours, 0),
+    }), [employeeRows])
 
     return (
         <div className="min-h-screen bg-neutral-950 text-white">
@@ -164,89 +168,99 @@ export default function EmployeeTimesheetsPage() {
                                     <th className="px-4 py-3 font-medium">Mitarbeiter</th>
                                     <th className="px-4 py-3 font-medium">Klient</th>
                                     <th className="px-4 py-3 font-medium text-right">Schichten</th>
-                                    <th className="px-4 py-3 font-medium text-right">Stunden</th>
+                                    <th className="px-4 py-3 font-medium text-right">Soll</th>
+                                    <th className="px-4 py-3 font-medium text-right">Ist</th>
                                     <th className="px-4 py-3 font-medium text-center">Abwesenheit</th>
-                                    <th className="px-4 py-3 font-medium text-center">Status</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {employeeRows.map((row) => (
-                                    <tr
-                                        key={row.employeeId}
-                                        onClick={() => {
-                                            if (row.clientId) {
-                                                setSelectedEmployee({
-                                                    employeeId: row.employeeId,
-                                                    clientId: row.clientId,
-                                                })
-                                            }
-                                        }}
-                                        className={`border-b border-neutral-800/50 transition-colors ${
-                                            row.clientId
-                                                ? "hover:bg-neutral-800/50 cursor-pointer"
-                                                : "opacity-60"
-                                        }`}
-                                    >
-                                        {/* Employee name */}
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-semibold">
-                                                    {row.employeeName.charAt(0).toUpperCase()}
+                                {employeeRows.map((row) => {
+                                    const diff = row.actualHours - row.plannedHours
+                                    const hasActual = row.actualHours > 0
+
+                                    return (
+                                        <tr
+                                            key={row.employeeId}
+                                            onClick={() => {
+                                                if (row.clientId) {
+                                                    setSelectedEmployee({
+                                                        employeeId: row.employeeId,
+                                                        clientId: row.clientId,
+                                                    })
+                                                }
+                                            }}
+                                            className={`border-b border-neutral-800/50 transition-colors ${
+                                                row.clientId
+                                                    ? "hover:bg-neutral-800/50 cursor-pointer"
+                                                    : "opacity-60"
+                                            }`}
+                                        >
+                                            {/* Employee name */}
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-semibold">
+                                                        {row.employeeName.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <span className="font-medium">{row.employeeName}</span>
                                                 </div>
-                                                <span className="font-medium">{row.employeeName}</span>
-                                            </div>
-                                        </td>
+                                            </td>
 
-                                        {/* Client */}
-                                        <td className="px-4 py-3 text-neutral-400 text-sm">
-                                            {row.clientName || <span className="text-neutral-600">Kein Klient</span>}
-                                        </td>
+                                            {/* Client */}
+                                            <td className="px-4 py-3 text-neutral-400 text-sm">
+                                                {row.clientName || <span className="text-neutral-600">Kein Klient</span>}
+                                            </td>
 
-                                        {/* Shift count */}
-                                        <td className="px-4 py-3 text-right text-sm tabular-nums">
-                                            {row.shiftCount}
-                                        </td>
+                                            {/* Shift count */}
+                                            <td className="px-4 py-3 text-right text-sm tabular-nums text-neutral-400">
+                                                {row.shiftCount}
+                                            </td>
 
-                                        {/* Hours */}
-                                        <td className="px-4 py-3 text-right font-medium tabular-nums">
-                                            {row.totalHours.toFixed(1)}h
-                                        </td>
+                                            {/* Soll (planned) */}
+                                            <td className="px-4 py-3 text-right tabular-nums text-neutral-400">
+                                                {row.plannedHours.toFixed(1)}h
+                                            </td>
 
-                                        {/* Absence */}
-                                        <td className="px-4 py-3 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                {row.sickDays > 0 && (
-                                                    <span className="px-2 py-0.5 rounded text-xs bg-red-500/20 text-red-400">
-                                                        {row.sickDays} Krank
-                                                    </span>
+                                            {/* Ist (actual) */}
+                                            <td className="px-4 py-3 text-right tabular-nums">
+                                                {hasActual ? (
+                                                    <div>
+                                                        <span className="font-medium text-white">
+                                                            {row.actualHours.toFixed(1)}h
+                                                        </span>
+                                                        {diff !== 0 && (
+                                                            <span className={`ml-1.5 text-xs ${
+                                                                diff > 0 ? "text-emerald-400" : "text-red-400"
+                                                            }`}>
+                                                                {diff > 0 ? "+" : ""}{diff.toFixed(1)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-neutral-600">-</span>
                                                 )}
-                                                {row.vacationDays > 0 && (
-                                                    <span className="px-2 py-0.5 rounded text-xs bg-cyan-500/20 text-cyan-400">
-                                                        {row.vacationDays} Urlaub
-                                                    </span>
-                                                )}
-                                                {row.sickDays === 0 && row.vacationDays === 0 && (
-                                                    <span className="text-neutral-600 text-xs">-</span>
-                                                )}
-                                            </div>
-                                        </td>
+                                            </td>
 
-                                        {/* Status */}
-                                        <td className="px-4 py-3 text-center">
-                                            {row.hasActualTimes ? (
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-medium">
-                                                    <Check className="w-3 h-3" />
-                                                    Erfasst
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-700 text-neutral-400 text-xs">
-                                                    <FileText className="w-3 h-3" />
-                                                    Geplant
-                                                </span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                            {/* Absence */}
+                                            <td className="px-4 py-3 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    {row.sickDays > 0 && (
+                                                        <span className="px-2 py-0.5 rounded text-xs bg-red-500/20 text-red-400">
+                                                            {row.sickDays} Krank
+                                                        </span>
+                                                    )}
+                                                    {row.vacationDays > 0 && (
+                                                        <span className="px-2 py-0.5 rounded text-xs bg-cyan-500/20 text-cyan-400">
+                                                            {row.vacationDays} Urlaub
+                                                        </span>
+                                                    )}
+                                                    {row.sickDays === 0 && row.vacationDays === 0 && (
+                                                        <span className="text-neutral-600 text-xs">-</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
                             </tbody>
                         </table>
 
@@ -255,9 +269,14 @@ export default function EmployeeTimesheetsPage() {
                             <span className="text-neutral-400">
                                 {employeeRows.length} Mitarbeiter
                             </span>
-                            <span className="text-white font-medium tabular-nums">
-                                Gesamt: {employeeRows.reduce((sum, r) => sum + r.totalHours, 0).toFixed(1)}h
-                            </span>
+                            <div className="flex items-center gap-4 tabular-nums">
+                                <span className="text-neutral-400">
+                                    Soll: {totals.planned.toFixed(1)}h
+                                </span>
+                                <span className="text-white font-medium">
+                                    Ist: {totals.actual.toFixed(1)}h
+                                </span>
+                            </div>
                         </div>
                     </div>
                 )}
