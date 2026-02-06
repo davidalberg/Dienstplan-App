@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { useState, useCallback } from "react"
+import { useState } from "react"
 import {
     Calendar,
     FileText,
@@ -55,29 +55,6 @@ export function Sidebar({ onExportClick }: SidebarProps) {
         return pathname.startsWith(href)
     }
 
-    // Prefetch data on hover
-    const prefetchData = useCallback((href: string) => {
-        const now = new Date()
-        const month = now.getMonth() + 1
-        const year = now.getFullYear()
-
-        // Map routes to their API endpoints
-        const routeToApi: Record<string, string> = {
-            "/admin/dashboard": "/api/admin/dashboard",
-            "/admin/schedule": `/api/admin/schedule?month=${month}&year=${year}`,
-            "/admin/assistants": "/api/admin/employees",
-            "/admin/clients": "/api/clients",
-            "/admin/employee-timesheets": `/api/admin/timesheets?month=${month}&year=${year}`,
-            "/admin/timesheets": `/api/admin/timesheets?month=${month}&year=${year}`,
-            "/admin/vacations": `/api/admin/vacations/absences?month=${month}&year=${year}`,
-            "/admin/payroll": `/api/admin/payroll?month=${month}&year=${year}`,
-        }
-
-        const apiUrl = routeToApi[href]
-        if (apiUrl) {
-            fetch(apiUrl).catch(() => {}) // Silent prefetch
-        }
-    }, [])
 
     const NavLink = ({ item }: { item: NavItem }) => {
         const active = isActive(item.href)
@@ -110,7 +87,6 @@ export function Sidebar({ onExportClick }: SidebarProps) {
                     href={item.href}
                     className={baseClasses}
                     prefetch={true}
-                    onMouseEnter={() => prefetchData(item.href!)}
                 >
                     {content}
                 </Link>

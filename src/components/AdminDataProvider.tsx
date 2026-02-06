@@ -151,53 +151,32 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
             `/api/admin/timesheets?month=${currentMonth}&year=${currentYear}`,
         ]
 
-        // Prefetch in Batches um Server nicht zu überlasten
+        // Prefetch sequentiell um DB Connection Pool nicht zu überlasten
+        // Supabase Session Mode hat begrenzte Connections
         const prefetchAll = async () => {
-            for (let i = 0; i < prefetchUrls.length; i += 2) {
-                const batch = prefetchUrls.slice(i, i + 2)
-                await Promise.all(
-                    batch.map(url =>
-                        globalMutate(url, fetch(url).then(res => res.ok ? res.json() : null), { revalidate: false })
-                            .catch(() => null) // Fehler ignorieren
-                    )
-                )
-                // Kleine Pause zwischen Batches
-                if (i + 2 < prefetchUrls.length) {
-                    await new Promise(resolve => setTimeout(resolve, 150))
-                }
+            for (const url of prefetchUrls) {
+                await globalMutate(url, fetch(url).then(res => res.ok ? res.json() : null), { revalidate: false })
+                    .catch(() => null)
+                await new Promise(resolve => setTimeout(resolve, 300))
             }
 
-            // Prefetch alle Mitarbeiter-Details für Stundennachweise
+            // Prefetch Mitarbeiter-Details für Stundennachweise (sequentiell)
             if (clients.length > 0 && employees.length > 0) {
-                const detailUrls: string[] = []
-                clients.forEach((client: Client) => {
-                    client.employees?.forEach((emp: { id: string }) => {
-                        detailUrls.push(
-                            `/api/admin/submissions/detail?employeeId=${emp.id}&clientId=${client.id}&month=${currentMonth}&year=${currentYear}`
-                        )
-                    })
-                })
-
-                // Batch prefetch details (max 3 parallel)
-                for (let i = 0; i < detailUrls.length; i += 3) {
-                    const batch = detailUrls.slice(i, i + 3)
-                    await Promise.all(
-                        batch.map(url =>
-                            globalMutate(url, fetch(url).then(res => res.ok ? res.json() : null), { revalidate: false })
-                                .catch(() => null)
-                        )
-                    )
-                    if (i + 3 < detailUrls.length) {
-                        await new Promise(resolve => setTimeout(resolve, 100))
+                for (const client of clients as Client[]) {
+                    for (const emp of (client.employees || [])) {
+                        const url = `/api/admin/submissions/detail?employeeId=${emp.id}&clientId=${client.id}&month=${currentMonth}&year=${currentYear}`
+                        await globalMutate(url, fetch(url).then(res => res.ok ? res.json() : null), { revalidate: false })
+                            .catch(() => null)
+                        await new Promise(resolve => setTimeout(resolve, 200))
                     }
                 }
             }
 
-            console.log('[AdminDataProvider] ✅ Alle Seiten-Daten vorgeladen')
+            console.log('[AdminDataProvider] Alle Seiten-Daten vorgeladen')
         }
 
-        // Starte Prefetch nach kurzer Verzögerung (UI-Priorität)
-        const timer = setTimeout(prefetchAll, 1000)
+        // Starte Prefetch nach Verzögerung (UI-Priorität + DB Connection Cooldown)
+        const timer = setTimeout(prefetchAll, 2000)
         return () => clearTimeout(timer)
     }, [isLoading, globalMutate, clients, employees])
 
