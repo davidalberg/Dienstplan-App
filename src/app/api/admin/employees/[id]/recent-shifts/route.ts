@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 import { z } from "zod"
 
 const ParamsSchema = z.object({
@@ -32,13 +33,9 @@ export async function GET(
 ) {
   try {
     // Auth Check
-    const session = await auth()
-    if (!session || session.user?.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      )
-    }
+    const adminResult = await requireAdmin()
+    if (adminResult instanceof NextResponse) return adminResult
+    const session = adminResult
 
     // Await params before validation
     const params = await context.params
@@ -78,7 +75,7 @@ export async function GET(
         employeeId,
         plannedStart: { not: null },
         plannedEnd: { not: null },
-        status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] },
+        status: { in: [...ALL_TIMESHEET_STATUSES] },
         absenceType: null // Keine Abwesenheiten
       },
       orderBy: { date: "desc" },

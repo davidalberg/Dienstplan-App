@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { generateCombinedTeamPdf } from "@/lib/pdf-generator"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
 import { calculateMinutesBetween } from "@/lib/time-utils"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 
 /**
  * GET /api/timesheets/download/[submissionId]
@@ -14,10 +15,9 @@ export async function GET(
     { params }: { params: Promise<{ submissionId: string }> }
 ) {
     try {
-        const session = await auth()
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const authResult = await requireAuth()
+        if (authResult instanceof NextResponse) return authResult
+        const session = authResult
 
         const { submissionId } = await params
 
@@ -80,7 +80,7 @@ export async function GET(
                 sheetFileName: teamSubmission.sheetFileName,
                 month: teamSubmission.month,
                 year: teamSubmission.year,
-                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                status: { in: [...ALL_TIMESHEET_STATUSES] }
             },
             include: {
                 employee: {
@@ -107,6 +107,20 @@ export async function GET(
         if (timesheets.length === 0) {
             return NextResponse.json({ error: "No timesheets found" }, { status: 404 })
         }
+
+        // Load ALL timesheets for this month for backup calculation
+        const allMonthTimesheets = await prisma.timesheet.findMany({
+            where: { month: teamSubmission.month, year: teamSubmission.year },
+            select: {
+                backupEmployeeId: true,
+                absenceType: true,
+                actualStart: true,
+                actualEnd: true,
+                plannedStart: true,
+                plannedEnd: true,
+                date: true
+            }
+        })
 
         // Group timesheets by employee
         const timesheetsByEmployee = new Map<string, typeof timesheets>()
@@ -135,14 +149,16 @@ export async function GET(
                     status: ts.status
                 })),
                 {
+                    id: employee.id,
                     hourlyWage: employee.hourlyWage || 0,
                     nightPremiumEnabled: employee.nightPremiumEnabled,
                     nightPremiumPercent: employee.nightPremiumPercent || 25,
                     sundayPremiumEnabled: employee.sundayPremiumEnabled,
-                    sundayPremiumPercent: employee.sundayPremiumPercent || 50,
+                    sundayPremiumPercent: employee.sundayPremiumPercent || 30,
                     holidayPremiumEnabled: employee.holidayPremiumEnabled,
-                    holidayPremiumPercent: employee.holidayPremiumPercent || 100
-                }
+                    holidayPremiumPercent: employee.holidayPremiumPercent || 125
+                },
+                allMonthTimesheets
             )
 
             totalHours += monthlyData.totalHours
@@ -161,11 +177,15 @@ export async function GET(
 
         // Prepare timesheets for combined PDF (flat structure with employee names)
         const pdfTimesheets = timesheets.map(ts => {
-            // Calculate hours from actual times
+            // Calculate hours from actual times, with fallback to planned times
             let hours = 0
-            if (ts.actualStart && ts.actualEnd && !ts.absenceType) {
-                const minutes = calculateMinutesBetween(ts.actualStart, ts.actualEnd)
-                hours = minutes ? Math.round(minutes / 60 * 100) / 100 : 0
+            if (!ts.absenceType) {
+                const start = ts.actualStart || ts.plannedStart
+                const end = ts.actualEnd || ts.plannedEnd
+                if (start && end) {
+                    const minutes = calculateMinutesBetween(start, end)
+                    hours = minutes ? Math.round(minutes / 60 * 100) / 100 : 0
+                }
             }
             return {
                 date: ts.date,
@@ -199,7 +219,7 @@ export async function GET(
                 employeeName: empData.employee.name || empData.employee.email,
                 totalHours: empData.stats.totalHours,
                 plannedHours,
-                workDays: empData.timesheets.filter((ts: any) => !ts.absenceType).length,
+                workDays: empData.timesheets.filter((ts: any) => !ts.absenceType && ts.status !== "PLANNED").length,
                 sickDays: empData.timesheets.filter((ts: any) => ts.absenceType === "SICK").length,
                 vacationDays: empData.timesheets.filter((ts: any) => ts.absenceType === "VACATION").length
             }

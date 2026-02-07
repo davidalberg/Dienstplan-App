@@ -221,17 +221,10 @@ function SchedulePageContent() {
         }
     }, [swrShifts, swrEmployees, swrTeams, globalEmployees, globalTeams, isLoading, globalDataLoading])
 
-    // Expand all clients by default when data loads (only on initial load)
+    // Teams bleiben standardmäßig zugeklappt - User entscheidet selbst
     const [hasInitialExpand, setHasInitialExpand] = useState(false)
     useEffect(() => {
         if (shifts.length > 0 && !hasInitialExpand) {
-            const clientIds = new Set<string>()
-            shifts.forEach(shift => {
-                const clientId = shift.employee.team?.client?.id
-                if (clientId) clientIds.add(clientId)
-            })
-            clientIds.add("unassigned") // Immer "Ohne Klient" expandieren
-            setExpandedClients(clientIds)
             setHasInitialExpand(true)
         }
     }, [shifts.length, hasInitialExpand])
@@ -1045,7 +1038,8 @@ function SchedulePageContent() {
         // (z.B. 31. Januar + 1 Monat = 3. März, weil 31. Februar nicht existiert)
         const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1)
         setCurrentDate(newDate)
-        setHasInitialExpand(false) // Re-expand when navigating to new month
+        setExpandedClients(new Set()) // Alle Teams zugeklappt beim Monatswechsel
+        setHasInitialExpand(false)
     }
 
     // Duplicate Shift Handler

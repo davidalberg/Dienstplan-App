@@ -303,12 +303,14 @@ export function calculateBackupStats(
                         backupNightHours += calculateNightHours(start, end, date)
                     }
 
-                    if (employee.sundayPremiumEnabled && isSundayDate(date)) {
-                        backupSundayHours += hours
-                    }
+                    // Feiertag hat Vorrang vor Sonntag (keine Doppelzählung)
+                    const isBackupHoliday = employee.holidayPremiumEnabled && isNRWHoliday(date)
+                    const isBackupSunday = employee.sundayPremiumEnabled && isSundayDate(date)
 
-                    if (employee.holidayPremiumEnabled && isNRWHoliday(date)) {
+                    if (isBackupHoliday) {
                         backupHolidayHours += hours
+                    } else if (isBackupSunday) {
+                        backupSundayHours += hours
                     }
                 }
             }
@@ -410,14 +412,14 @@ export function aggregateMonthlyData(
                     nightHours += nightHrs
                 }
 
-                // Sonntagsstunden
-                if (employee.sundayPremiumEnabled && isSundayDate(date)) {
-                    sundayHours += hours
-                }
+                // Feiertag hat Vorrang vor Sonntag (keine Doppelzählung)
+                const isHoliday = employee.holidayPremiumEnabled && isNRWHoliday(date)
+                const isSunday = employee.sundayPremiumEnabled && isSundayDate(date)
 
-                // Feiertagsstunden
-                if (employee.holidayPremiumEnabled && isNRWHoliday(date)) {
+                if (isHoliday) {
                     holidayHours += hours
+                } else if (isSunday) {
+                    sundayHours += hours
                 }
             }
         }

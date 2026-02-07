@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 
 // Helper: Berechne Urlaubstage zwischen zwei Daten (inklusive)
@@ -16,10 +16,9 @@ export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const { id } = await params
@@ -67,10 +66,9 @@ export async function PUT(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const { id } = await params
@@ -264,10 +262,9 @@ export async function DELETE(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const { id } = await params

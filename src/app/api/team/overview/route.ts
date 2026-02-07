@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
 
 export async function GET(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        const authResult = await requireAuth()
+        if (authResult instanceof NextResponse) return authResult
+        const session = authResult
 
         const user = session.user as any
         if (user.role !== "TEAMLEAD" && user.role !== "ADMIN") {

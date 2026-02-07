@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 
 /**
@@ -7,10 +7,9 @@ import prisma from "@/lib/prisma"
  * Liste aller Teams mit zugehörigen Mitarbeitern und Clients
  */
 export async function GET(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const teams = await prisma.team.findMany({
@@ -60,10 +59,9 @@ export async function GET(req: NextRequest) {
  * Neues Team erstellen
  */
 export async function POST(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const body = await req.json()
@@ -101,10 +99,9 @@ export async function POST(req: NextRequest) {
  * Team aktualisieren oder Mitarbeiter zuweisen
  */
 export async function PUT(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const body = await req.json()
@@ -151,10 +148,9 @@ export async function PUT(req: NextRequest) {
  * Team löschen (nur wenn keine Mitarbeiter zugewiesen)
  */
 export async function DELETE(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const { searchParams } = new URL(req.url)

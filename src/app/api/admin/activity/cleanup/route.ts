@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 
 /**
@@ -15,11 +16,8 @@ export async function DELETE(req: NextRequest) {
         // Cron-Job authentifiziert
     } else {
         // Pruefe Admin-Session
-        const { auth } = await import("@/lib/auth")
-        const session = await auth()
-        if (!session?.user || (session.user as unknown as { role: string }).role !== "ADMIN") {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const result = await requireAdmin()
+        if (result instanceof NextResponse) return result
     }
 
     try {

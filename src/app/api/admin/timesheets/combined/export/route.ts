@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import * as XLSX from "xlsx"
 import { format } from "date-fns"
@@ -9,6 +9,7 @@ import { calculateMinutesBetween } from "@/lib/time-utils"
 import { generateCombinedTeamPdf } from "@/lib/pdf-generator"
 import { getEmployeesInDienstplan } from "@/lib/team-submission-utils"
 import { getTemplateByIdOrDefault, getNestedValue } from "@/lib/export-templates"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 
 /**
  * Zod Schema for query parameter validation
@@ -42,10 +43,8 @@ const QueryParamsSchema = z.object({
  */
 export async function GET(req: NextRequest) {
     // Auth check: Require ADMIN role
-    const session = await auth()
-    if (!session?.user || (session.user as { role?: string }).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
 
     // Parse and validate query parameters
     const { searchParams } = new URL(req.url)
@@ -176,7 +175,7 @@ export async function GET(req: NextRequest) {
                     sheetFileName,
                     month,
                     year,
-                    status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                    status: { in: [...ALL_TIMESHEET_STATUSES] }
                 },
                 orderBy: { date: "asc" },
                 select: {
@@ -202,14 +201,14 @@ export async function GET(req: NextRequest) {
 
         // Create employee name map (real names)
         const employeeNameMap = new Map<string, string>()
-        // Create anonymized name map for invoice template (Assistent N, T, ... = first letter of first name)
+        // Create anonymized name map for invoice template (Assistent A, B, C, ... = sequential letters)
         const anonymizedNameMap = new Map<string, string>()
-        for (let i = 0; i < employees.length; i++) {
-            const emp = employees[i]
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        employees.forEach((emp, index) => {
             employeeNameMap.set(emp.id, emp.name || "Unbekannt")
-            const firstLetter = emp.name ? emp.name.charAt(0).toUpperCase() : "?"
-            anonymizedNameMap.set(emp.id, `Assistent ${firstLetter}`)
-        }
+            const letter = index < 26 ? alphabet[index] : `${alphabet[Math.floor(index / 26) - 1]}${alphabet[index % 26]}`
+            anonymizedNameMap.set(emp.id, `Assistent ${letter}`)
+        })
 
         // Helper: get display name (anonymized for invoice, real for standard)
         const getDisplayName = (employeeId: string): string => {
@@ -235,7 +234,7 @@ export async function GET(req: NextRequest) {
                     anonymized = anonymized.replace(new RegExp(emp.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonName)
                     // Replace first name only
                     const firstName = emp.name.split(' ')[0]
-                    if (firstName && firstName.length > 2) {
+                    if (firstName && firstName.length > 1) {
                         anonymized = anonymized.replace(new RegExp(firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), anonName)
                     }
                     // Replace last name only

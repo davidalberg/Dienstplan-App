@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { sendSignatureRequestEmail } from "@/lib/email"
 import { headers } from "next/headers"
@@ -20,11 +20,9 @@ import {
  */
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth()
-
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const authResult = await requireAuth()
+        if (authResult instanceof NextResponse) return authResult
+        const session = authResult
 
         const user = session.user
         const body = await req.json()
@@ -118,12 +116,14 @@ export async function POST(req: NextRequest) {
             })
 
             // Update all user's timesheets to SUBMITTED status
+            // CRITICAL: Only update CONFIRMED/CHANGED timesheets to prevent overwriting other statuses
             await tx.timesheet.updateMany({
                 where: {
                     employeeId: user.id,
                     month: teamSubmission.month,
                     year: teamSubmission.year,
-                    sheetFileName: teamSubmission.sheetFileName
+                    sheetFileName: teamSubmission.sheetFileName,
+                    status: { in: ["CONFIRMED", "CHANGED"] }
                 },
                 data: {
                     status: "SUBMITTED",
@@ -131,12 +131,13 @@ export async function POST(req: NextRequest) {
                 }
             })
 
-            // Get all employee IDs in this Dienstplan
+            // Get all employee IDs in this Dienstplan (with status filter to match utility function)
             const allEmployeeTimesheets = await tx.timesheet.findMany({
                 where: {
                     sheetFileName: teamSubmission.sheetFileName,
                     month: teamSubmission.month,
-                    year: teamSubmission.year
+                    year: teamSubmission.year,
+                    status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
                 },
                 select: { employeeId: true },
                 distinct: ['employeeId']

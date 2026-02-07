@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { calculateMinutesBetween } from "@/lib/time-utils"
 
@@ -8,10 +8,9 @@ import { calculateMinutesBetween } from "@/lib/time-utils"
  * Fetch all absence entries (VACATION/SICK) from timesheets for a given month
  */
 export async function GET(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     const { searchParams } = new URL(req.url)
     const month = parseInt(searchParams.get("month") || "")

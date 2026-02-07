@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { z } from "zod"
 
@@ -24,10 +24,9 @@ const withdrawSchema = z.object({
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const authResult = await requireAuth()
+        if (authResult instanceof NextResponse) return authResult
+        const session = authResult
 
         const user = session.user as any
 
@@ -139,7 +138,7 @@ export async function POST(req: NextRequest) {
 
         const employeeSignature = submissionWithSignature.employeeSignatures[0]
 
-        // Use transaction to ensure atomicity
+        // Use transaction with Serializable isolation to prevent race conditions
         await prisma.$transaction(async (tx) => {
             // 1. Delete the EmployeeSignature
             await tx.employeeSignature.delete({
@@ -163,11 +162,18 @@ export async function POST(req: NextRequest) {
             })
 
             // 3. Update TeamSubmission status back to PENDING_EMPLOYEES
-            // (since at least one employee signature is now missing)
-            await tx.teamSubmission.update({
-                where: { id: submissionWithSignature.id },
+            // CRITICAL: Only update if status is still in an allowed state (prevents overwriting COMPLETED)
+            const updated = await tx.teamSubmission.updateMany({
+                where: {
+                    id: submissionWithSignature.id,
+                    status: { in: ["PENDING_EMPLOYEES", "PENDING_RECIPIENT"] }
+                },
                 data: { status: "PENDING_EMPLOYEES" }
             })
+
+            if (updated.count === 0) {
+                throw new Error("Submission status has changed - withdrawal not possible")
+            }
 
             // 4. Create audit log entry
             await tx.auditLog.create({
@@ -180,7 +186,7 @@ export async function POST(req: NextRequest) {
                     newValue: `Withdrawn for ${month}/${year}`
                 }
             })
-        })
+        }, { isolationLevel: 'Serializable' })
 
         return NextResponse.json({
             success: true,
@@ -189,6 +195,18 @@ export async function POST(req: NextRequest) {
 
     } catch (error: any) {
         console.error("[POST /api/submissions/withdraw] Error:", error)
+
+        // Handle race condition: submission status changed between check and update
+        if (error?.message === "Submission status has changed - withdrawal not possible") {
+            return NextResponse.json(
+                {
+                    error: "Der Status der Einreichung hat sich geaendert. Der Rueckzug ist nicht mehr moeglich.",
+                    code: "STATUS_CHANGED"
+                },
+                { status: 409 }
+            )
+        }
+
         return NextResponse.json(
             { error: "Ein unerwarteter Fehler ist aufgetreten" },
             { status: 500 }

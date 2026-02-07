@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 
 /**
@@ -21,10 +21,9 @@ import prisma from "@/lib/prisma"
  */
 export async function GET(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const authResult = await requireAuth()
+        if (authResult instanceof NextResponse) return authResult
+        const session = authResult
 
         const user = session.user as any
         const { searchParams } = new URL(req.url)
@@ -116,12 +115,13 @@ export async function GET(req: NextRequest) {
         // Check if client has signed
         const clientSigned = !!teamSubmission.recipientSignature
 
-        // Count total employees in this Dienstplan
+        // Count total employees in this Dienstplan (with status filter to match utility function)
         const allEmployeesInDienstplan = await prisma.timesheet.findMany({
             where: {
                 sheetFileName: teamSubmission.sheetFileName,
                 month,
                 year,
+                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
             },
             select: { employeeId: true },
             distinct: ['employeeId']

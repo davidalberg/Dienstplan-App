@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 
 // Helper: Berechne Urlaubstage zwischen zwei Daten (inklusive)
@@ -14,10 +14,9 @@ function calculateVacationDays(startDate: Date, endDate: Date): number {
 
 // GET - Liste aller Urlaubsantraege (mit Filter month/year/status/employeeId)
 export async function GET(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const { searchParams } = new URL(req.url)
@@ -218,10 +217,9 @@ export async function GET(req: NextRequest) {
 
 // POST - Neuer Urlaubsantrag erstellen
 export async function POST(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const body = await req.json()

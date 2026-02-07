@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
 import { ChevronLeft, ChevronRight, Clock, CheckCircle2, XCircle } from "lucide-react"
-import Link from "next/link"
+
 
 interface HistoryShift {
     id: string
@@ -66,13 +66,10 @@ export default function HistoryPage() {
     if (!session) return null
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-20">
+        <div className="pb-20">
             <header className="sticky top-0 z-10 border-b bg-white p-4 shadow-sm">
                 <div className="mx-auto flex max-w-2xl items-center justify-between">
                     <div>
-                        <Link href="/dashboard" className="text-sm text-blue-600 hover:underline mb-1 inline-block">
-                            &larr; Zurueck
-                        </Link>
                         <h1 className="text-xl font-bold text-black">Schichtverlauf</h1>
                     </div>
                     <div className="flex items-center gap-2">

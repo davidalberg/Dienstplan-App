@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { calculateMinutesBetween } from "@/lib/time-utils"
 import { getEmployeesInDienstplan } from "@/lib/team-submission-utils"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 
 /**
  * Zod Schema for query parameter validation
@@ -74,10 +75,8 @@ export async function GET(req: NextRequest) {
     const startTime = performance.now()
 
     // Auth check: Require ADMIN role
-    const session = await auth()
-    if (!session?.user || (session.user as { role?: string }).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
 
     // Parse and validate query parameters
     const { searchParams } = new URL(req.url)
@@ -207,7 +206,7 @@ export async function GET(req: NextRequest) {
                     sheetFileName,
                     month,
                     year,
-                    status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                    status: { in: [...ALL_TIMESHEET_STATUSES] }
                 },
                 orderBy: { date: "asc" },
                 select: {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 
 /**
@@ -7,10 +7,9 @@ import prisma from "@/lib/prisma"
  * Liste aller Teams ohne Mitglieder
  */
 export async function GET(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const [orphanedTeams, totalTeams, teamsWithMembers] = await Promise.all([
@@ -67,10 +66,9 @@ export async function GET(req: NextRequest) {
  * Löscht alle Teams ohne Mitglieder
  */
 export async function DELETE(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const adminResult = await requireAdmin()
+    if (adminResult instanceof NextResponse) return adminResult
+    const session = adminResult
 
     try {
         // Finde alle verwaisten Teams

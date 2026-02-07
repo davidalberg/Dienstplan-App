@@ -12,6 +12,8 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "DANGER_test:db:reset": "echo '⚠️ WARNUNG: Dieser Befehl löscht die PRODUCTION-Datenbank! Drücke Ctrl+C zum Abbrechen...' && timeout /t 10 && npx prisma db push --force-reset && tsx prisma/seed-test.ts"
   },
   "dependencies": {
@@ -53,7 +55,8 @@
     "eslint-config-next": "^15.5.9",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

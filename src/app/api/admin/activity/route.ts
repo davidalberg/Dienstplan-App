@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { z } from "zod"
 
@@ -19,10 +19,9 @@ const createActivitySchema = z.object({
  */
 export async function GET(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user || (session.user as any).role !== "ADMIN") {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const result = await requireAdmin()
+        if (result instanceof NextResponse) return result
+        const session = result
 
         const { searchParams } = new URL(req.url)
         const limit = parseInt(searchParams.get("limit") || "50")
@@ -57,10 +56,9 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user || (session.user as any).role !== "ADMIN") {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const result = await requireAdmin()
+        if (result instanceof NextResponse) return result
+        const session = result
 
         const body = await req.json()
         const validated = createActivitySchema.safeParse(body)
@@ -90,10 +88,9 @@ export async function POST(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user || (session.user as any).role !== "ADMIN") {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const adminResult = await requireAdmin()
+        if (adminResult instanceof NextResponse) return adminResult
+        const session = adminResult
 
         const { searchParams } = new URL(req.url)
         const olderThanDays = parseInt(searchParams.get("olderThanDays") || "30")

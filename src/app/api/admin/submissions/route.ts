@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 
 /**
  * Helper: Extract teamName from generated sheetFileName (if applicable)
@@ -52,10 +53,9 @@ export async function GET(req: NextRequest) {
     const startTime = performance.now()
 
     try {
-        const session = await auth()
-        if (!session?.user || (session.user as any).role !== "ADMIN") {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const result = await requireAdmin()
+        if (result instanceof NextResponse) return result
+        const session = result
 
         const { searchParams } = new URL(req.url)
         const filterMonth = searchParams.get("month") ? parseInt(searchParams.get("month")!) : null
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
                 where: {
                     month: targetMonth,
                     year: targetYear,
-                    status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                    status: { in: [...ALL_TIMESHEET_STATUSES] }
                 },
                 select: {
                     id: true,
@@ -668,10 +668,9 @@ export async function GET(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user || (session.user as any).role !== "ADMIN") {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const result = await requireAdmin()
+        if (result instanceof NextResponse) return result
+        const session = result
 
         const { searchParams } = new URL(req.url)
         const submissionId = searchParams.get("id")

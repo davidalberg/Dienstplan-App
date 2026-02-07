@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { logActivity } from "@/lib/activity-logger"
@@ -18,10 +18,9 @@ function safeParseFloat(value: any, defaultValue: number, fieldName: string): nu
 
 // GET - Liste aller Mitarbeiter (mit optionaler Pagination)
 export async function GET(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     const { searchParams } = new URL(req.url)
 
@@ -130,10 +129,9 @@ export async function GET(req: NextRequest) {
 
 // POST - Neuen Mitarbeiter erstellen
 export async function POST(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const body = await req.json()
@@ -251,10 +249,9 @@ export async function POST(req: NextRequest) {
 
 // PUT - Mitarbeiter bearbeiten
 export async function PUT(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const body = await req.json()
@@ -393,10 +390,9 @@ export async function PUT(req: NextRequest) {
 
 // DELETE - Mitarbeiter löschen (mit Transaction gegen Race Conditions)
 export async function DELETE(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const adminResult = await requireAdmin()
+    if (adminResult instanceof NextResponse) return adminResult
+    const session = adminResult
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get("id")

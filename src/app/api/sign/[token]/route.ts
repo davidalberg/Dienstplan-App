@@ -458,11 +458,13 @@ export async function POST(
             }
 
             // Update all timesheets to COMPLETED status (innerhalb der gleichen Transaktion!)
+            // CRITICAL: Only update SUBMITTED timesheets to prevent overwriting other statuses
             await tx.timesheet.updateMany({
                 where: {
                     sheetFileName: teamSubmission.sheetFileName,
                     month: teamSubmission.month,
-                    year: teamSubmission.year
+                    year: teamSubmission.year,
+                    status: { in: ["SUBMITTED"] }
                 },
                 data: {
                     status: "COMPLETED"

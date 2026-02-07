@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import * as XLSX from "xlsx"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 
 export async function GET(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const authResult = await requireAuth()
+    if (authResult instanceof NextResponse) return authResult
+    const session = authResult
 
     const { searchParams } = new URL(req.url)
     const month = parseInt(searchParams.get("month") || "", 10)
@@ -27,29 +29,37 @@ export async function GET(req: NextRequest) {
         let targetEmployeeId = employeeId
         if (user.role === "EMPLOYEE") {
             targetEmployeeId = user.id // Employees can only export their own data
-        } else if (user.role === "TEAMLEAD" && targetEmployeeId) {
-            // Validate teamId from database and ensure employee belongs to teamlead's team
-            const dbUser = await prisma.user.findUnique({
-                where: { id: user.id },
-                select: { teamId: true, role: true }
-            })
+        } else if (user.role === "TEAMLEAD") {
+            if (targetEmployeeId) {
+                // Validate teamId from database and ensure employee belongs to teamlead's team
+                const dbUser = await prisma.user.findUnique({
+                    where: { id: user.id },
+                    select: { teamId: true, role: true }
+                })
 
-            if (!dbUser || dbUser.role !== "TEAMLEAD" || !dbUser.teamId) {
-                return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+                if (!dbUser || dbUser.role !== "TEAMLEAD" || !dbUser.teamId) {
+                    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+                }
+
+                // Verify the target employee belongs to this teamlead's team
+                const targetEmployee = await prisma.user.findUnique({
+                    where: { id: targetEmployeeId },
+                    select: { teamId: true }
+                })
+
+                if (!targetEmployee || targetEmployee.teamId !== dbUser.teamId) {
+                    return NextResponse.json({ error: "Forbidden - Employee not in your team" }, { status: 403 })
+                }
+            } else {
+                // No employeeId provided - restrict to own data
+                targetEmployeeId = user.id
             }
-
-            // Verify the target employee belongs to this teamlead's team
-            const targetEmployee = await prisma.user.findUnique({
-                where: { id: targetEmployeeId },
-                select: { teamId: true }
-            })
-
-            if (!targetEmployee || targetEmployee.teamId !== dbUser.teamId) {
-                return NextResponse.json({ error: "Forbidden - Employee not in your team" }, { status: 403 })
-            }
+        } else if (user.role !== "ADMIN") {
+            // Unknown role - deny access
+            return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
         }
 
-        const where: any = { month, year }
+        const where: any = { month, year, status: { in: ALL_TIMESHEET_STATUSES } }
         if (targetEmployeeId) where.employeeId = targetEmployeeId
 
         // Support filtering by source (tab name) OR sheetFileName (file name)

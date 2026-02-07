@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import * as XLSX from "xlsx"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
 import { calculateMinutesBetween } from "@/lib/time-utils"
 import { generateTimesheetPdf } from "@/lib/pdf-generator"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 
 // GET - Export Stundennachweis als PDF, CSV oder Excel
 export async function GET(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
 
     const { searchParams } = new URL(req.url)
     const employeeId = searchParams.get("employeeId")
@@ -70,7 +69,7 @@ export async function GET(req: NextRequest) {
                 employeeId,
                 month,
                 year,
-                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                status: { in: [...ALL_TIMESHEET_STATUSES] }
             },
             orderBy: { date: "asc" }
         })

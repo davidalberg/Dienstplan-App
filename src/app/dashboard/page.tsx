@@ -7,7 +7,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns"
 import { de } from "date-fns/locale"
 import TimesheetDay from "@/components/TimesheetDay"
 import MonthlySummary from "@/components/MonthlySummary"
-import { ChevronDown, ChevronRight, Shield } from "lucide-react"
+import { ChevronDown, ChevronRight, Shield, Download, CalendarDays, Clock, CheckCircle2 } from "lucide-react"
 import { formatTimeRange } from "@/lib/time-utils"
 
 interface DashboardClient {
@@ -181,7 +181,7 @@ export default function DashboardPage() {
     if (!session) return null
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-20">
+        <div className="pb-20">
             <header className="sticky top-0 z-10 border-b bg-white p-4 shadow-sm">
                 <div className="mx-auto flex max-w-2xl items-center justify-between">
                     <div>
@@ -257,13 +257,66 @@ export default function DashboardPage() {
                     </div>
                 ) : (
                     <>
-                        {/* Statistics Card */}
+                        {/* Quick Stats */}
+                        {!loading && timesheets.length > 0 && (() => {
+                            const shiftCount = timesheets.filter(ts => !ts.absenceType).length
+                            const totalHours = timesheets.reduce((sum, ts) => {
+                                const start = ts.actualStart || ts.plannedStart
+                                const end = ts.actualEnd || ts.plannedEnd
+                                if (!start || !end || ts.absenceType) return sum
+                                const [sh, sm] = start.split(":").map(Number)
+                                const [eh, em] = end.split(":").map(Number)
+                                let diff = (eh * 60 + em) - (sh * 60 + sm)
+                                if (diff < 0) diff += 24 * 60
+                                return sum + diff / 60
+                            }, 0)
+                            const allSubmitted = timesheets.every(ts => ts.status === "SUBMITTED" || ts.status === "COMPLETED")
+
+                            return (
+                                <div className="grid grid-cols-3 gap-3 mb-4">
+                                    <div className="rounded-xl bg-white p-3 shadow-sm text-center">
+                                        <CalendarDays size={18} className="mx-auto text-blue-500 mb-1" />
+                                        <p className="text-lg font-bold text-gray-900">{shiftCount}</p>
+                                        <p className="text-[10px] text-gray-500 font-medium">Schichten</p>
+                                    </div>
+                                    <div className="rounded-xl bg-white p-3 shadow-sm text-center">
+                                        <Clock size={18} className="mx-auto text-blue-500 mb-1" />
+                                        <p className="text-lg font-bold text-gray-900">{totalHours.toFixed(1)}</p>
+                                        <p className="text-[10px] text-gray-500 font-medium">Stunden</p>
+                                    </div>
+                                    <div className="rounded-xl bg-white p-3 shadow-sm text-center">
+                                        <CheckCircle2 size={18} className={`mx-auto mb-1 ${allSubmitted ? "text-green-500" : "text-gray-400"}`} />
+                                        <p className={`text-lg font-bold ${allSubmitted ? "text-green-600" : "text-gray-900"}`}>
+                                            {allSubmitted ? "Ja" : "Nein"}
+                                        </p>
+                                        <p className="text-[10px] text-gray-500 font-medium">Eingereicht</p>
+                                    </div>
+                                </div>
+                            )
+                        })()}
+
+                        {/* Monthly Summary + Export */}
                         <MonthlySummary
                             timesheets={timesheets}
                             onRefresh={fetchTimesheets}
                             month={currentDate.getMonth() + 1}
                             year={currentDate.getFullYear()}
                         />
+
+                        {/* Excel Export Button */}
+                        {!loading && timesheets.length > 0 && (
+                            <button
+                                onClick={() => {
+                                    const month = currentDate.getMonth() + 1
+                                    const year = currentDate.getFullYear()
+                                    window.open(`/api/timesheets/export?month=${month}&year=${year}`, '_blank')
+                                }}
+                                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-sm font-medium text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors"
+                            >
+                                <Download size={16} />
+                                Excel Export
+                            </button>
+                        )}
 
                         {/* Backup-Schichten Sektion (eingeklappt) */}
                         {potentialBackupShifts.length > 0 && (

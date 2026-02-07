@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { v4 as uuidv4 } from "uuid"
 import {
@@ -15,10 +15,9 @@ import {
  */
 export async function GET(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const authResult = await requireAuth()
+        if (authResult instanceof NextResponse) return authResult
+        const session = authResult
 
         const user = session.user as any
         const { searchParams } = new URL(req.url)
@@ -177,13 +176,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     console.log("[POST /api/submissions] === REQUEST START ===")
     try {
-        const session = await auth()
+        const authResult = await requireAuth()
+        if (authResult instanceof NextResponse) return authResult
+        const session = authResult
         console.log("[POST /api/submissions] Session:", session?.user ? { id: (session.user as any).id, email: session.user.email, role: (session.user as any).role } : "NO SESSION")
-
-        if (!session?.user) {
-            console.log("[POST /api/submissions] RETURNING 401 - No session")
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
 
         const user = session.user as any
         if (user.role !== "EMPLOYEE") {

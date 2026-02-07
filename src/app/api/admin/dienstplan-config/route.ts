@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 
 /**
@@ -8,10 +8,9 @@ import prisma from "@/lib/prisma"
  * Zeigt alle sheetFileNames aus Timesheet-Tabelle + ob konfiguriert
  */
 export async function GET(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         // 1. Hole alle eindeutigen sheetFileNames aus Timesheet-Tabelle
@@ -78,10 +77,9 @@ export async function GET(req: NextRequest) {
  * Erstellt oder aktualisiert eine Dienstplan-Konfiguration
  */
 export async function POST(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const adminResult = await requireAdmin()
+    if (adminResult instanceof NextResponse) return adminResult
+    const session = adminResult
 
     try {
         const body = await req.json()

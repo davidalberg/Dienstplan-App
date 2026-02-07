@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 
 /**
  * Extrahiert teamId aus generiertem sheetFileName (falls vorhanden)
@@ -29,7 +30,7 @@ export async function getEmployeesInDienstplan(
             sheetFileName,
             month,
             year,
-            status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+            status: { in: [...ALL_TIMESHEET_STATUSES] }
         },
         select: {
             employeeId: true
@@ -56,7 +57,7 @@ export async function getEmployeesInDienstplan(
                         month,
                         year,
                         sheetFileName: null, // Nur Legacy-Daten
-                        status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                        status: { in: [...ALL_TIMESHEET_STATUSES] }
                     },
                     select: {
                         employeeId: true

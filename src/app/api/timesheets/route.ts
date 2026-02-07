@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
@@ -20,8 +20,9 @@ const timesheetUpdateSchema = z.object({
 
 export async function GET(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        const authResult = await requireAuth()
+        if (authResult instanceof NextResponse) return authResult
+        const session = authResult
 
         const { searchParams } = new URL(req.url)
         const getAvailableMonths = searchParams.get("getAvailableMonths") === "true"
@@ -138,8 +139,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        const authResult = await requireAuth()
+        if (authResult instanceof NextResponse) return authResult
+        const session = authResult
 
         const body = await req.json()
         const validated = timesheetUpdateSchema.safeParse(body)
@@ -260,17 +262,22 @@ export async function POST(req: NextRequest) {
                     absenceType: null, // They're working, not absent
                     note: `Backup-Schicht anfallend wegen ${absenceType === "SICK" ? "Krankheit" : "Urlaub"} von ${originalEmployee?.name || "Mitarbeiter"}`,
                     lastUpdatedBy: "SYSTEM_BACKUP_ACTIVATION",
-                    teamId: backupEmployee.teamId,
+                    teamId: existing.teamId,
                     sheetFileName: existing.sheetFileName
                 }
 
                 if (backupExisting) {
-                    // Update existing backup timesheet
-                    await prisma.timesheet.update({
-                        where: { id: backupExisting.id },
-                        data: backupData
-                    })
-                    console.log(`[BACKUP SUBSTITUTION] Updated existing timesheet for backup employee`)
+                    // Only overwrite if existing shift is already a backup shift
+                    if (backupExisting.note?.includes("Backup-Schicht anfallend")) {
+                        await prisma.timesheet.update({
+                            where: { id: backupExisting.id },
+                            data: backupData
+                        })
+                        console.log(`[BACKUP SUBSTITUTION] Updated existing backup timesheet for backup employee`)
+                    } else {
+                        // Employee has their own regular shift on this date - do NOT overwrite
+                        console.warn(`[BACKUP SUBSTITUTION] Skipped: Backup employee ${existing.backupEmployeeId} already has their own shift on ${existing.date}. Will not overwrite.`)
+                    }
                 } else {
                     // Create new backup timesheet
                     await prisma.timesheet.create({

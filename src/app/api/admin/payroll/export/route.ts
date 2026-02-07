@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 import * as XLSX from "xlsx"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
@@ -22,10 +23,9 @@ const QueryParamsSchema = z.object({
  */
 export async function GET(req: NextRequest) {
     // Auth check: Require ADMIN role
-    const session = await auth()
-    if (!session?.user || (session.user as { role?: string }).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     // Parse and validate query parameters
     const { searchParams } = new URL(req.url)
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
             where: {
                 month,
                 year,
-                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                status: { in: [...ALL_TIMESHEET_STATUSES] }
             },
             orderBy: { date: "asc" }
         })

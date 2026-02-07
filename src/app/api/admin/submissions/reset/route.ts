@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { z } from "zod"
 import { randomBytes } from "crypto"
@@ -27,10 +27,9 @@ const resetSchema = z.object({
 export async function POST(request: NextRequest) {
     try {
         // 1. Auth check - only ADMIN allowed
-        const session = await auth()
-        if (!session?.user || (session.user as any).role !== "ADMIN") {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
+        const adminAuth = await requireAdmin()
+        if (adminAuth instanceof NextResponse) return adminAuth
+        const session = adminAuth
 
         // 2. Parse and validate request body
         const body = await request.json()

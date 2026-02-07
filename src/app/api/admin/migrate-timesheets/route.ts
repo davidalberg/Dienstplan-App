@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 
 /**
@@ -11,15 +11,9 @@ import prisma from "@/lib/prisma"
  */
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
-
-        const user = session.user as any
-        if (user.role !== "ADMIN") {
-            return NextResponse.json({ error: "Only admins can run migrations" }, { status: 403 })
-        }
+        const adminResult = await requireAdmin()
+        if (adminResult instanceof NextResponse) return adminResult
+        const session = adminResult
 
         const body = await req.json().catch(() => ({}))
         const { dryRun = true } = body // Default: Dry Run (zeigt nur was passieren wuerde)
@@ -217,15 +211,9 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
     try {
-        const session = await auth()
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
-
-        const user = session.user as any
-        if (user.role !== "ADMIN") {
-            return NextResponse.json({ error: "Only admins can view migration status" }, { status: 403 })
-        }
+        const result = await requireAdmin()
+        if (result instanceof NextResponse) return result
+        const session = result
 
         // Zaehle Legacy-Timesheets
         const legacyCount = await prisma.timesheet.count({

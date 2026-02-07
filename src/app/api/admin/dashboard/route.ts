@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 
 export async function GET(req: NextRequest) {
-    const session = await auth()
-    if (!session?.user || (session.user as unknown as { role: string }).role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const result = await requireAdmin()
+    if (result instanceof NextResponse) return result
+    const session = result
 
     try {
         const today = new Date()
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
                     lt: tomorrow
                 },
                 absenceType: null,
-                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                status: { in: [...ALL_TIMESHEET_STATUSES] }
             },
             include: {
                 employee: {
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
                     lt: dayAfterTomorrow
                 },
                 absenceType: null,
-                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                status: { in: [...ALL_TIMESHEET_STATUSES] }
             },
             include: {
                 employee: {
@@ -197,7 +197,7 @@ export async function GET(req: NextRequest) {
             where: {
                 date: { gte: today, lt: sevenDaysFromNow },
                 absenceType: null,
-                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                status: { in: [...ALL_TIMESHEET_STATUSES] }
             },
             select: { date: true }
         })
