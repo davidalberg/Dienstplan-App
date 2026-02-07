@@ -69,7 +69,7 @@ interface DashboardData {
     sickByEmployee: { employeeName: string; days: number }[]
     upcomingVacations: { employeeName: string; startDate: string; endDate: string }[]
     employeesWithoutShifts: { id: string; name: string }[]
-    unsignedEmployeesList: { employeeName: string }[]
+    pendingSignaturesList: { clientName: string; status: string; detail: string }[]
     weekPreview: { date: string; shiftCount: number }[]
 }
 
@@ -419,13 +419,26 @@ export default function AdminDashboardPage() {
                             </Link>
                         </div>
                         <div className="p-4 space-y-2 max-h-64 overflow-y-auto">
-                            {data.unsignedEmployeesList.length === 0 ? (
-                                <p className="text-neutral-500 text-sm py-4 text-center">Alle Mitarbeiter haben unterschrieben</p>
+                            {data.pendingSignaturesList.length === 0 ? (
+                                <p className="text-neutral-500 text-sm py-4 text-center">Alle Nachweise abgeschlossen</p>
                             ) : (
-                                data.unsignedEmployeesList.map((entry, i) => (
-                                    <div key={i} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-neutral-800/50">
-                                        <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                                        <span className="text-sm text-white">{entry.employeeName}</span>
+                                data.pendingSignaturesList.map((entry, i) => (
+                                    <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-neutral-800/50">
+                                        <div className="flex items-center gap-3">
+                                            <span className={`w-2 h-2 rounded-full shrink-0 ${
+                                                entry.status === "NOT_SUBMITTED" ? "bg-red-400" :
+                                                entry.status === "PENDING_EMPLOYEES" ? "bg-amber-400" :
+                                                "bg-blue-400"
+                                            }`} />
+                                            <span className="text-sm text-white">{entry.clientName}</span>
+                                        </div>
+                                        <span className={`text-xs ${
+                                            entry.status === "NOT_SUBMITTED" ? "text-red-400" :
+                                            entry.status === "PENDING_EMPLOYEES" ? "text-amber-400" :
+                                            "text-blue-400"
+                                        }`}>
+                                            {entry.detail}
+                                        </span>
                                     </div>
                                 ))
                             )}

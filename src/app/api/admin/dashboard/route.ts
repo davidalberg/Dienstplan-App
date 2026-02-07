@@ -175,20 +175,54 @@ export async function GET(req: NextRequest) {
             select: { id: true, name: true }
         })
 
-        // 9. Offene Unterschriften diesen Monat
-        const unsignedEmployeesList = await prisma.employeeSignature.findMany({
+        // 9. Offene Unterschriften diesen Monat - basierend auf Timesheets + Submissions
+        // Alle Clients mit aktiven Timesheets im aktuellen Monat
+        const clientsWithTimesheets = await prisma.client.findMany({
             where: {
-                teamSubmission: {
-                    month: currentMonth,
-                    year: currentYear,
-                    status: "PENDING_EMPLOYEES"
-                },
-                signature: null
+                isActive: true,
+                OR: [
+                    { employees: { some: { timesheets: { some: { month: currentMonth, year: currentYear, status: { in: [...ALL_TIMESHEET_STATUSES] } } } } } },
+                    { teams: { some: { timesheets: { some: { month: currentMonth, year: currentYear, status: { in: [...ALL_TIMESHEET_STATUSES] } } } } } }
+                ]
             },
-            include: {
-                employee: { select: { name: true } }
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true
             }
         })
+
+        // Alle TeamSubmissions für diesen Monat
+        const monthSubmissions = await prisma.teamSubmission.findMany({
+            where: { month: currentMonth, year: currentYear },
+            select: {
+                clientId: true,
+                status: true,
+                employeeSignatures: {
+                    select: { signature: true }
+                }
+            }
+        })
+        const submissionByClient = new Map(monthSubmissions.filter(s => s.clientId).map(s => [s.clientId!, s]))
+
+        // Pro Client den Status ermitteln
+        const pendingSignaturesList: { clientName: string; status: string; detail: string }[] = []
+        for (const client of clientsWithTimesheets) {
+            const submission = submissionByClient.get(client.id)
+            const clientName = `${client.firstName} ${client.lastName}`
+
+            if (!submission) {
+                // Noch gar nicht eingereicht
+                pendingSignaturesList.push({ clientName, status: "NOT_SUBMITTED", detail: "Noch nicht eingereicht" })
+            } else if (submission.status === "PENDING_EMPLOYEES") {
+                const signed = submission.employeeSignatures.filter(s => s.signature !== null).length
+                const total = submission.employeeSignatures.length
+                pendingSignaturesList.push({ clientName, status: "PENDING_EMPLOYEES", detail: `${signed}/${total} unterschrieben` })
+            } else if (submission.status === "PENDING_RECIPIENT") {
+                pendingSignaturesList.push({ clientName, status: "PENDING_RECIPIENT", detail: "Warte auf Klient" })
+            }
+            // COMPLETED wird nicht angezeigt (fertig)
+        }
 
         // 10. Wochenplan-Vorschau (naechste 7 Tage)
         const sevenDaysFromNow = new Date(today)
@@ -272,9 +306,7 @@ export async function GET(req: NextRequest) {
                 endDate: v.endDate.toISOString()
             })),
             employeesWithoutShifts,
-            unsignedEmployeesList: unsignedEmployeesList.map(s => ({
-                employeeName: s.employee.name || "Unbekannt"
-            })),
+            pendingSignaturesList,
             weekPreview
         })
     } catch (error: unknown) {
