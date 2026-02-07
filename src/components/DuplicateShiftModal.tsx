@@ -21,7 +21,7 @@ interface Shift {
 interface DuplicateShiftModalProps {
   shift: Shift
   onClose: () => void
-  onDuplicate: (targetDate: string) => Promise<void>
+  onDuplicate: (targetDate: string) => void | Promise<void>
 }
 
 export default function DuplicateShiftModal({

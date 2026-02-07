@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { generateCombinedTeamPdf } from "@/lib/pdf-generator"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
@@ -13,6 +14,11 @@ export async function GET(
     { params }: { params: Promise<{ submissionId: string }> }
 ) {
     try {
+        const session = await auth()
+        if (!session?.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
         const { submissionId } = await params
 
         // Load TeamSubmission with all signatures and timesheets
@@ -49,6 +55,18 @@ export async function GET(
 
         if (!teamSubmission) {
             return NextResponse.json({ error: "Submission not found" }, { status: 404 })
+        }
+
+        // Authorization: Only ADMIN or employees in this submission
+        const userId = (session.user as any).id
+        const userRole = (session.user as any).role
+        if (userRole !== "ADMIN") {
+            const isInSubmission = teamSubmission.employeeSignatures.some(
+                sig => sig.employeeId === userId
+            )
+            if (!isInSubmission) {
+                return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+            }
         }
 
         // Only allow download if submission is completed

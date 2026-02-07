@@ -158,10 +158,10 @@ export async function POST(req: NextRequest) {
             team // NEW: sheetFileName string from frontend
         } = body
 
-        // Validierung
-        if (!email || !password || !name) {
+        // Validierung - Passwort ist optional (Einladung per E-Mail möglich)
+        if (!email || !name) {
             return NextResponse.json(
-                { error: "Email, Passwort und Name sind erforderlich" },
+                { error: "Email und Name sind erforderlich" },
                 { status: 400 }
             )
         }
@@ -177,8 +177,8 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Passwort hashen
-        const hashedPassword = await bcrypt.hash(password, 10)
+        // Passwort hashen (nur wenn angegeben)
+        const hashedPassword = password ? await bcrypt.hash(password, 12) : null
 
         // ✅ RACE CONDITION FIX: Direkt create() versuchen und P2002 abfangen
         // Statt findUnique + create (Race Condition möglich), nutzen wir
@@ -364,7 +364,7 @@ export async function PUT(req: NextRequest) {
 
         // Passwort nur aktualisieren wenn angegeben
         if (password) {
-            updateData.password = await bcrypt.hash(password, 10)
+            updateData.password = await bcrypt.hash(password, 12)
         }
 
         const employee = await prisma.user.update({

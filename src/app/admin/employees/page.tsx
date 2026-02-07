@@ -3,6 +3,7 @@
 import React from "react"
 import { useEffect, useState } from "react"
 import { Users, Edit2, Trash2, Plus, X, Save, ChevronDown, ChevronRight } from "lucide-react"
+import { showToast } from "@/lib/toast-utils"
 
 interface Employee {
     id: string
@@ -132,12 +133,12 @@ export default function EmployeesPage() {
 
     const handleSave = async () => {
         if (!formData.email || !formData.name) {
-            alert("Email und Name sind erforderlich")
+            showToast("error", "Email und Name sind erforderlich")
             return
         }
 
         if (isCreating && !formData.password) {
-            alert("Passwort ist erforderlich")
+            showToast("error", "Passwort ist erforderlich")
             return
         }
 
@@ -157,7 +158,7 @@ export default function EmployeesPage() {
                 fetchEmployees()
             } else {
                 const err = await res.json()
-                alert(`Fehler: ${err.error}`)
+                showToast("error", err.error || "Fehler beim Speichern")
             }
         } catch (err) {
             console.error(err)
@@ -201,7 +202,7 @@ export default function EmployeesPage() {
                         handleDelete(id, name, timesheetCount, true)
                     }
                 } else {
-                    alert(`Fehler: ${err.error}`)
+                    showToast("error", err.error || "Fehler beim Löschen")
                 }
             }
         } catch (err) {

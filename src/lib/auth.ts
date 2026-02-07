@@ -1,8 +1,17 @@
-import NextAuth from "next-auth"
+import NextAuth, { CredentialsSignin } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import prisma from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { UserRole } from "@/types"
+import { checkRateLimit } from "@/lib/rate-limiter"
+
+// Login rate limit: 5 attempts per 15 minutes per email address
+const LOGIN_RATE_LIMIT = 5
+const LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+
+class RateLimitError extends CredentialsSignin {
+    code = "rate_limit"
+}
 
 // Validate AUTH_SECRET at startup
 if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
@@ -49,8 +58,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             async authorize(credentials) {
                 if (!credentials?.email || !credentials?.password) return null
 
+                const email = (credentials.email as string).toLowerCase().trim()
+
+                // Rate limit check BEFORE any database or bcrypt operations
+                const { limited } = checkRateLimit(
+                    `login:${email}`,
+                    LOGIN_RATE_LIMIT,
+                    LOGIN_RATE_WINDOW_MS
+                )
+
+                if (limited) {
+                    console.warn(
+                        `[Auth] Login rate limit exceeded for email: ${email}`
+                    )
+                    throw new RateLimitError()
+                }
+
                 const user = await prisma.user.findUnique({
-                    where: { email: credentials.email as string },
+                    where: { email },
                     select: {
                         id: true,
                         email: true,

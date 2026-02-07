@@ -32,10 +32,10 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
     const [isOptimistic, setIsOptimistic] = useState(false)
 
     const handleAction = async (action: "CONFIRM" | "UPDATE" | "UNCONFIRM") => {
-        // Zeit-Validierung bei UPDATE
+        // Zeit-Validierung bei UPDATE (Nachtschichten erlaubt: End < Start = über Mitternacht)
         if (action === "UPDATE" && editData.actualStart && editData.actualEnd) {
-            if (editData.actualStart >= editData.actualEnd) {
-                showToast("error", "Startzeit muss vor Endzeit liegen")
+            if (editData.actualStart === editData.actualEnd) {
+                showToast("error", "Start- und Endzeit dürfen nicht identisch sein")
                 return
             }
         }

@@ -136,8 +136,8 @@ export async function POST(
     try {
         const { token } = await params
 
-        // Rate Limiting: 10 POST requests pro Minute pro Token (Brute-Force Schutz)
-        const rl = checkRateLimit(`sign-post:${token}`, 10, 60_000)
+        // Rate Limiting: 3 POST requests pro Minute pro Token (Brute-Force Schutz)
+        const rl = checkRateLimit(`sign-post:${token}`, 3, 60_000)
         if (rl.limited) {
             return NextResponse.json(
                 { error: "Zu viele Anfragen. Bitte warten Sie einen Moment." },

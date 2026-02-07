@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
                 employeeId: user.id,
                 month,
                 year,
+                status: { in: ["CONFIRMED", "CHANGED"] }
             },
             data: {
                 status: "SUBMITTED",

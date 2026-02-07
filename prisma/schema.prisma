@@ -10,9 +10,11 @@ datasource db {
 model User {
   id         String      @id @default(cuid())
   email      String      @unique
-  password   String
+  password   String?
   name       String?
   role       String      @default("EMPLOYEE")
+  invitationToken   String?   @unique
+  invitationExpiry  DateTime?
   employeeId String?     @unique
   teamId     String?
   createdAt  DateTime    @default(now())

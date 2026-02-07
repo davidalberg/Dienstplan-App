@@ -18,6 +18,10 @@ import useSWR from "swr"
 import { showToast } from "@/lib/toast-utils"
 
 const fetcher = (url: string) => fetch(url).then(res => {
+    if (res.status === 401) {
+        window.location.href = "/login"
+        throw new Error("Session expired")
+    }
     if (!res.ok) throw new Error(`API Error: ${res.status}`)
     return res.json()
 })

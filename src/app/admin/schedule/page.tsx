@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useEffect, useState, useMemo, useCallback, Suspense } from "react"
+import { useEffect, useState, useMemo, useCallback, useRef, Suspense } from "react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from "date-fns"
 import { de } from "date-fns/locale"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
@@ -197,6 +197,9 @@ function SchedulePageContent() {
     // Undo Queue für gelöschte Schichten
     const [deletedShifts, setDeletedShifts] = useState<Array<{ id: string; shift: Shift; timeout: NodeJS.Timeout }>>([])
 
+    // AbortController-Map für pending Delete-Requests (abort bei Unmount/Navigation)
+    const deleteAbortControllers = useRef<Map<string, AbortController>>(new Map())
+
     // Sync SWR data to local state
     // ✅ OPTIMIZATION: Nutze globale Employees/Teams wenn Schedule-API keine liefert
     useEffect(() => {
@@ -218,9 +221,10 @@ function SchedulePageContent() {
         }
     }, [swrShifts, swrEmployees, swrTeams, globalEmployees, globalTeams, isLoading, globalDataLoading])
 
-    // Expand all clients by default when data loads
+    // Expand all clients by default when data loads (only on initial load)
+    const [hasInitialExpand, setHasInitialExpand] = useState(false)
     useEffect(() => {
-        if (shifts.length > 0) {
+        if (shifts.length > 0 && !hasInitialExpand) {
             const clientIds = new Set<string>()
             shifts.forEach(shift => {
                 const clientId = shift.employee.team?.client?.id
@@ -228,8 +232,9 @@ function SchedulePageContent() {
             })
             clientIds.add("unassigned") // Immer "Ohne Klient" expandieren
             setExpandedClients(clientIds)
+            setHasInitialExpand(true)
         }
-    }, [shifts.length])
+    }, [shifts.length, hasInitialExpand])
 
     // ✅ INSTANT UI: Prefetch ALLE Stundennachweise in EINEM Request
     // Skalierbar für 200+ Mitarbeiter - nur 1 API-Call statt 200
@@ -374,7 +379,7 @@ function SchedulePageContent() {
     const [validating, setValidating] = useState(false)
 
     // Alte fetchData-Funktion durch mutate() ersetzen
-    const fetchData = () => mutate()
+    const fetchData = useCallback(() => mutate(), [mutate])
 
     // Feature 1: Load smart time defaults when employee selected
     const loadSmartDefaults = async (employeeId: string) => {
@@ -455,6 +460,29 @@ function SchedulePageContent() {
         return () => clearTimeout(timer)
     }, [showModal, selectedClientId, validateShift])
 
+    // Unified close function: resets ALL modal-related state
+    const closeModal = useCallback(() => {
+        setShowModal(false)
+        setEditingShift(null)
+        setSelectedClientId("")
+        setSuggestedTimes(null)
+        setConflicts([])
+        setValidating(false)
+        setLoadingSuggestions(false)
+        setFormData({
+            employeeId: "",
+            date: "",
+            plannedStart: "08:00",
+            plannedEnd: "16:00",
+            backupEmployeeId: "",
+            note: "",
+            absenceType: "",
+            isRepeating: false,
+            repeatEndDate: "",
+            repeatDays: [1, 2, 3, 4, 5]
+        })
+    }, [])
+
     const handleCreateOrUpdate = useCallback(async () => {
         // Frontend-Validierung
         if (!formData.employeeId) {
@@ -505,8 +533,8 @@ function SchedulePageContent() {
                     return s
                 }))
 
-                // 2. Modal sofort schließen
-                setShowModal(false)
+                // 2. Modal sofort schließen und Formular zurücksetzen
+                closeModal()
                 showToast("success", "Schicht aktualisiert")
 
                 // 3. API-Call im Hintergrund (kein await blockiert UI)
@@ -620,8 +648,8 @@ function SchedulePageContent() {
                 new Date(a.date).getTime() - new Date(b.date).getTime()
             ))
 
-            // 2. Modal sofort schließen
-            setShowModal(false)
+            // 2. Modal sofort schließen und Formular zurücksetzen
+            closeModal()
             const toastMsg = optimisticShifts.length > 1
                 ? `${optimisticShifts.length} Schichten erstellt`
                 : "Schicht erstellt"
@@ -712,13 +740,17 @@ function SchedulePageContent() {
         } finally {
             setLoading(false)
         }
-    }, [editingShift, formData, fetchData, mutate, clients, employees, teams, selectedClientId, shifts])
+    }, [editingShift, formData, fetchData, mutate, clients, employees, teams, selectedClientId, shifts, closeModal])
 
     // Cleanup-Funktion für Undo-Queue
     useEffect(() => {
         return () => {
             // Cleanup timeouts bei Komponenten-Unmount
             deletedShifts.forEach(({ timeout }) => clearTimeout(timeout))
+
+            // Alle pending Delete-Requests abbrechen bei Unmount
+            deleteAbortControllers.current.forEach((controller) => controller.abort())
+            deleteAbortControllers.current.clear()
         }
     }, [deletedShifts])
 
@@ -729,6 +761,13 @@ function SchedulePageContent() {
 
         // Clear timeout
         clearTimeout(deletedItem.timeout)
+
+        // Pending Delete-Request abbrechen falls bereits gestartet
+        const controller = deleteAbortControllers.current.get(id)
+        if (controller) {
+            controller.abort()
+            deleteAbortControllers.current.delete(id)
+        }
 
         // Remove from deleted queue
         setDeletedShifts(prev => prev.filter(item => item.id !== id))
@@ -757,8 +796,18 @@ function SchedulePageContent() {
 
     // Commit-Delete: Tatsächlich löschen nach Timeout
     const commitDelete = useCallback(async (id: string) => {
+        // AbortController fuer diesen Delete-Request erstellen
+        const controller = new AbortController()
+        deleteAbortControllers.current.set(id, controller)
+
         try {
-            const res = await fetch(`/api/admin/schedule?id=${id}`, { method: "DELETE" })
+            const res = await fetch(`/api/admin/schedule?id=${id}`, {
+                method: "DELETE",
+                signal: controller.signal
+            })
+
+            // Controller nach erfolgreichem Fetch entfernen
+            deleteAbortControllers.current.delete(id)
 
             if (res.ok) {
                 // Remove from deleted queue
@@ -767,24 +816,36 @@ function SchedulePageContent() {
                 // Revalidate all related SWR caches
                 invalidateRelatedCaches()
             } else {
-                // Rollback bei Fehler
-                const deletedItem = deletedShifts.find(item => item.id === id)
-                if (deletedItem) {
-                    setShifts(prev => [...prev, deletedItem.shift])
-                    setDeletedShifts(prev => prev.filter(item => item.id !== id))
-                }
+                // Rollback bei Fehler - use functional update to avoid stale closure
+                setDeletedShifts(prev => {
+                    const deletedItem = prev.find(item => item.id === id)
+                    if (deletedItem) {
+                        setShifts(shifts => [...shifts, deletedItem.shift])
+                    }
+                    return prev.filter(item => item.id !== id)
+                })
                 showToast("error", "Fehler beim Löschen")
             }
         } catch (err) {
-            // Rollback bei Fehler
-            const deletedItem = deletedShifts.find(item => item.id === id)
-            if (deletedItem) {
-                setShifts(prev => [...prev, deletedItem.shift])
-                setDeletedShifts(prev => prev.filter(item => item.id !== id))
+            // Controller entfernen
+            deleteAbortControllers.current.delete(id)
+
+            // Bei Abort (Unmount/Navigation) kein Rollback/Toast noetig
+            if (err instanceof DOMException && err.name === "AbortError") {
+                return
             }
+
+            // Rollback bei echtem Fehler - use functional update to avoid stale closure
+            setDeletedShifts(prev => {
+                const deletedItem = prev.find(item => item.id === id)
+                if (deletedItem) {
+                    setShifts(shifts => [...shifts, deletedItem.shift])
+                }
+                return prev.filter(item => item.id !== id)
+            })
             showToast("error", "Netzwerkfehler")
         }
-    }, [deletedShifts, invalidateRelatedCaches])
+    }, [invalidateRelatedCaches])
 
     // ✅ PERFORMANCE FIX: Memoize event handler with Undo functionality
     const handleDelete = useCallback((id: string) => {
@@ -974,10 +1035,17 @@ function SchedulePageContent() {
     }
 
     const navigateMonth = (delta: number) => {
+        // Pending Delete-Timeouts und API-Requests abbrechen bei Monatswechsel
+        deletedShifts.forEach(({ timeout }) => clearTimeout(timeout))
+        deleteAbortControllers.current.forEach((controller) => controller.abort())
+        deleteAbortControllers.current.clear()
+        setDeletedShifts([])
+
         // Wichtig: Zuerst auf den 1. des Monats setzen, um Month-Skipping zu vermeiden
         // (z.B. 31. Januar + 1 Monat = 3. März, weil 31. Februar nicht existiert)
         const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1)
         setCurrentDate(newDate)
+        setHasInitialExpand(false) // Re-expand when navigating to new month
     }
 
     // Duplicate Shift Handler
@@ -991,40 +1059,83 @@ function SchedulePageContent() {
         setShiftToDuplicate(null)
     }
 
-    const handleDuplicateShift = async (targetDate: string) => {
+    const handleDuplicateShift = (targetDate: string) => {
         if (!shiftToDuplicate) return
 
-        try {
-            const res = await fetch("/api/admin/schedule", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    employeeId: shiftToDuplicate.employee.id,
-                    date: targetDate,
-                    plannedStart: shiftToDuplicate.plannedStart,
-                    plannedEnd: shiftToDuplicate.plannedEnd,
-                    backupEmployeeId: shiftToDuplicate.backupEmployee?.id || null,
-                    note: shiftToDuplicate.note || null
-                })
-            })
-
-            if (res.ok) {
-                showToast("success", "Schicht erfolgreich dupliziert")
-                fetchData()
-            } else {
-                const data = await res.json()
-                showToast("error", data.error || "Fehler beim Duplizieren")
-            }
-        } catch (error) {
-            console.error("Duplicate shift error:", error)
-            showToast("error", "Netzwerkfehler beim Duplizieren")
+        // 1. Build optimistic shift with temp ID
+        const tempId = `temp_${Date.now()}_dup`
+        const optimisticShift: Shift = {
+            id: tempId,
+            date: targetDate,
+            plannedStart: shiftToDuplicate.plannedStart,
+            plannedEnd: shiftToDuplicate.plannedEnd,
+            actualStart: null,
+            actualEnd: null,
+            status: "PLANNED",
+            note: shiftToDuplicate.note || null,
+            absenceType: shiftToDuplicate.absenceType || null,
+            employee: { ...shiftToDuplicate.employee },
+            backupEmployee: shiftToDuplicate.backupEmployee ? { ...shiftToDuplicate.backupEmployee } : null
         }
+
+        // 2. Instantly add to state
+        setShifts(prev => [...prev, optimisticShift].sort((a, b) =>
+            new Date(a.date).getTime() - new Date(b.date).getTime()
+        ))
+
+        // 3. Close modal and show toast immediately
+        setShowDuplicateModal(false)
+        setShiftToDuplicate(null)
+        showToast("success", "Schicht erfolgreich dupliziert")
+
+        // 4. API call in background (non-blocking)
+        fetch("/api/admin/schedule", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                employeeId: shiftToDuplicate.employee.id,
+                date: targetDate,
+                plannedStart: shiftToDuplicate.plannedStart,
+                plannedEnd: shiftToDuplicate.plannedEnd,
+                backupEmployeeId: shiftToDuplicate.backupEmployee?.id || null,
+                note: shiftToDuplicate.note || null
+            })
+        }).then(async (res) => {
+            if (!res.ok) {
+                // Rollback: remove optimistic shift
+                setShifts(prev => prev.filter(s => s.id !== tempId))
+                const data = await res.json().catch(() => ({}))
+                showToast("error", data.error || "Fehler beim Duplizieren")
+                return
+            }
+
+            const responseData = await res.json().catch(() => ({}))
+
+            // Replace temp ID with real ID from server
+            if (responseData.id) {
+                setShifts(prev => prev.map(s =>
+                    s.id === tempId ? {
+                        ...s,
+                        id: responseData.id,
+                        date: responseData.date || s.date,
+                        status: responseData.status || s.status,
+                    } : s
+                ))
+            }
+
+            // Background revalidation for consistency
+            mutate()
+        }).catch(() => {
+            // Rollback on network error
+            setShifts(prev => prev.filter(s => s.id !== tempId))
+            showToast("error", "Netzwerkfehler beim Duplizieren")
+        })
     }
 
     // Keyboard Shortcuts Handlers
     const handleCloseModal = useCallback(() => {
         if (showModal) {
-            setShowModal(false)
+            closeModal()
         } else if (showShortcutsHelp) {
             setShowShortcutsHelp(false)
         } else if (showDuplicateModal) {
@@ -1032,7 +1143,7 @@ function SchedulePageContent() {
         } else if (showTimesheetDetail) {
             closeTimesheetPreview()
         }
-    }, [showModal, showShortcutsHelp, showDuplicateModal, showTimesheetDetail])
+    }, [showModal, showShortcutsHelp, showDuplicateModal, showTimesheetDetail, closeModal])
 
     const handleSaveShortcut = useCallback(() => {
         if (showModal) {
@@ -1489,7 +1600,7 @@ function SchedulePageContent() {
                                 <h2 className="text-xl font-bold text-white">
                                     {editingShift ? "Schicht bearbeiten" : "Neue Schicht"}
                                 </h2>
-                                <button onClick={() => setShowModal(false)} className="text-neutral-500 hover:text-white transition">
+                                <button onClick={closeModal} className="text-neutral-500 hover:text-white transition">
                                     <X size={24} />
                                 </button>
                             </div>
@@ -1836,7 +1947,7 @@ function SchedulePageContent() {
                                 {!editingShift && !selectedClientId ? (
                                     /* Stufe 1: Nur Abbrechen-Button */
                                     <button
-                                        onClick={() => setShowModal(false)}
+                                        onClick={closeModal}
                                         className="flex-1 border border-neutral-700 py-2.5 rounded-xl font-bold text-neutral-400 hover:bg-neutral-800 transition-colors"
                                     >
                                         Abbrechen
@@ -1853,7 +1964,7 @@ function SchedulePageContent() {
                                             {loading ? "Speichert..." : "Speichern"}
                                         </button>
                                         <button
-                                            onClick={() => setShowModal(false)}
+                                            onClick={closeModal}
                                             className="flex-1 border border-neutral-700 py-2.5 rounded-xl font-bold text-neutral-400 hover:bg-neutral-800 transition-colors"
                                         >
                                             Abbrechen

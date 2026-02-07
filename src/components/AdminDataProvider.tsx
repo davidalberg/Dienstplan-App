@@ -5,6 +5,10 @@ import useSWR, { useSWRConfig } from 'swr'
 
 // SWR fetcher function
 const fetcher = (url: string) => fetch(url).then(res => {
+    if (res.status === 401) {
+        window.location.href = "/login"
+        throw new Error("Session expired")
+    }
     if (!res.ok) throw new Error('Failed to fetch')
     return res.json()
 })
@@ -86,6 +90,7 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
     // Phase 0: Lade Employees sofort
     const {
         data: employeesData,
+        error: employeesError,
         isLoading: isLoadingEmployees,
         mutate: mutateEmployees
     } = useSWR(
@@ -97,6 +102,7 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
     // Phase 1: Lade Clients erst wenn Employees fertig sind
     const {
         data: clientsData,
+        error: clientsError,
         isLoading: isLoadingClients,
         mutate: mutateClients
     } = useSWR(
@@ -108,6 +114,7 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
     // Phase 2: Lade Teams erst wenn Clients fertig sind
     const {
         data: teamsData,
+        error: teamsError,
         isLoading: isLoadingTeams,
         mutate: mutateTeams
     } = useSWR(
@@ -116,24 +123,26 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
         preloadConfig
     )
 
-    // Sequentieller Load: Nächste Phase starten wenn aktuelle fertig
+    // Sequentieller Load: Nächste Phase starten wenn aktuelle fertig (oder fehlgeschlagen)
+    // WICHTIG: Auch bei Fehlern die Phase weiterschalten, damit der Loading-State
+    // nicht stecken bleibt. Die UI zeigt dann leere Arrays fuer fehlgeschlagene Daten.
     useEffect(() => {
-        if (loadPhase === 0 && employeesData && !isLoadingEmployees) {
+        if (loadPhase === 0 && !isLoadingEmployees && (employeesData || employeesError)) {
             setLoadPhase(1)
         }
-    }, [loadPhase, employeesData, isLoadingEmployees])
+    }, [loadPhase, employeesData, employeesError, isLoadingEmployees])
 
     useEffect(() => {
-        if (loadPhase === 1 && clientsData && !isLoadingClients) {
+        if (loadPhase === 1 && !isLoadingClients && (clientsData || clientsError)) {
             setLoadPhase(2)
         }
-    }, [loadPhase, clientsData, isLoadingClients])
+    }, [loadPhase, clientsData, clientsError, isLoadingClients])
 
     useEffect(() => {
-        if (loadPhase === 2 && teamsData && !isLoadingTeams) {
+        if (loadPhase === 2 && !isLoadingTeams && (teamsData || teamsError)) {
             setLoadPhase(3)
         }
-    }, [loadPhase, teamsData, isLoadingTeams])
+    }, [loadPhase, teamsData, teamsError, isLoadingTeams])
 
     // Extrahiere Daten aus Response
     const employees = employeesData?.employees || []

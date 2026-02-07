@@ -55,31 +55,12 @@ export async function GET(
             }, { status: 410 })
         }
 
-        // ✅ FIX: Check if token is expired - Automatische Token-Erneuerung
+        // Check if token is expired
         if (employeeSignature.tokenExpiresAt && new Date() > employeeSignature.tokenExpiresAt) {
-            // Token abgelaufen aber noch nicht unterschrieben - erneuere Token automatisch
-            const { randomBytes } = await import("crypto")
-            const newToken = randomBytes(32).toString("hex")
-            const newExpiry = new Date()
-            newExpiry.setDate(newExpiry.getDate() + 14) // 14 Tage gültig
-
-            await prisma.employeeSignature.update({
-                where: { id: employeeSignature.id },
-                data: {
-                    signToken: newToken,
-                    tokenExpiresAt: newExpiry
-                }
-            })
-
-            console.log(`[GET /api/sign/employee] Token erneuert für Employee ${employeeSignature.employeeId}`)
-
-            // Redirect zur neuen URL
             return NextResponse.json({
-                expired: true,
-                message: "Link war abgelaufen und wurde automatisch erneuert",
-                newToken: newToken,
-                redirectUrl: `/sign/employee/${newToken}`
-            }, { status: 200 }) // 200 damit Frontend redirect kann
+                error: "Der Link ist abgelaufen. Bitte wende dich an den Administrator für einen neuen Link.",
+                expired: true
+            }, { status: 410 })
         }
 
         const teamSubmission = employeeSignature.teamSubmission

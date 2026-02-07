@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { redirect } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns"
 import { de } from "date-fns/locale"
 import TimesheetDay from "@/components/TimesheetDay"
@@ -64,14 +64,20 @@ interface BackupShift {
 export default function DashboardPage() {
     const { data: session, status } = useSession()
 
+    const router = useRouter()
+
     // Auto-redirect Admin
-    if (status === "authenticated" && (session?.user as any)?.role === "ADMIN") {
-        redirect("/admin")
-    }
+    useEffect(() => {
+        if (status === "authenticated" && (session?.user as any)?.role === "ADMIN") {
+            router.push("/admin")
+        }
+    }, [status, session, router])
+
     const [timesheets, setTimesheets] = useState<DashboardTimesheet[]>([])
     const [potentialBackupShifts, setPotentialBackupShifts] = useState<BackupShift[]>([])
     const [isBackupCollapsed, setIsBackupCollapsed] = useState(true)
     const [loading, setLoading] = useState(true)
+    const [fetchError, setFetchError] = useState<string | null>(null)
     const [currentDate, setCurrentDate] = useState(new Date())
     const [availableMonths, setAvailableMonths] = useState<{month: number, year: number}[]>([])
 
@@ -146,11 +152,17 @@ export default function DashboardPage() {
                 // Neues API-Format: { timesheets, potentialBackupShifts }
                 setTimesheets(data.timesheets || data)
                 setPotentialBackupShifts(data.potentialBackupShifts || [])
+                setFetchError(null)
                 // Restore scroll position after state update
                 requestAnimationFrame(() => window.scrollTo(0, scrollY))
+            } else if (res.status === 401) {
+                window.location.href = "/login"
+            } else {
+                setFetchError("Fehler beim Laden der Daten")
             }
         } catch (err) {
             console.error("Failed to fetch timesheets", err)
+            setFetchError("Netzwerkfehler - bitte Verbindung prüfen")
         } finally {
             setLoading(false)
         }
@@ -296,7 +308,11 @@ export default function DashboardPage() {
                         {/* Days List */}
                         <div className="mt-6 space-y-4">
                             <h2 className="text-lg font-bold text-black">Tageskarten</h2>
-                            {loading ? (
+                            {fetchError ? (
+                                <div className="rounded-xl border-2 border-red-200 bg-red-50 py-6 text-center text-red-700 font-medium">
+                                    {fetchError}
+                                </div>
+                            ) : loading ? (
                                 <div className="py-10 text-center text-black font-medium">Lade Daten...</div>
                             ) : (
                                 timesheets.map((ts) => (

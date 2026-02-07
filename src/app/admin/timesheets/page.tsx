@@ -405,12 +405,14 @@ function TimesheetsPageContent() {
         return { totalCount, completedCount, pendingCount }
     }, [allSubmissions])
 
-    // Expand all clients by default when data loads
+    // Expand all clients by default when data loads (only on initial load per month)
+    const [hasInitialExpand, setHasInitialExpand] = useState(false)
     useEffect(() => {
-        if (groupedByClient.length > 0) {
+        if (groupedByClient.length > 0 && !hasInitialExpand) {
             setExpandedClients(new Set(groupedByClient.map(g => g.clientId)))
+            setHasInitialExpand(true)
         }
-    }, [groupedByClient])
+    }, [groupedByClient, hasInitialExpand])
 
     // Toggle client expansion
     const toggleClient = (clientId: string) => {
@@ -429,6 +431,7 @@ function TimesheetsPageContent() {
     const navigateMonth = (delta: number) => {
         const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1)
         setCurrentDate(newDate)
+        setHasInitialExpand(false) // Re-expand when navigating to new month
     }
 
     // Open Combined Timesheet Modal
@@ -645,6 +648,7 @@ function TimesheetsPageContent() {
                     onClose={() => {
                         setShowCombinedModal(false)
                         setSelectedSubmission(null)
+                        mutate()
                     }}
                 />
             )}

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState, DragEvent } from "react"
 import { useSearchParams } from "next/navigation"
 import {
     Users, Edit2, Trash2, X, Save, Search,
-    GripVertical, UserPlus, ChevronDown, ChevronRight
+    GripVertical, UserPlus, ChevronDown, ChevronRight, Mail, Loader2
 } from "lucide-react"
 import { showToast } from "@/lib/toast-utils"
 import { useClients, useAdminEmployees } from "@/hooks/use-admin-data"
@@ -113,6 +113,8 @@ function AssistantsContent() {
         holidayPremiumEnabled: true,
         holidayPremiumPercent: 125
     })
+    const [sendInvitation, setSendInvitation] = useState(true)
+    const [invitingEmployeeId, setInvitingEmployeeId] = useState<string | null>(null)
 
 
     // Sync SWR data to local state
@@ -344,20 +346,47 @@ function AssistantsContent() {
             showToast("error", "Email und Name sind erforderlich")
             return
         }
-        if (!employeeForm.password) {
-            showToast("error", "Passwort ist erforderlich")
+        if (!sendInvitation && !employeeForm.password) {
+            showToast("error", "Passwort ist erforderlich (oder Einladung per E-Mail senden)")
             return
         }
 
         try {
+            const formData = { ...employeeForm }
+            if (sendInvitation) {
+                // Don't send password when inviting via email
+                formData.password = ""
+            }
+
             const res = await fetch("/api/admin/employees", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(employeeForm)
+                body: JSON.stringify(formData)
             })
 
             if (res.ok) {
-                showToast("success", "Assistent erstellt")
+                const data = await res.json()
+
+                if (sendInvitation && data.employee?.id) {
+                    // Send invitation email
+                    try {
+                        const inviteRes = await fetch("/api/admin/employees/invite", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ employeeId: data.employee.id })
+                        })
+                        if (inviteRes.ok) {
+                            showToast("success", "Assistent erstellt & Einladung gesendet")
+                        } else {
+                            showToast("success", "Assistent erstellt (Einladung konnte nicht gesendet werden)")
+                        }
+                    } catch {
+                        showToast("success", "Assistent erstellt (Einladung konnte nicht gesendet werden)")
+                    }
+                } else {
+                    showToast("success", "Assistent erstellt")
+                }
+
                 setShowCreateEmployee(false)
                 resetEmployeeForm()
                 mutateEmployees()
@@ -368,6 +397,27 @@ function AssistantsContent() {
         } catch {
             showToast("error", "Fehler beim Erstellen")
         }
+    }
+
+    const handleSendInvitation = async (employeeId: string) => {
+        setInvitingEmployeeId(employeeId)
+        try {
+            const res = await fetch("/api/admin/employees/invite", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ employeeId })
+            })
+
+            if (res.ok) {
+                showToast("success", "Einladung gesendet")
+            } else {
+                const err = await res.json()
+                showToast("error", err.error || "Fehler beim Senden")
+            }
+        } catch {
+            showToast("error", "Fehler beim Senden der Einladung")
+        }
+        setInvitingEmployeeId(null)
     }
 
     const handleEditEmployee = async () => {
@@ -468,6 +518,7 @@ function AssistantsContent() {
             holidayPremiumEnabled: true,
             holidayPremiumPercent: 125
         })
+        setSendInvitation(true)
     }
 
     const toggleClientExpanded = (clientId: string) => {
@@ -600,7 +651,9 @@ function AssistantsContent() {
                                                 employee={employee}
                                                 onEdit={() => openEditEmployee(employee)}
                                                 onDelete={() => handleDeleteEmployee(employee)}
+                                                onInvite={() => handleSendInvitation(employee.id)}
                                                 isHighlighted={highlightedEmployees.has(employee.id)}
+                                                isInviting={invitingEmployeeId === employee.id}
                                             />
                                         ))}
                                     </div>
@@ -703,7 +756,9 @@ function AssistantsContent() {
                                                         employee={employee}
                                                         onEdit={() => openEditEmployee(employee)}
                                                         onDelete={() => handleDeleteEmployee(employee)}
+                                                        onInvite={() => handleSendInvitation(employee.id)}
                                                         isHighlighted={highlightedEmployees.has(employee.id)}
+                                                        isInviting={invitingEmployeeId === employee.id}
                                                     />
                                                 ))}
                                             </div>
@@ -780,15 +835,37 @@ function AssistantsContent() {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-neutral-300 mb-1">
-                                                {showEditEmployee ? "Passwort (leer = keine Änderung)" : "Passwort *"}
-                                            </label>
-                                            <input
-                                                type="password"
-                                                value={employeeForm.password}
-                                                onChange={(e) => setEmployeeForm({ ...employeeForm, password: e.target.value })}
-                                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            />
+                                            {!showEditEmployee && (
+                                                <div className="mb-2">
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={sendInvitation}
+                                                            onChange={(e) => setSendInvitation(e.target.checked)}
+                                                            className="w-4 h-4 text-blue-600 rounded"
+                                                        />
+                                                        <span className="text-sm text-neutral-300">Einladung per E-Mail senden</span>
+                                                    </label>
+                                                </div>
+                                            )}
+                                            {(showEditEmployee || !sendInvitation) && (
+                                                <>
+                                                    <label className="block text-sm font-medium text-neutral-300 mb-1">
+                                                        {showEditEmployee ? "Passwort (leer = keine Änderung)" : "Passwort *"}
+                                                    </label>
+                                                    <input
+                                                        type="password"
+                                                        value={employeeForm.password}
+                                                        onChange={(e) => setEmployeeForm({ ...employeeForm, password: e.target.value })}
+                                                        className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    />
+                                                </>
+                                            )}
+                                            {!showEditEmployee && sendInvitation && (
+                                                <p className="text-xs text-blue-400 mt-1">
+                                                    Der Mitarbeiter erhält eine E-Mail und kann sein eigenes Passwort erstellen.
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -921,12 +998,16 @@ function EmployeeCard({
     employee,
     onEdit,
     onDelete,
-    isHighlighted = false
+    onInvite,
+    isHighlighted = false,
+    isInviting = false
 }: {
     employee: Employee
     onEdit: () => void
     onDelete: () => void
+    onInvite: () => void
     isHighlighted?: boolean
+    isInviting?: boolean
 }) {
     return (
         <div
@@ -991,6 +1072,18 @@ function EmployeeCard({
 
             {/* Action Buttons - Hover to reveal */}
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        onInvite()
+                    }}
+                    disabled={isInviting}
+                    className="p-1.5 text-neutral-400 hover:text-blue-400 hover:bg-neutral-700 rounded-md transition-colors disabled:opacity-50"
+                    title="Einladung senden"
+                    aria-label="Einladung per E-Mail senden"
+                >
+                    {isInviting ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} strokeWidth={2} />}
+                </button>
                 <button
                     onClick={(e) => {
                         e.stopPropagation()

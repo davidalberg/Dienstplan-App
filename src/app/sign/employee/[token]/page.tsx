@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { FileText, CheckCircle, AlertCircle, Loader2, Clock, User, Calendar } from "lucide-react"
 import SignaturePad from "@/components/SignaturePad"
+import { showToast } from "@/lib/toast-utils"
 
 interface EmployeeData {
     id: string
@@ -113,7 +114,7 @@ export default function EmployeeSignPage() {
 
     const handleSign = async () => {
         if (!signature) {
-            alert("Bitte unterschreibe zuerst")
+            showToast("error", "Bitte unterschreibe zuerst")
             return
         }
 

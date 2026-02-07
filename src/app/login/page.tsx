@@ -24,7 +24,11 @@ export default function LoginPage() {
             })
 
             if (result?.error) {
-                setError("Ungültige E-Mail oder Passwort")
+                if (result.code === "rate_limit") {
+                    setError("Zu viele Anmeldeversuche. Bitte versuchen Sie es in 15 Minuten erneut.")
+                } else {
+                    setError("Ungültige E-Mail oder Passwort")
+                }
             } else {
                 router.push("/dashboard")
             }
