@@ -2,6 +2,11 @@ import useSWR from 'swr'
 
 // SWR fetcher function
 const fetcher = (url: string) => fetch(url).then(res => {
+    if (res.status === 401) {
+        // Session abgelaufen → Login
+        window.location.href = "/login"
+        throw new Error("Session expired")
+    }
     if (!res.ok) throw new Error('Failed to fetch')
     return res.json()
 })
