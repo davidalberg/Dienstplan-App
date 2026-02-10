@@ -1,7 +1,7 @@
 "use client"
 
-import { createContext, useContext, ReactNode, useMemo, useState, useEffect, useCallback } from 'react'
-import useSWR, { useSWRConfig } from 'swr'
+import { createContext, useContext, ReactNode, useMemo } from 'react'
+import useSWR from 'swr'
 
 // SWR fetcher function
 const fetcher = (url: string) => fetch(url).then(res => {
@@ -75,86 +75,35 @@ const AdminDataContext = createContext<AdminDataContextType | null>(null)
 /**
  * AdminDataProvider - Zentrale Datenverwaltung für Admin-Bereich
  *
- * Lädt Master-Daten (Employees, Clients, Teams) SEQUENTIELL beim ersten Mount
- * um den Supabase Connection Pool nicht zu überlasten.
- *
- * WICHTIG: Kein aggressives Prefetching! Supabase Session Mode hat
- * einen kleinen Connection Pool (pool_size). Jede Serverless-Funktion
- * belegt eine Connection - zu viele parallele Requests = Pool Overflow.
+ * Lädt Master-Daten (Employees, Clients, Teams) PARALLEL beim ersten Mount.
+ * 3 parallele Requests sind kein Problem für den Connection Pool (limit=10).
  */
 export function AdminDataProvider({ children }: { children: ReactNode }) {
-    // Sequentielles Laden: Erst Employees, dann Clients, dann Teams
-    // Verhindert 3 parallele DB-Connections beim Start
-    const [loadPhase, setLoadPhase] = useState(0) // 0=employees, 1=clients, 2=teams, 3=done
-
-    // Phase 0: Lade Employees sofort
     const {
         data: employeesData,
-        error: employeesError,
         isLoading: isLoadingEmployees,
         mutate: mutateEmployees
-    } = useSWR(
-        '/api/admin/employees',
-        fetcher,
-        preloadConfig
-    )
+    } = useSWR('/api/admin/employees', fetcher, preloadConfig)
 
-    // Phase 1: Lade Clients erst wenn Employees fertig sind
     const {
         data: clientsData,
-        error: clientsError,
         isLoading: isLoadingClients,
         mutate: mutateClients
-    } = useSWR(
-        loadPhase >= 1 ? '/api/clients' : null,
-        fetcher,
-        preloadConfig
-    )
+    } = useSWR('/api/clients', fetcher, preloadConfig)
 
-    // Phase 2: Lade Teams erst wenn Clients fertig sind
     const {
         data: teamsData,
-        error: teamsError,
         isLoading: isLoadingTeams,
         mutate: mutateTeams
-    } = useSWR(
-        loadPhase >= 2 ? '/api/admin/teams' : null,
-        fetcher,
-        preloadConfig
-    )
-
-    // Sequentieller Load: Nächste Phase starten wenn aktuelle fertig (oder fehlgeschlagen)
-    // WICHTIG: Auch bei Fehlern die Phase weiterschalten, damit der Loading-State
-    // nicht stecken bleibt. Die UI zeigt dann leere Arrays fuer fehlgeschlagene Daten.
-    useEffect(() => {
-        if (loadPhase === 0 && !isLoadingEmployees && (employeesData || employeesError)) {
-            setLoadPhase(1)
-        }
-    }, [loadPhase, employeesData, employeesError, isLoadingEmployees])
-
-    useEffect(() => {
-        if (loadPhase === 1 && !isLoadingClients && (clientsData || clientsError)) {
-            setLoadPhase(2)
-        }
-    }, [loadPhase, clientsData, clientsError, isLoadingClients])
-
-    useEffect(() => {
-        if (loadPhase === 2 && !isLoadingTeams && (teamsData || teamsError)) {
-            setLoadPhase(3)
-        }
-    }, [loadPhase, teamsData, teamsError, isLoadingTeams])
+    } = useSWR('/api/admin/teams', fetcher, preloadConfig)
 
     // Extrahiere Daten aus Response
     const employees = employeesData?.employees || []
     const clients = clientsData?.clients || []
     const teams = teamsData?.teams || []
 
-    // Combined loading state
-    const isLoading = loadPhase < 3
-
-    // Prefetch: Nur die aktuelle Seite wird vom SWR-Hook der Seite selbst geladen.
-    // Kein aggressives Background-Prefetching mehr - das hat den Connection Pool gesprengt.
-    // Die Seiten laden ihre Daten on-demand über ihre eigenen SWR-Hooks.
+    // Combined loading state - alle 3 müssen fertig sein
+    const isLoading = isLoadingEmployees || isLoadingClients || isLoadingTeams
 
     // Memoize utility functions to prevent re-renders
     const getClientById = useMemo(() => {

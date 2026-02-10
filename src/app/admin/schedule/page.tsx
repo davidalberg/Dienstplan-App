@@ -240,15 +240,11 @@ function SchedulePageContent() {
 
         // Skip wenn innerhalb der letzten 10 Minuten bereits prefetched
         if (lastPrefetch && (now - parseInt(lastPrefetch, 10)) < 10 * 60 * 1000) {
-            console.log(`[Schedule] Cache noch gültig für ${month}/${year}`)
             return
         }
 
-        if (loading) return
-
         const prefetchAll = async () => {
             try {
-                console.log(`[Schedule] Prefetching alle Stundennachweise für ${month}/${year}...`)
                 const res = await fetch(`/api/admin/schedule/prefetch?month=${month}&year=${year}`)
                 if (!res.ok) throw new Error("Prefetch failed")
 
@@ -264,14 +260,13 @@ function SchedulePageContent() {
 
                 // Speichere Timestamp in sessionStorage
                 sessionStorage.setItem(cacheKey, String(now))
-                console.log(`[Schedule] ✅ ${data.count} Stundennachweise vorgeladen`)
-            } catch (error) {
-                console.error("[Schedule] Prefetch error:", error)
+            } catch {
+                // Prefetch-Fehler sind nicht kritisch - Daten werden on-demand geladen
             }
         }
 
         prefetchAll()
-    }, [loading, month, year, globalMutate])
+    }, [month, year, globalMutate])
 
     // ✅ PERFORMANCE FIX: Memoize grouping logic (was recalculating on every render)
     const groupedShifts = useMemo(() => {
@@ -1403,6 +1398,12 @@ function SchedulePageContent() {
                                                         return (
                                                             <tr
                                                                 key={shift.id}
+                                                                onMouseEnter={() => {
+                                                                    const clientId = shift.employee?.team?.client?.id
+                                                                    if (shift.employee?.id && clientId) {
+                                                                        prefetchTimesheetDetail(shift.employee.id, clientId)
+                                                                    }
+                                                                }}
                                                                 className={`transition ${
                                                                     isSelected
                                                                         ? "bg-violet-900/20 border-l-2 border-violet-600"
@@ -1471,12 +1472,6 @@ function SchedulePageContent() {
                                                                 <td className="px-3 py-2 text-right">
                                                                     <div className="flex gap-1 justify-end">
                                                                         <button
-                                                                            onMouseEnter={() => {
-                                                                                const clientId = shift.employee?.team?.client?.id
-                                                                                if (shift.employee?.id && clientId) {
-                                                                                    prefetchTimesheetDetail(shift.employee.id, clientId)
-                                                                                }
-                                                                            }}
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation()
                                                                                 openTimesheetPreview(shift)

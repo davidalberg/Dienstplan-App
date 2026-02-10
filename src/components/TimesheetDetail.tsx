@@ -100,7 +100,7 @@ export default function TimesheetDetail({
         {
             fallbackData: initialData,
             revalidateOnFocus: false,       // Nicht bei Tab-Wechsel neu laden
-            dedupingInterval: 600000,       // 10 Minuten Cache
+            dedupingInterval: 60000,        // 1 Minute Cache
             revalidateIfStale: false,       // Kein Background-Refetch
         }
     )

@@ -3,7 +3,8 @@
 import { useSession, signOut } from "next-auth/react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useCallback, useRef } from "react"
+import { useSWRConfig } from "swr"
 import {
     Calendar,
     CalendarRange,
@@ -34,10 +35,46 @@ interface SidebarProps {
     onExportClick?: () => void
 }
 
+// Mapping: Sidebar-Href → API-URL die vorgeladen werden soll
+const sidebarPrefetchMap: Record<string, string> = {
+    "/admin/schedule": "/api/admin/schedule",
+    "/admin/timesheets": "/api/admin/timesheets",
+    "/admin/employee-timesheets": "/api/admin/submissions",
+    "/admin/assistants": "/api/admin/employees",
+    "/admin/clients": "/api/clients",
+    "/admin/vacations": "/api/admin/vacations/absences",
+    "/admin/payroll": "/api/admin/payroll",
+}
+
 export function Sidebar({ onExportClick }: SidebarProps) {
     const { data: session } = useSession()
     const pathname = usePathname()
     const [collapsed, setCollapsed] = useState(false)
+    const { mutate } = useSWRConfig()
+    const prefetchedRef = useRef<Set<string>>(new Set())
+
+    // Extrahiere month/year aus aktueller URL oder verwende aktuellen Monat
+    const currentMonth = (() => {
+        const match = pathname?.match(/month=(\d+)/)
+        return match ? parseInt(match[1], 10) : new Date().getMonth() + 1
+    })()
+    const currentYear = (() => {
+        const match = pathname?.match(/year=(\d+)/)
+        return match ? parseInt(match[1], 10) : new Date().getFullYear()
+    })()
+
+    const prefetchPageData = useCallback((href: string) => {
+        const apiUrl = sidebarPrefetchMap[href]
+        if (!apiUrl) return
+        if (prefetchedRef.current.has(apiUrl)) return
+        prefetchedRef.current.add(apiUrl)
+
+        // Baue die vollständige URL mit month/year Parametern
+        const separator = apiUrl.includes("?") ? "&" : "?"
+        const fullUrl = `${apiUrl}${separator}month=${currentMonth}&year=${currentYear}`
+
+        mutate(fullUrl, fetch(fullUrl).then(res => res.ok ? res.json() : undefined), { revalidate: false })
+    }, [currentMonth, currentYear, mutate])
 
     const navItems: NavItem[] = [
         { icon: LayoutDashboard, label: "Dashboard", href: "/admin/dashboard" },
@@ -91,6 +128,7 @@ export function Sidebar({ onExportClick }: SidebarProps) {
                     href={item.href}
                     className={baseClasses}
                     prefetch={true}
+                    onMouseEnter={() => prefetchPageData(item.href!)}
                 >
                     {content}
                 </Link>
