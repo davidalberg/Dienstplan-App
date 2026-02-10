@@ -15,7 +15,7 @@ export async function POST(
     try {
         const adminAuth = await requireAdmin()
         if (adminAuth instanceof NextResponse) return adminAuth
-        const session = adminAuth
+        const { user: adminUser } = adminAuth
 
         const { id } = await params
         const body = await req.json()
@@ -64,7 +64,7 @@ export async function POST(
             data: {
                 status: "PENDING_RECIPIENT",
                 manuallyReleasedAt: new Date(),
-                manuallyReleasedBy: (session.user as any).email,
+                manuallyReleasedBy: adminUser.email,
                 releaseNote
             }
         })

@@ -493,12 +493,19 @@ export async function sendEmployeeConfirmationEmail(params: SendEmployeeConfirma
 </html>
 `
 
-    await resend.emails.send({
+    const result = await resend.emails.send({
         from: fromEmail,
         to: employeeEmail,
         subject: `✓ Unterschrift bestätigt - ${clientName} ${monthName} ${year}`,
         html: htmlContent,
     })
+
+    if (result.error) {
+        console.error("[EMAIL] sendEmployeeConfirmationEmail failed:", result.error)
+        throw new Error(result.error.message || "E-Mail konnte nicht gesendet werden")
+    }
+
+    return { success: true, id: result.data?.id }
 }
 
 /**
@@ -601,12 +608,19 @@ export async function sendReminderEmail(params: SendReminderEmailParams) {
 </html>
 `
 
-    await resend.emails.send({
+    const result = await resend.emails.send({
         from: fromEmail,
         to: recipientEmail,
         subject: `⏰ Erinnerung: Stundennachweis wartet - ${sheetFileName} ${monthName} ${year}`,
         html: htmlContent,
     })
+
+    if (result.error) {
+        console.error("[EMAIL] sendReminderEmail failed:", result.error)
+        throw new Error(result.error.message || "E-Mail konnte nicht gesendet werden")
+    }
+
+    return { success: true, id: result.data?.id }
 }
 
 /**
@@ -717,12 +731,19 @@ Mit freundlichen Grüßen,
 Dienstplan App
 `
 
-    await resend.emails.send({
+    const result = await resend.emails.send({
         from: fromEmail,
         to: employeeEmail,
         subject: `Stundennachweis zur Unterschrift - ${sheetFileName} ${monthName} ${year}`,
         html: htmlContent,
     })
+
+    if (result.error) {
+        console.error("[EMAIL] sendEmployeeSignatureEmail failed:", result.error)
+        throw new Error(result.error.message || "E-Mail konnte nicht gesendet werden")
+    }
+
+    return { success: true, id: result.data?.id }
 }
 
 /**

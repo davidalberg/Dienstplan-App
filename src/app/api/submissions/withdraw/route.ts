@@ -26,9 +26,7 @@ export async function POST(req: NextRequest) {
     try {
         const authResult = await requireAuth()
         if (authResult instanceof NextResponse) return authResult
-        const session = authResult
-
-        const user = session.user as any
+        const { user } = authResult
 
         // Only employees can withdraw their signatures
         if (user.role !== "EMPLOYEE") {

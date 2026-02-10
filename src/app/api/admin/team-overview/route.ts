@@ -22,8 +22,8 @@ export async function GET(req: NextRequest) {
     try {
         // Parse week parameter (e.g., "2026-W05")
         const [yearStr, weekStr] = weekParam.split("-W")
-        const year = parseInt(yearStr)
-        const week = parseInt(weekStr)
+        const year = parseInt(yearStr, 10)
+        const week = parseInt(weekStr, 10)
 
         if (isNaN(year) || isNaN(week)) {
             return NextResponse.json({ error: "Invalid week format" }, { status: 400 })

@@ -66,8 +66,6 @@ export async function POST(req: NextRequest) {
                 where: { id: { in: shiftIds } }
             })
 
-            console.log(`[POST /api/admin/schedule/bulk-delete] Deleted ${deleteResult.count} shifts`)
-
             // 4. CLEANUP: Check each affected submission (innerhalb Transaktion!)
             for (const submission of affectedSubmissions.values()) {
                 const remainingCount = await tx.timesheet.count({
@@ -80,7 +78,6 @@ export async function POST(req: NextRequest) {
 
                 if (remainingCount === 0) {
                     // All timesheets deleted → Delete orphaned TeamSubmission
-                    console.log(`[POST /api/admin/schedule/bulk-delete] CLEANUP: Deleting orphaned TeamSubmission for ${submission.sheetFileName} ${submission.month}/${submission.year}`)
                     await tx.teamSubmission.delete({
                         where: {
                             sheetFileName_month_year: {
@@ -91,7 +88,6 @@ export async function POST(req: NextRequest) {
                         }
                     }).catch(() => {
                         // Submission might not exist (not yet submitted) - ignore error
-                        console.log("[POST /api/admin/schedule/bulk-delete] No submission to delete (not yet submitted)")
                     })
                 }
             }

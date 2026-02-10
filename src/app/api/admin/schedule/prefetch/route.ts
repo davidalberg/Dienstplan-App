@@ -17,8 +17,8 @@ export async function GET(req: NextRequest) {
     if (result instanceof NextResponse) return result
 
     const { searchParams } = new URL(req.url)
-    const month = parseInt(searchParams.get("month") || "")
-    const year = parseInt(searchParams.get("year") || "")
+    const month = parseInt(searchParams.get("month") || "", 10)
+    const year = parseInt(searchParams.get("year") || "", 10)
 
     if (isNaN(month) || isNaN(year)) {
         return NextResponse.json({

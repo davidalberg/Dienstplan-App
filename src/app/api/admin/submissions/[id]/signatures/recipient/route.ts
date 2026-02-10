@@ -56,8 +56,6 @@ export async function DELETE(
             data: { status: "SUBMITTED" }
         })
 
-        console.log(`[DELETE recipient signature] Deleted recipient signature for submission ${id}`)
-
         return NextResponse.json({
             success: true,
             message: "Assistenznehmer-Unterschrift gelöscht"

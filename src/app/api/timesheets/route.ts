@@ -93,8 +93,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(timesheets)
     }
 
-    const month = parseInt(searchParams.get("month") || "")
-    const year = parseInt(searchParams.get("year") || "")
+    const month = parseInt(searchParams.get("month") || "", 10)
+    const year = parseInt(searchParams.get("year") || "", 10)
 
     if (isNaN(month) || isNaN(year)) {
         return NextResponse.json({ error: "Invalid month/year" }, { status: 400 })
@@ -237,8 +237,6 @@ export async function POST(req: NextRequest) {
     // BUG-FIX: Wenn Backup-Person sich krank/Urlaub meldet → Backup-Schicht löschen
     // Die Backup-Person bekommt KEINE Krankheitsstunden für eine Schicht, die sie nur als Vertretung hatte
     if ((absenceType === "SICK" || absenceType === "VACATION") && existing.note?.includes("Backup-Schicht anfallend")) {
-        console.log(`[BACKUP SICK] Backup employee ${existing.employeeId} is ${absenceType}, deleting backup shift`)
-
         // Lösche die Backup-Schicht komplett
         await prisma.timesheet.delete({
             where: { id }
@@ -285,8 +283,6 @@ export async function POST(req: NextRequest) {
     // Wenn jemand krank/Urlaub ist und es gibt einen Backup, springt dieser automatisch ein
     if ((absenceType === "SICK" || absenceType === "VACATION") && existing.backupEmployeeId) {
         try {
-            console.log(`[BACKUP SUBSTITUTION] Employee ${existing.employeeId} is ${absenceType}, activating backup ${existing.backupEmployeeId}`)
-
             // Prüfe ob Backup-Person bereits einen Eintrag für diesen Tag hat
             const backupExisting = await prisma.timesheet.findUnique({
                 where: {
@@ -324,16 +320,18 @@ export async function POST(req: NextRequest) {
                 }
 
                 if (backupExisting) {
-                    // Only overwrite if existing shift is already a backup shift
-                    if (backupExisting.note?.includes("Backup-Schicht anfallend")) {
+                    // Only overwrite if existing shift is a system-created backup shift
+                    // Check BOTH note content AND lastUpdatedBy to prevent overwriting manually edited shifts
+                    const isSystemBackup = backupExisting.note?.includes("Backup-Schicht anfallend")
+                        && backupExisting.lastUpdatedBy === "SYSTEM_BACKUP_ACTIVATION"
+                    if (isSystemBackup) {
                         await prisma.timesheet.update({
                             where: { id: backupExisting.id },
                             data: backupData
                         })
-                        console.log(`[BACKUP SUBSTITUTION] Updated existing backup timesheet for backup employee`)
                     } else {
-                        // Employee has their own regular shift on this date - do NOT overwrite
-                        console.warn(`[BACKUP SUBSTITUTION] Skipped: Backup employee ${existing.backupEmployeeId} already has their own shift on ${existing.date}. Will not overwrite.`)
+                        // Employee has their own shift or a manually edited backup shift - do NOT overwrite
+                        console.error(`[BACKUP] Skipped: Employee has own shift for date ${backupExisting.date}`)
                     }
                 } else {
                     // Create new backup timesheet
@@ -348,7 +346,6 @@ export async function POST(req: NextRequest) {
                             year: existing.year,
                         }
                     })
-                    console.log(`[BACKUP SUBSTITUTION] Created new timesheet for backup employee`)
                 }
             }
         } catch (error) {
@@ -360,8 +357,6 @@ export async function POST(req: NextRequest) {
     // lösche Backup-Schicht aus der Datenbank
     if (!absenceType && (existing.absenceType === "SICK" || existing.absenceType === "VACATION") && existing.backupEmployeeId) {
         try {
-            console.log(`[BACKUP CLEAR] Employee ${existing.employeeId} is no longer ${existing.absenceType}, removing backup shift`)
-
             // Lösche die Backup-Schicht in der Datenbank
             const backupShift = await prisma.timesheet.findUnique({
                 where: {
@@ -377,9 +372,8 @@ export async function POST(req: NextRequest) {
                     await prisma.timesheet.delete({
                         where: { id: backupShift.id }
                     })
-                    console.log(`[BACKUP CLEAR] Deleted unconfirmed backup shift for employee ${existing.backupEmployeeId}`)
                 } else {
-                    console.warn(`[BACKUP CLEAR] Backup shift for employee ${existing.backupEmployeeId} has status "${backupShift.status}" - NOT deleting (backup already confirmed)`)
+                    // Backup shift already confirmed - do NOT delete
                 }
             }
         } catch (error) {

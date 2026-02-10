@@ -7,7 +7,7 @@ import {
     GripVertical, UserPlus, ChevronDown, ChevronRight, Mail, Loader2
 } from "lucide-react"
 import { showToast } from "@/lib/toast-utils"
-import { useClients, useAdminEmployees } from "@/hooks/use-admin-data"
+import { useClients, useAdminEmployees, useTeams } from "@/hooks/use-admin-data"
 
 interface Employee {
     id: string
@@ -36,6 +36,12 @@ interface Client {
     displayOrder: number
     isActive: boolean
     employees: Array<{ id: string; name: string | null; email: string }>
+}
+
+interface Team {
+    id: string
+    name: string
+    clientId: string | null
 }
 
 function getAvatarColor(name: string): string {
@@ -76,13 +82,14 @@ function AssistantsContent() {
     // SWR Hooks für automatisches Caching
     const { clients: swrClients, isLoading: clientsLoading, mutate: mutateClients } = useClients()
     const { employees: swrEmployees, isLoading: employeesLoading, mutate: mutateEmployees } = useAdminEmployees()
+    const { teams: swrTeams, isLoading: teamsLoading } = useTeams()
 
     // Lokaler State für optimistische Updates
     const [clients, setClients] = useState<Client[]>([])
     const [allEmployees, setAllEmployees] = useState<Employee[]>([])
 
     // Loading State abgeleitet von SWR
-    const loading = clientsLoading || employeesLoading
+    const loading = clientsLoading || employeesLoading || teamsLoading
     const [searchQuery, setSearchQuery] = useState("")
     const [draggedEmployee, setDraggedEmployee] = useState<{ employee: Employee; fromClientId: string | null } | null>(null)
     const [draggedClient, setDraggedClient] = useState<Client | null>(null)
@@ -106,6 +113,7 @@ function AssistantsContent() {
         exitDate: "",
         hourlyWage: 0,
         travelCostType: "NONE",
+        teamId: "",
         nightPremiumEnabled: true,
         nightPremiumPercent: 25,
         sundayPremiumEnabled: true,
@@ -426,6 +434,10 @@ function AssistantsContent() {
             return
         }
 
+        // Track if email changed
+        const originalEmail = showEditEmployee?.email
+        const emailChanged = originalEmail && originalEmail !== employeeForm.email
+
         try {
             const res = await fetch("/api/admin/employees", {
                 method: "PUT",
@@ -434,7 +446,26 @@ function AssistantsContent() {
             })
 
             if (res.ok) {
-                showToast("success", "Assistent aktualisiert")
+                if (emailChanged) {
+                    showToast("success", "E-Mail geändert. Sende neue Einladung...")
+                    // Automatically send invitation to new email
+                    try {
+                        const inviteRes = await fetch("/api/admin/employees/invite", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ employeeId: employeeForm.id })
+                        })
+                        if (inviteRes.ok) {
+                            showToast("success", "Einladung an neue E-Mail gesendet")
+                        } else {
+                            showToast("error", "Einladung konnte nicht gesendet werden")
+                        }
+                    } catch {
+                        showToast("error", "Einladung konnte nicht gesendet werden")
+                    }
+                } else {
+                    showToast("success", "Assistent aktualisiert")
+                }
                 setShowEditEmployee(null)
                 resetEmployeeForm()
                 mutateEmployees()
@@ -490,6 +521,7 @@ function AssistantsContent() {
                 : "",
             hourlyWage: fullEmployee.hourlyWage || 0,
             travelCostType: fullEmployee.travelCostType || "NONE",
+            teamId: "",
             nightPremiumEnabled: fullEmployee.nightPremiumEnabled,
             nightPremiumPercent: fullEmployee.nightPremiumPercent || 25,
             sundayPremiumEnabled: fullEmployee.sundayPremiumEnabled,
@@ -511,6 +543,7 @@ function AssistantsContent() {
             exitDate: "",
             hourlyWage: 0,
             travelCostType: "NONE",
+            teamId: "",
             nightPremiumEnabled: true,
             nightPremiumPercent: 25,
             sundayPremiumEnabled: true,
@@ -902,6 +935,26 @@ function AssistantsContent() {
                                                 className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             />
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* Team-Zuweisung */}
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Team-Zuweisung</h3>
+                                    <div>
+                                        <label className="block text-sm font-medium text-neutral-300 mb-1">Team</label>
+                                        <select
+                                            value={employeeForm.teamId}
+                                            onChange={(e) => setEmployeeForm({ ...employeeForm, teamId: e.target.value })}
+                                            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">Kein Team</option>
+                                            {(swrTeams || []).map((team: Team) => (
+                                                <option key={team.id} value={team.id}>
+                                                    {team.name}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
 

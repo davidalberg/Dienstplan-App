@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { Session } from "next-auth"
+
+export interface AuthUser {
+    id: string
+    email: string
+    name?: string | null
+    role: string
+}
+
+export interface AuthSession {
+    user: AuthUser
+}
 
 /**
  * Require authenticated admin user. Returns session or 401 response.
@@ -8,14 +18,15 @@ import { Session } from "next-auth"
  * Usage:
  *   const result = await requireAdmin()
  *   if (result instanceof NextResponse) return result
- *   const session = result
+ *   const { user } = result
  */
-export async function requireAdmin(): Promise<Session | NextResponse> {
+export async function requireAdmin(): Promise<AuthSession | NextResponse> {
     const session = await auth()
-    if (!session?.user || (session.user as unknown as { role: string }).role !== "ADMIN") {
+    const user = session?.user as AuthUser | undefined
+    if (!user || user.role !== "ADMIN") {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    return session
+    return { user }
 }
 
 /**
@@ -24,12 +35,13 @@ export async function requireAdmin(): Promise<Session | NextResponse> {
  * Usage:
  *   const result = await requireAuth()
  *   if (result instanceof NextResponse) return result
- *   const session = result
+ *   const { user } = result
  */
-export async function requireAuth(): Promise<Session | NextResponse> {
+export async function requireAuth(): Promise<AuthSession | NextResponse> {
     const session = await auth()
-    if (!session?.user) {
+    const user = session?.user as AuthUser | undefined
+    if (!user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    return session
+    return { user }
 }

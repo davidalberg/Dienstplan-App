@@ -29,8 +29,6 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        console.log("[TEST-EMAIL] Attempting to send test email to:", recipientEmail)
-
         // Send test email
         await sendSignatureRequestEmail({
             recipientEmail,
@@ -41,8 +39,6 @@ export async function POST(req: NextRequest) {
             signatureUrl: "http://localhost:3000/sign/test-token",
             expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         })
-
-        console.log("[TEST-EMAIL] Email sent successfully!")
 
         return NextResponse.json({
             success: true,

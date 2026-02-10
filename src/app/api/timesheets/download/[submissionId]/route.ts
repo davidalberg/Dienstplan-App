@@ -17,7 +17,7 @@ export async function GET(
     try {
         const authResult = await requireAuth()
         if (authResult instanceof NextResponse) return authResult
-        const session = authResult
+        const { user } = authResult
 
         const { submissionId } = await params
 
@@ -58,8 +58,8 @@ export async function GET(
         }
 
         // Authorization: Only ADMIN or employees in this submission
-        const userId = (session.user as any).id
-        const userRole = (session.user as any).role
+        const userId = user.id
+        const userRole = user.role
         if (userRole !== "ADMIN") {
             const isInSubmission = teamSubmission.employeeSignatures.some(
                 sig => sig.employeeId === userId

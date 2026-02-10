@@ -58,8 +58,8 @@ export async function GET(req: NextRequest) {
         const session = result
 
         const { searchParams } = new URL(req.url)
-        const filterMonth = searchParams.get("month") ? parseInt(searchParams.get("month")!) : null
-        const filterYear = searchParams.get("year") ? parseInt(searchParams.get("year")!) : null
+        const filterMonth = searchParams.get("month") ? parseInt(searchParams.get("month")!, 10) : null
+        const filterYear = searchParams.get("year") ? parseInt(searchParams.get("year")!, 10) : null
 
         const currentDate = new Date()
         const targetMonth = filterMonth || currentDate.getMonth() + 1
@@ -646,9 +646,6 @@ export async function GET(req: NextRequest) {
                 : b.recipientName || b.sheetFileName
             return nameA.localeCompare(nameB, 'de')
         })
-
-        const duration = Math.round(performance.now() - startTime)
-        console.log(`[API] GET /api/admin/submissions - ${duration}ms (${submissionsWithProgress.length} submissions, ${allPendingDienstplaene.length} pending)`)
 
         return NextResponse.json({
             submissions: submissionsWithProgress,

@@ -54,8 +54,6 @@ export async function POST(
             }
         })
 
-        console.log(`[REVERT-RELEASE] Admin ${session.user!.email} reverted release for submission ${id} (${submission.sheetFileName} ${submission.month}/${submission.year})`)
-
         return NextResponse.json({
             success: true,
             message: "Freigabe erfolgreich widerrufen"

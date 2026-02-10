@@ -70,8 +70,6 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        console.log(`[skip-signature] Signature uebersprungen fuer Employee ${employeeId} (${empSig.employee.name})`)
-
         // Pruefe ob jetzt ALLE unterschrieben haben
         const submission = await prisma.teamSubmission.findUnique({
             where: { id: submissionId },
@@ -101,7 +99,6 @@ export async function POST(req: NextRequest) {
             })
 
             newStatus = "PENDING_RECIPIENT"
-            console.log(`[skip-signature] Alle Mitarbeiter haben unterschrieben (inkl. Skip) -> PENDING_RECIPIENT`)
         }
 
         return NextResponse.json({

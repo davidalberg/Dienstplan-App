@@ -5,9 +5,7 @@ import prisma from "@/lib/prisma"
 export async function POST(req: NextRequest) {
     const authResult = await requireAuth()
     if (authResult instanceof NextResponse) return authResult
-    const session = authResult
-
-    const user = session.user as any
+    const { user } = authResult
 
     // Nur Mitarbeiter können ihre Einreichungen abbrechen
     if (user.role !== "EMPLOYEE") {

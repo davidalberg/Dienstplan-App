@@ -135,21 +135,7 @@ export async function POST(request: NextRequest) {
             }
         })
 
-        // 5. Log the action for audit trail
-        console.log(
-            `[RESET] TeamSubmission ${submission.id} reset by ${session.user.email}:`,
-            {
-                clientId,
-                month,
-                year,
-                sheetFileName: submission.sheetFileName,
-                employeeSignaturesDeleted: result.employeeSignaturesDeleted,
-                hadClientSignature: result.hadClientSignature,
-                timesheetsReset: result.timesheetsReset
-            }
-        )
-
-        // 6. Return success with details
+        // 5. Return success with details
         return NextResponse.json({
             success: true,
             message: "Stundennachweis erfolgreich zurueckgesetzt",

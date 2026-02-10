@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma"
 import { Resend } from "resend"
 import { getReminderEmailHTML, getReminderEmailText, getReminderEmailSubject, ReminderType } from "@/lib/email-templates"
 import { PRE_SUBMISSION_STATUSES } from "@/lib/constants"
+import { timingSafeEqual } from "crypto"
 
 /**
  * Cron Job: Remind Employees about Unsigned Timesheets
@@ -53,7 +54,11 @@ export async function GET(req: NextRequest) {
     const authHeader = req.headers.get("authorization")
     const expectedAuth = `Bearer ${process.env.CRON_SECRET}`
 
-    if (!authHeader || authHeader !== expectedAuth) {
+    function safeCompare(a: string, b: string): boolean {
+        if (a.length !== b.length) return false
+        return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+    }
+    if (!authHeader || !safeCompare(authHeader, expectedAuth)) {
         console.error("[Cron: remind-employees] Unauthorized access attempt")
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -64,13 +69,6 @@ export async function GET(req: NextRequest) {
         const currentYear = now.getFullYear()
         const currentDay = now.getDate()
         const todayStr = now.toISOString().split("T")[0] // YYYY-MM-DD
-
-        console.log("[Cron: remind-employees] Running check", {
-            currentMonth,
-            currentYear,
-            currentDay,
-            todayStr
-        })
 
         // Initialize Resend
         if (!process.env.RESEND_API_KEY) {
@@ -188,8 +186,6 @@ export async function GET(req: NextRequest) {
         // =========================================================================
 
         if (currentDay === 2) {
-            console.log("[Cron] Scenario 3: 2nd of month - OVERDUE")
-
             // Target LAST month
             const targetMonth = currentMonth === 1 ? 12 : currentMonth - 1
             const targetYear = currentMonth === 1 ? currentYear - 1 : currentYear
@@ -243,8 +239,6 @@ export async function GET(req: NextRequest) {
         // =========================================================================
 
         if (currentDay === 4) {
-            console.log("[Cron] Scenario 4: 4th of month - URGENT (CC admin)")
-
             // Target LAST month
             const targetMonth = currentMonth === 1 ? 12 : currentMonth - 1
             const targetYear = currentMonth === 1 ? currentYear - 1 : currentYear
@@ -299,7 +293,6 @@ export async function GET(req: NextRequest) {
         // Reduziert 55s → ~10s für 100 E-Mails
         // =========================================================================
 
-        console.log(`[Cron] Sending ${emailTasks.length} emails in batches of 10...`)
         const BATCH_SIZE = 10
         const BATCH_DELAY_MS = 1000 // 1 Sekunde zwischen Batches (Rate Limiting)
 
@@ -336,7 +329,6 @@ export async function GET(req: NextRequest) {
                             })
                         })
 
-                        console.log(`[Cron] Sent ${task.reminderType} to ${task.email}${task.cc ? ` (CC: ${task.cc.join(", ")})` : ""}`)
                         return { type: task.reminderType, email: task.email, success: true }
                     } catch (emailError) {
                         console.error(`[Cron] Failed ${task.reminderType} to ${task.email}:`, emailError)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { sendSignatureRequestEmail, sendEmployeeConfirmationEmail } from "@/lib/email"
 import { headers } from "next/headers"
+import { checkRateLimit } from "@/lib/rate-limiter"
 
 /**
  * GET /api/sign/employee/[token]
@@ -128,6 +129,16 @@ export async function POST(
 ) {
     try {
         const { token } = await params
+
+        // Rate Limiting: 3 POST requests per minute per token
+        const rl = checkRateLimit(`sign-employee-post:${token}`, 3, 60_000)
+        if (rl.limited) {
+            return NextResponse.json(
+                { error: "Zu viele Anfragen. Bitte warten Sie einen Moment." },
+                { status: 429, headers: rl.headers }
+            )
+        }
+
         const body = await req.json()
         const { signature } = body
 
@@ -138,6 +149,11 @@ export async function POST(
         // Validate signature format
         if (!signature.startsWith("data:image/png;base64,")) {
             return NextResponse.json({ error: "Ungueltiges Unterschrift-Format" }, { status: 400 })
+        }
+
+        // Signature size limit (consistent with recipient-sign endpoint)
+        if (signature.length > 500_000) {
+            return NextResponse.json({ error: "Signatur zu groß (max 500KB)" }, { status: 400 })
         }
 
         // Find EmployeeSignature by signToken
@@ -261,9 +277,8 @@ export async function POST(
                         signatureUrl,
                         expiresAt: teamSubmission.tokenExpiresAt
                     })
-                    console.log(`[SIGN TOKEN] Signature request email sent to ${recipientEmail}`)
                 } else {
-                    console.warn(`[SIGN TOKEN] No recipient email configured for client ${clientName}`)
+                    // No recipient email configured
                 }
             } catch (emailError) {
                 // Email failure must NOT block the signature
@@ -284,7 +299,6 @@ export async function POST(
                     totalSigned: signedCount,
                     totalRequired: totalCount
                 })
-                console.log(`[SIGN TOKEN] Confirmation email sent to ${employeeSignature.employee.email}`)
             } catch (emailError) {
                 // Email failure must NOT block the signature
                 console.error("[SIGN TOKEN] Failed to send confirmation email:", emailError)

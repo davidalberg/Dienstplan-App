@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
-import { v4 as uuidv4 } from "uuid"
+import { randomBytes } from "crypto"
 import {
     getEmployeesInDienstplan,
     getAllEmployeesInDienstplan,
@@ -17,12 +17,11 @@ export async function GET(req: NextRequest) {
     try {
         const authResult = await requireAuth()
         if (authResult instanceof NextResponse) return authResult
-        const session = authResult
+        const { user } = authResult
 
-        const user = session.user as any
         const { searchParams } = new URL(req.url)
-        const month = parseInt(searchParams.get("month") || "")
-        const year = parseInt(searchParams.get("year") || "")
+        const month = parseInt(searchParams.get("month") || "", 10)
+        const year = parseInt(searchParams.get("year") || "", 10)
 
         if (isNaN(month) || isNaN(year)) {
             return NextResponse.json({ error: "Invalid month/year" }, { status: 400 })
@@ -174,25 +173,17 @@ export async function GET(req: NextRequest) {
  * FIXES: Katharina Broll's "kein Team zugewiesen" error by using sheetFileName instead of teamId
  */
 export async function POST(req: NextRequest) {
-    console.log("[POST /api/submissions] === REQUEST START ===")
     try {
         const authResult = await requireAuth()
         if (authResult instanceof NextResponse) return authResult
-        const session = authResult
-        console.log("[POST /api/submissions] Session:", session?.user ? { id: (session.user as any).id, email: session.user.email, role: (session.user as any).role } : "NO SESSION")
-
-        const user = session.user as any
+        const { user } = authResult
         if (user.role !== "EMPLOYEE") {
-            console.log("[POST /api/submissions] RETURNING 403 - User is not EMPLOYEE, role:", user.role)
             return NextResponse.json({ error: "Only employees can submit timesheets" }, { status: 403 })
         }
 
         const body = await req.json()
         const { month, year } = body
-        console.log("[POST /api/submissions] Request body:", { month, year })
-
         if (!month || !year) {
-            console.log("[POST /api/submissions] RETURNING 400 - Missing month/year")
             return NextResponse.json({ error: "Month and year required" }, { status: 400 })
         }
 
@@ -259,11 +250,7 @@ export async function POST(req: NextRequest) {
         let sheetFileName: string
         let dienstplanConfig: any
 
-        console.log("[POST /api/submissions] userTimesheet found:", userTimesheet ? { sheetFileName: userTimesheet.sheetFileName, teamId: userTimesheet.teamId, teamName: userTimesheet.team?.name } : "NULL")
-
         if (!userTimesheet) {
-            // FALLBACK: Erstelle Submission automatisch wenn kein Timesheet existiert
-            console.log(`[POST /api/submissions] Kein Timesheet gefunden fuer User ${user.id}, Monat ${month}/${year}`)
 
             // Versuche Team/Client des Users zu finden
             const employee = await prisma.user.findUnique({
@@ -289,8 +276,6 @@ export async function POST(req: NextRequest) {
             const teamName = employee.team?.name || (client ? `${client.firstName} ${client.lastName}`.trim() : "Unbekannt")
             sheetFileName = `Team_${teamName.replace(/\s+/g, '_')}_${year}`
 
-            console.log(`[POST /api/submissions] Generierter sheetFileName: ${sheetFileName}`)
-
             // Erstelle DienstplanConfig falls nicht existiert
             dienstplanConfig = await prisma.dienstplanConfig.findUnique({
                 where: { sheetFileName }
@@ -307,7 +292,6 @@ export async function POST(req: NextRequest) {
                         assistantRecipientName: clientName
                     }
                 })
-                console.log(`[POST /api/submissions] DienstplanConfig erstellt fuer ${sheetFileName}`)
             }
         } else {
             // Normaler Flow: Timesheet existiert
@@ -318,8 +302,6 @@ export async function POST(req: NextRequest) {
             if (isLegacyTimesheet && userTimesheet.team) {
                 // Generiere einen eindeutigen sheetFileName aus Team-Name + Jahr
                 sheetFileName = `Team_${userTimesheet.team.name.replace(/\s+/g, '_')}_${year}`
-                console.log(`[POST /api/submissions] Generated sheetFileName for legacy timesheet: ${sheetFileName}`)
-
                 // WICHTIG: Aktualisiere ALLE Timesheets dieses Teams/Monats mit dem generierten sheetFileName
                 // damit getAllEmployeesInDienstplan korrekt funktioniert
                 const updateResult = await prisma.timesheet.updateMany({
@@ -333,7 +315,6 @@ export async function POST(req: NextRequest) {
                         sheetFileName
                     }
                 })
-                console.log(`[POST /api/submissions] Updated ${updateResult.count} legacy timesheets with sheetFileName: ${sheetFileName}`)
             }
 
             if (!sheetFileName) {
@@ -362,7 +343,6 @@ export async function POST(req: NextRequest) {
                             assistantRecipientName: `${client.firstName} ${client.lastName}`
                         }
                     })
-                    console.log(`[POST /api/submissions] Auto-created DienstplanConfig for: ${sheetFileName}`)
                 } else if (team) {
                     // Fallback: Nutze Team-Daten wenn kein Client
                     dienstplanConfig = await prisma.dienstplanConfig.create({
@@ -372,7 +352,6 @@ export async function POST(req: NextRequest) {
                             assistantRecipientName: team.name
                         }
                     })
-                    console.log(`[POST /api/submissions] Auto-created DienstplanConfig (from team) for: ${sheetFileName}`)
                 } else {
                     return NextResponse.json({
                         error: `Der Dienstplan "${sheetFileName}" ist noch nicht konfiguriert. Bitte kontaktieren Sie den Administrator.`
@@ -382,7 +361,6 @@ export async function POST(req: NextRequest) {
         }
 
         // 5. Check that all user's timesheets are confirmed BEFORE any transaction
-        console.log("[POST /api/submissions] Checking for unconfirmed timesheets...")
         const unconfirmedTimesheets = await prisma.timesheet.count({
             where: {
                 employeeId: user.id,
@@ -392,10 +370,7 @@ export async function POST(req: NextRequest) {
                 plannedStart: { not: null }
             }
         })
-        console.log("[POST /api/submissions] Unconfirmed timesheets count:", unconfirmedTimesheets)
-
         if (unconfirmedTimesheets > 0) {
-            console.log("[POST /api/submissions] RETURNING 400 - Unconfirmed timesheets exist")
             return NextResponse.json({
                 error: `Es gibt noch ${unconfirmedTimesheets} unbestätigte Schichten. Bitte bestätigen Sie alle Schichten bevor Sie einreichen.`
             }, { status: 400 })
@@ -417,17 +392,13 @@ export async function POST(req: NextRequest) {
             }
         })
 
-        console.log("[POST /api/submissions] existingSubmission:", existingSubmission ? { id: existingSubmission.id, signaturesCount: existingSubmission.employeeSignatures.length } : "NULL")
-
         if (existingSubmission) {
             const alreadySigned = existingSubmission.employeeSignatures.some(
                 sig => sig.employeeId === user.id
             )
-            console.log("[POST /api/submissions] User already signed?", alreadySigned)
 
             if (alreadySigned) {
                 // DEFENSIVE CHECK: Verify timesheets still exist before blocking resubmission
-                console.log("[POST /api/submissions] Checking if timesheets still exist for this submission...")
                 const timesheetCount = await prisma.timesheet.count({
                     where: {
                         sheetFileName: existingSubmission.sheetFileName,
@@ -436,19 +407,14 @@ export async function POST(req: NextRequest) {
                     }
                 })
 
-                console.log(`[POST /api/submissions] Timesheet count for ${sheetFileName} ${month}/${year}: ${timesheetCount}`)
-
                 if (timesheetCount === 0) {
                     // Timesheets were deleted - clean up orphaned submission
-                    console.log(`[POST /api/submissions] CLEANUP: Deleting orphaned TeamSubmission ${existingSubmission.id}`)
                     await prisma.teamSubmission.delete({
                         where: { id: existingSubmission.id }
                     })
-                    console.log("[POST /api/submissions] Orphaned submission deleted - continuing with new submission")
                     // Continue with new submission creation below
                 } else {
                     // Legitimate block: timesheets exist and user already signed
-                    console.log(`[POST /api/submissions] RETURNING 400 - User ${user.id} already signed for ${sheetFileName} ${month}/${year}`)
                     return NextResponse.json({
                         error: "Sie haben bereits für diesen Monat unterschrieben. Die Einreichung ist bereits aktiv."
                     }, { status: 400 })
@@ -457,9 +423,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 4. Use transaction to prevent race condition between check and create
-        console.log("[POST /api/submissions] Starting transaction...")
         const result = await prisma.$transaction(async (tx) => {
-            console.log("[POST /api/submissions] INSIDE transaction")
             // Re-check if TeamSubmission exists (inside transaction for consistency)
             let teamSubmission = await tx.teamSubmission.findUnique({
                 where: {
@@ -501,7 +465,7 @@ export async function POST(req: NextRequest) {
             }
 
             // 6. Create new TeamSubmission (no duplicate possible due to unique constraint)
-            const signatureToken = uuidv4()
+            const signatureToken = randomBytes(32).toString("hex")
             const tokenExpiresAt = new Date()
             tokenExpiresAt.setDate(tokenExpiresAt.getDate() + 7)
 
@@ -531,7 +495,6 @@ export async function POST(req: NextRequest) {
                 }
             })
 
-            console.log("[POST /api/submissions] Transaction returning teamSubmission:", teamSubmission.id)
             return { teamSubmission, isNew: true, alreadySigned: false }
         }, {
             isolationLevel: 'Serializable', // Highest isolation level for race condition safety
@@ -544,7 +507,6 @@ export async function POST(req: NextRequest) {
 
             // Handle Prisma unique constraint violation
             if (error.code === 'P2002') {
-                console.log("[POST /api/submissions] P2002 - Unique constraint violation, fetching existing...")
                 // Another user just created it, fetch and return
                 return prisma.teamSubmission.findUnique({
                     where: {
@@ -560,7 +522,6 @@ export async function POST(req: NextRequest) {
                         }
                     }
                 }).then(teamSubmission => {
-                    console.log("[POST /api/submissions] P2002 - Found existing submission:", teamSubmission?.id)
                     return { teamSubmission, isNew: false, alreadySigned: false }
                 })
             }
@@ -568,31 +529,19 @@ export async function POST(req: NextRequest) {
             throw error
         })
 
-        console.log("[POST /api/submissions] Transaction completed. Result:", {
-            alreadySigned: result.alreadySigned,
-            isNew: result.isNew,
-            teamSubmissionId: result.teamSubmission?.id || "NULL"
-        })
-
         // Handle race condition case where user signed between outer check and transaction
         if (result.alreadySigned) {
-            console.log("[POST /api/submissions] RETURNING 400 - Already signed (from transaction)")
             return NextResponse.json({
                 error: "Sie haben bereits für diesen Monat unterschrieben. Die Einreichung ist bereits aktiv."
             }, { status: 400 })
         }
 
         if (!result.teamSubmission) {
-            console.log("[POST /api/submissions] RETURNING 500 - teamSubmission is null/undefined")
             return NextResponse.json({ error: "Failed to create or find submission" }, { status: 500 })
         }
 
         // 7. Get all employees in this Dienstplan
-        console.log("[POST /api/submissions] Getting all employees in Dienstplan:", sheetFileName)
         const allEmployees = await getAllEmployeesInDienstplan(sheetFileName, month, year)
-        console.log("[POST /api/submissions] Found employees:", allEmployees.length)
-
-        console.log("[POST /api/submissions] Building response...")
         const response = {
             submission: result.teamSubmission,
             allEmployees,
@@ -608,7 +557,6 @@ export async function POST(req: NextRequest) {
                 ? "Einreichung erstellt. Bitte unterschreiben Sie jetzt."
                 : `${result.teamSubmission.employeeSignatures.length} von ${allEmployees.length} Mitarbeitern haben bereits unterschrieben.`
         }
-        console.log("[POST /api/submissions] === SUCCESS - Returning response ===")
         return NextResponse.json(response)
     } catch (error: any) {
         console.error("[POST /api/submissions] === OUTER CATCH BLOCK ===")

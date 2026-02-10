@@ -119,6 +119,7 @@ model Timesheet {
   @@index([month, year, teamId])     // ✅ PERFORMANCE FIX: Für GET /api/admin/schedule mit teamId filter
   @@index([teamId, month, year])     // ✅ PERFORMANCE FIX: Alternative für team-based queries
   @@index([absenceType, month, year]) // ✅ PERFORMANCE: Für Urlaub/Krank-Reports
+  @@index([absenceType, employeeId, month, year]) // ✅ PERFORMANCE: Für employee-spezifische Absence-Queries
   @@index([status, month, year])      // ✅ PERFORMANCE: Für Submissions-Filter
   @@index([employeeId])               // ✅ PERFORMANCE: Für Employee-Dashboard Queries
   @@index([sheetFileName, month, year]) // ✅ PERFORMANCE: Für Dienstplan-Lookups

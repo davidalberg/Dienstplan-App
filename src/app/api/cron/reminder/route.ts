@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { sendReminderEmail } from "@/lib/email"
+import { timingSafeEqual } from "crypto"
 
 /**
  * GET /api/cron/reminder
@@ -13,7 +14,11 @@ export async function GET(req: NextRequest) {
     const authHeader = req.headers.get("authorization")
     const cronSecret = process.env.CRON_SECRET
 
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    function safeCompare(a: string, b: string): boolean {
+        if (a.length !== b.length) return false
+        return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+    }
+    if (!cronSecret || !authHeader || !safeCompare(authHeader, `Bearer ${cronSecret}`)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

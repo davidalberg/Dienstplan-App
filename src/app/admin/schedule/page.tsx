@@ -239,7 +239,7 @@ function SchedulePageContent() {
         const now = Date.now()
 
         // Skip wenn innerhalb der letzten 10 Minuten bereits prefetched
-        if (lastPrefetch && (now - parseInt(lastPrefetch)) < 10 * 60 * 1000) {
+        if (lastPrefetch && (now - parseInt(lastPrefetch, 10)) < 10 * 60 * 1000) {
             console.log(`[Schedule] Cache noch gültig für ${month}/${year}`)
             return
         }
@@ -1753,7 +1753,7 @@ function SchedulePageContent() {
                                                         if (match) {
                                                             const h = match[1].padStart(2, '0')
                                                             const m = (match[2] || '00').padStart(2, '0')
-                                                            if (parseInt(h) <= 24 && parseInt(m) <= 59) {
+                                                            if (parseInt(h, 10) <= 24 && parseInt(m, 10) <= 59) {
                                                                 setFormData({ ...formData, plannedStart: `${h}:${m}` })
                                                             }
                                                         }
@@ -1787,7 +1787,7 @@ function SchedulePageContent() {
                                                         if (match) {
                                                             const h = match[1].padStart(2, '0')
                                                             const m = (match[2] || '00').padStart(2, '0')
-                                                            if (parseInt(h) <= 24 && parseInt(m) <= 59) {
+                                                            if (parseInt(h, 10) <= 24 && parseInt(m, 10) <= 59) {
                                                                 setFormData({ ...formData, plannedEnd: `${h}:${m}` })
                                                             }
                                                         }

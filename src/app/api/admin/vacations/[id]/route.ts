@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/api-auth"
+import { requireAdmin, AuthUser } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 
 // Helper: Berechne Urlaubstage zwischen zwei Daten (inklusive)
@@ -149,7 +149,7 @@ export async function PUT(
 
             // Bei Genehmigung: approvedBy und approvedAt setzen, usedDays erhoehen
             if (status === "APPROVED" && existing.status !== "APPROVED") {
-                updateData.approvedBy = (session.user as any).id
+                updateData.approvedBy = session.user.id
                 updateData.approvedAt = new Date()
 
                 // Urlaubstage zum Kontingent hinzufuegen

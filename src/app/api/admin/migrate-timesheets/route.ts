@@ -18,8 +18,6 @@ export async function POST(req: NextRequest) {
         const body = await req.json().catch(() => ({}))
         const { dryRun = true } = body // Default: Dry Run (zeigt nur was passieren wuerde)
 
-        console.log(`[migrate-timesheets] Starting migration (dryRun: ${dryRun})`)
-
         // 1. Finde alle eindeutigen Team/Monat/Jahr Kombinationen ohne sheetFileName
         const legacyTimesheets = await prisma.timesheet.findMany({
             where: {
@@ -163,7 +161,6 @@ export async function POST(req: NextRequest) {
                         }
                     })
                     configsCreated++
-                    console.log(`[migrate-timesheets] Created DienstplanConfig: ${sheetFileName}`)
                 }
 
                 // Update alle Timesheets dieser Gruppe
@@ -176,7 +173,6 @@ export async function POST(req: NextRequest) {
                     }
                 })
                 timesheetsUpdated += updateResult.count
-                console.log(`[migrate-timesheets] Updated ${updateResult.count} timesheets for ${sheetFileName}`)
             }
 
             return { configsCreated, timesheetsUpdated }

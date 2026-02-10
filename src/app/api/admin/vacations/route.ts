@@ -40,8 +40,8 @@ export async function GET(req: NextRequest) {
 
         // Zeitraum-Filter: Antraege die im angegebenen Monat/Jahr liegen
         if (month && year) {
-            const monthNum = parseInt(month)
-            const yearNum = parseInt(year)
+            const monthNum = parseInt(month, 10)
+            const yearNum = parseInt(year, 10)
 
             if (isNaN(monthNum) || isNaN(yearNum) || monthNum < 1 || monthNum > 12) {
                 return NextResponse.json({ error: "Ungueltige Monat/Jahr Werte" }, { status: 400 })
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
             ]
         } else if (year) {
             // Nur Jahr-Filter
-            const yearNum = parseInt(year)
+            const yearNum = parseInt(year, 10)
             if (isNaN(yearNum)) {
                 return NextResponse.json({ error: "Ungueltiges Jahr" }, { status: 400 })
             }
@@ -145,8 +145,8 @@ export async function GET(req: NextRequest) {
         }> = []
 
         if (month && year) {
-            const monthNum = parseInt(month)
-            const yearNum = parseInt(year)
+            const monthNum = parseInt(month, 10)
+            const yearNum = parseInt(year, 10)
 
             // Get all vacation timesheets for this period
             const vacationTimesheets = await prisma.timesheet.findMany({

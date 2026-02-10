@@ -101,8 +101,8 @@ export default function TeamOverviewPage() {
 
     const navigateWeek = (delta: number) => {
         const [yearStr, weekStr] = currentWeek.split("-W")
-        const year = parseInt(yearStr)
-        const week = parseInt(weekStr)
+        const year = parseInt(yearStr, 10)
+        const week = parseInt(weekStr, 10)
 
         const firstDayOfYear = new Date(year, 0, 1)
         const daysOffset = (week - 1) * 7

@@ -176,14 +176,14 @@ export default function TeamDetailPage() {
                     <input
                         type="number"
                         value={filters.month}
-                        onChange={e => setFilters({ ...filters, month: parseInt(e.target.value) })}
+                        onChange={e => setFilters({ ...filters, month: parseInt(e.target.value, 10) })}
                         className="w-16 rounded-lg border border-gray-200 p-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <span className="text-gray-300">/</span>
                     <input
                         type="number"
                         value={filters.year}
-                        onChange={e => setFilters({ ...filters, year: parseInt(e.target.value) })}
+                        onChange={e => setFilters({ ...filters, year: parseInt(e.target.value, 10) })}
                         className="w-20 rounded-lg border border-gray-200 p-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                 </div>

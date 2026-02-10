@@ -12,8 +12,8 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const source = searchParams.get("source")
-    const month = parseInt(searchParams.get("month") || "")
-    const year = parseInt(searchParams.get("year") || "")
+    const month = parseInt(searchParams.get("month") || "", 10)
+    const year = parseInt(searchParams.get("year") || "", 10)
 
     if (!source || isNaN(month) || isNaN(year)) {
         return NextResponse.json({ error: "Missing or invalid parameters" }, { status: 400 })

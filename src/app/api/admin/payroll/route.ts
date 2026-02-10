@@ -52,10 +52,28 @@ export async function GET(req: NextRequest) {
                 where: {
                     role: "EMPLOYEE"
                 },
-                include: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    hourlyWage: true,
+                    entryDate: true,
+                    exitDate: true,
+                    travelCostType: true,
+                    nightPremiumEnabled: true,
+                    nightPremiumPercent: true,
+                    sundayPremiumEnabled: true,
+                    sundayPremiumPercent: true,
+                    holidayPremiumEnabled: true,
+                    holidayPremiumPercent: true,
                     team: {
-                        include: {
-                            client: true
+                        select: {
+                            client: {
+                                select: {
+                                    firstName: true,
+                                    lastName: true
+                                }
+                            }
                         }
                     }
                 },
@@ -106,11 +124,11 @@ export async function GET(req: NextRequest) {
                     id: employee.id,
                     hourlyWage: employee.hourlyWage || 0,
                     nightPremiumEnabled: employee.nightPremiumEnabled,
-                    nightPremiumPercent: employee.nightPremiumPercent,
+                    nightPremiumPercent: employee.nightPremiumPercent || 25,
                     sundayPremiumEnabled: employee.sundayPremiumEnabled,
-                    sundayPremiumPercent: employee.sundayPremiumPercent,
+                    sundayPremiumPercent: employee.sundayPremiumPercent || 30,
                     holidayPremiumEnabled: employee.holidayPremiumEnabled,
-                    holidayPremiumPercent: employee.holidayPremiumPercent
+                    holidayPremiumPercent: employee.holidayPremiumPercent || 125
                 },
                 timesheets  // ALLE Timesheets für Backup-Suche
             )

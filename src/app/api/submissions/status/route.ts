@@ -24,13 +24,11 @@ export async function GET(req: NextRequest) {
     try {
         const authResult = await requireAuth()
         if (authResult instanceof NextResponse) return authResult
-        const session = authResult
-
-        const user = session.user as any
+        const { user } = authResult
         const { searchParams } = new URL(req.url)
 
-        const month = parseInt(searchParams.get("month") || "")
-        const year = parseInt(searchParams.get("year") || "")
+        const month = parseInt(searchParams.get("month") || "", 10)
+        const year = parseInt(searchParams.get("year") || "", 10)
 
         if (isNaN(month) || isNaN(year) || month < 1 || month > 12) {
             return NextResponse.json(

@@ -96,9 +96,6 @@ export async function DELETE(
                 data: { status: "CONFIRMED" }
             })
 
-            // 7. Log to console (for debugging/auditing)
-            console.log(`[DELETE-SIGNATURE] Admin ${session.user!.email} deleted signature of ${employeeName} (${employeeId}) from submission ${id} (${submission.sheetFileName} ${submission.month}/${submission.year})`)
-
             return {
                 success: true,
                 signedCount,

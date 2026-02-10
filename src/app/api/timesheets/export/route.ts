@@ -10,7 +10,7 @@ import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 export async function GET(req: NextRequest) {
     const authResult = await requireAuth()
     if (authResult instanceof NextResponse) return authResult
-    const session = authResult
+    const { user } = authResult
 
     const { searchParams } = new URL(req.url)
     const month = parseInt(searchParams.get("month") || "", 10)
@@ -21,8 +21,6 @@ export async function GET(req: NextRequest) {
     if (isNaN(month) || isNaN(year) || month < 1 || month > 12) {
         return NextResponse.json({ error: "Invalid month/year" }, { status: 400 })
     }
-
-    const user = session.user as any
 
     try {
         // Determine which employee's data to export

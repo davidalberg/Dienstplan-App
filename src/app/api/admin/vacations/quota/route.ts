@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
         const where: any = {}
 
         if (year) {
-            const yearNum = parseInt(year)
+            const yearNum = parseInt(year, 10)
             if (isNaN(yearNum)) {
                 return NextResponse.json({ error: "Ungueltiges Jahr" }, { status: 400 })
             }
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Jahr ist erforderlich" }, { status: 400 })
         }
 
-        const yearNum = parseInt(year)
+        const yearNum = parseInt(year, 10)
         if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) {
             return NextResponse.json({ error: "Ungueltiges Jahr" }, { status: 400 })
         }
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
         // Werte validieren
         let totalDaysNum = 30 // Default
         if (totalDays !== undefined) {
-            totalDaysNum = parseInt(totalDays)
+            totalDaysNum = parseInt(totalDays, 10)
             if (isNaN(totalDaysNum) || totalDaysNum < 0 || totalDaysNum > 365) {
                 return NextResponse.json({ error: "Ungueltige Gesamttage (0-365)" }, { status: 400 })
             }
@@ -165,14 +165,14 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: "Jahr ist erforderlich" }, { status: 400 })
         }
 
-        const yearNum = parseInt(year)
+        const yearNum = parseInt(year, 10)
         if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) {
             return NextResponse.json({ error: "Ungueltiges Jahr" }, { status: 400 })
         }
 
         let totalDaysNum = 30
         if (totalDays !== undefined) {
-            totalDaysNum = parseInt(totalDays)
+            totalDaysNum = parseInt(totalDays, 10)
             if (isNaN(totalDaysNum) || totalDaysNum < 0 || totalDaysNum > 365) {
                 return NextResponse.json({ error: "Ungueltige Gesamttage (0-365)" }, { status: 400 })
             }

@@ -85,9 +85,6 @@ export async function POST(
                 }
             })
 
-            // 5. Log to console (for debugging/auditing)
-            console.log(`[RESET-SUBMISSION] Admin ${session.user!.email} reset submission ${id} (${submission.sheetFileName} ${submission.month}/${submission.year}). Reason: ${reason || "None"}. Deleted ${employeeIds.length} signatures.`)
-
             return {
                 success: true,
                 newToken,

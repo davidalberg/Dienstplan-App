@@ -10,8 +10,8 @@ export async function GET(req: NextRequest) {
     if (result instanceof NextResponse) return result
 
     const { searchParams } = new URL(req.url)
-    const month = parseInt(searchParams.get("month") || String(new Date().getMonth() + 1))
-    const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()))
+    const month = parseInt(searchParams.get("month") || String(new Date().getMonth() + 1), 10)
+    const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()), 10)
 
     try {
         // 1. Alle aktiven Klienten mit ihren Teams laden

@@ -30,8 +30,7 @@ export async function GET(
                         employee: {
                             select: {
                                 id: true,
-                                name: true,
-                                email: true
+                                name: true
                             }
                         }
                     },
@@ -111,7 +110,6 @@ export async function GET(
             employeeSignatures: teamSubmission.employeeSignatures.map(sig => ({
                 employeeId: sig.employeeId,
                 employeeName: sig.employee.name,
-                employeeEmail: sig.employee.email,
                 signature: sig.signature,
                 signedAt: sig.signedAt
             })),
@@ -399,7 +397,6 @@ export async function POST(
                     })
 
                     googleDriveFileId = uploadResult.fileId
-                    console.log(`[RECIPIENT SIGN] PDF uploaded to client folder: ${uploadResult.webViewLink}`)
                 } catch (driveError: unknown) {
                     console.error("[RECIPIENT SIGN] Client folder upload failed:", driveError instanceof Error ? driveError.message : driveError)
 
@@ -418,14 +415,11 @@ export async function POST(
                         })
 
                         googleDriveFileId = fallbackResult.fileId
-                        console.log("[RECIPIENT SIGN] Fallback upload succeeded")
                     } catch (fallbackError: unknown) {
                         console.error("[RECIPIENT SIGN] Fallback upload also failed:", fallbackError instanceof Error ? fallbackError.message : fallbackError)
                         // Continue without Google Drive - we have the app link
                     }
                 }
-            } else {
-                console.warn("[RECIPIENT SIGN] No client name available for folder upload")
             }
         } catch (uploadError: unknown) {
             console.error("[RECIPIENT SIGN] PDF URL generation failed:", uploadError)

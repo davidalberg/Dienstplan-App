@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
 
         const { searchParams } = new URL(req.url)
         const sheetFileName = searchParams.get("sheetFileName")
-        const month = parseInt(searchParams.get("month") || "")
-        const year = parseInt(searchParams.get("year") || "")
+        const month = parseInt(searchParams.get("month") || "", 10)
+        const year = parseInt(searchParams.get("year") || "", 10)
 
         if (!sheetFileName || isNaN(month) || isNaN(year)) {
             return NextResponse.json({ error: "Missing or invalid parameters" }, { status: 400 })

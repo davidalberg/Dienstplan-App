@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     try {
         const adminAuth = await requireAdmin()
         if (adminAuth instanceof NextResponse) return adminAuth
-        const session = adminAuth
+        const { user: adminUser } = adminAuth
 
         const body = await req.json()
         const parseResult = withdrawSchema.safeParse(body)
@@ -86,6 +86,13 @@ export async function POST(req: NextRequest) {
             )
         }
 
+        // Prevent withdrawing signatures from completed submissions (race condition guard)
+        if (teamSubmission.status === "COMPLETED") {
+            return NextResponse.json({
+                error: "Unterschrift kann nicht zurückgezogen werden - Stundennachweis ist bereits abgeschlossen"
+            }, { status: 400 })
+        }
+
         if (type === "employee") {
             // Withdraw employee signature
             const employeeSignature = teamSubmission.employeeSignatures[0]
@@ -114,7 +121,7 @@ export async function POST(req: NextRequest) {
                     },
                     data: {
                         status: "CONFIRMED",
-                        lastUpdatedBy: (session.user as any).email
+                        lastUpdatedBy: adminUser.email
                     }
                 })
 
@@ -129,7 +136,7 @@ export async function POST(req: NextRequest) {
                     data: {
                         employeeId,
                         date: new Date(),
-                        changedBy: (session.user as any).email || "Admin",
+                        changedBy: adminUser.email || "Admin",
                         field: "ADMIN_WITHDRAW_EMPLOYEE_SIGNATURE",
                         oldValue: `Signed at ${employeeSignature.signedAt?.toISOString()}`,
                         newValue: `Admin withdrew for ${month}/${year}`
@@ -167,7 +174,7 @@ export async function POST(req: NextRequest) {
                     data: {
                         employeeId,
                         date: new Date(),
-                        changedBy: (session.user as any).email || "Admin",
+                        changedBy: adminUser.email || "Admin",
                         field: "ADMIN_WITHDRAW_CLIENT_SIGNATURE",
                         oldValue: `Client signed at ${teamSubmission.recipientSignedAt?.toISOString()}`,
                         newValue: `Admin withdrew client signature for ${month}/${year}`

@@ -123,7 +123,6 @@ export async function PUT(
                             }
                         })
 
-                        console.log(`[Auto-Team] Created team "${teamName}" for client ${id}`)
                     }
 
                     // Setze Mitarbeiter's Primary Team
@@ -132,9 +131,8 @@ export async function PUT(
                         data: { teamId: clientTeam.id }
                     })
 
-                    console.log(`[Auto-Team] Set employee ${employee.name} primary team to "${clientTeam.name}"`)
                 } else {
-                    console.log(`[Auto-Team] Employee ${employee.name} already has primary team, skipping`)
+                    // Employee already has primary team, skipping
                 }
             }
 

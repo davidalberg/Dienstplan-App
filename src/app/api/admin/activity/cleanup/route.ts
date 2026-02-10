@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
+import { timingSafeEqual } from "crypto"
 
 /**
  * DELETE /api/admin/activity/cleanup
@@ -12,7 +13,11 @@ export async function DELETE(req: NextRequest) {
     const authHeader = req.headers.get("authorization")
     const cronSecret = process.env.CRON_SECRET
 
-    if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
+    function safeCompare(a: string, b: string): boolean {
+        if (a.length !== b.length) return false
+        return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+    }
+    if (cronSecret && authHeader && safeCompare(authHeader, `Bearer ${cronSecret}`)) {
         // Cron-Job authentifiziert
     } else {
         // Pruefe Admin-Session

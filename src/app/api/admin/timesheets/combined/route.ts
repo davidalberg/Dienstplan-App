@@ -174,7 +174,6 @@ export async function GET(req: NextRequest) {
 
         const clientMissing = !resolvedClient
         if (clientMissing) {
-            console.warn(`[GET /api/admin/timesheets/combined] Could not resolve client for sheetFileName: ${sheetFileName}`)
         }
 
         // Check if any employees found
@@ -396,9 +395,6 @@ export async function GET(req: NextRequest) {
                 client: clientSignature
             }
         }
-
-        const duration = Math.round(performance.now() - startTime)
-        console.log(`[API] GET /api/admin/timesheets/combined - ${duration}ms (${flatTimesheets.length} timesheets, ${employees.length} employees)`)
 
         return NextResponse.json(response)
 

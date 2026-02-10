@@ -94,8 +94,6 @@ export async function DELETE(req: NextRequest) {
             }
         })
 
-        console.log(`[Cleanup] Deleted ${result.count} orphaned teams:`, orphanedTeams.map(t => t.name))
-
         return NextResponse.json({ deletedCount: result.count, deletedTeams: orphanedTeams })
     } catch (error: any) {
         console.error("[DELETE /api/admin/teams/orphaned] Error:", error)

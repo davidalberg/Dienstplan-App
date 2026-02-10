@@ -30,6 +30,8 @@ const createShiftSchema = z.object({
     note: z.string().optional().nullable(),
     teamId: z.string().optional().nullable(),
     absenceType: z.enum(["SICK", "VACATION"]).optional().nullable(),
+}).refine(data => data.plannedStart !== data.plannedEnd, {
+    message: "Start- und Endzeit dürfen nicht identisch sein"
 })
 
 // Schema für Schicht-Update
@@ -62,6 +64,8 @@ const bulkCreateSchema = z.object({
     teamId: z.string().optional().nullable(),
     repeatDays: z.array(z.number().min(0).max(6)).min(1, "Mindestens ein Wochentag muss ausgewählt sein"),
     absenceType: z.enum(["SICK", "VACATION"]).optional().nullable(),
+}).refine(data => data.plannedStart !== data.plannedEnd, {
+    message: "Start- und Endzeit dürfen nicht identisch sein"
 })
 
 // GET - Alle Schichten für einen Zeitraum
@@ -72,8 +76,8 @@ export async function GET(req: NextRequest) {
     if (result instanceof NextResponse) return result
 
     const { searchParams } = new URL(req.url)
-    const month = parseInt(searchParams.get("month") || "")
-    const year = parseInt(searchParams.get("year") || "")
+    const month = parseInt(searchParams.get("month") || "", 10)
+    const year = parseInt(searchParams.get("year") || "", 10)
     const teamId = searchParams.get("teamId") || undefined
 
     if (isNaN(month) || isNaN(year)) {
@@ -175,9 +179,6 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        const duration = Math.round(performance.now() - startTime)
-        console.log(`[API] GET /api/admin/schedule - ${duration}ms (${shifts.length} shifts, ${employees.length} employees)`)
-
         return NextResponse.json({ shifts, employees, teams })
     } catch (error: unknown) {
         console.error("[GET /api/admin/schedule] Error:", error)
@@ -231,82 +232,116 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: "Mitarbeiter nicht gefunden" }, { status: 400 })
             }
 
-            // Generiere alle Daten zwischen Start und Ende
+            // Generiere alle Kandidaten-Daten zwischen Start und Ende
             const start = new Date(startDate)
             const end = new Date(endDate)
-            const createdShifts = []
 
+            // Sammle alle Kandidaten-Daten, die auf einen gewählten Wochentag fallen
+            const candidateDates: Date[] = []
             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                const dayOfWeek = d.getDay()
-
-                // Nur an ausgewählten Wochentagen erstellen
-                if (!repeatDays.includes(dayOfWeek)) continue
-
+                if (!repeatDays.includes(d.getDay())) continue
                 const dateStr = d.toISOString().split('T')[0]
-                const month = d.getMonth() + 1
-                const year = d.getFullYear()
+                candidateDates.push(new Date(dateStr + "T00:00:00.000Z"))
+            }
 
-                // Prüfe ob bereits eine Schicht existiert
-                const existing = await prisma.timesheet.findUnique({
-                    where: {
-                        employeeId_date: { employeeId, date: new Date(dateStr) }
-                    }
-                })
+            if (candidateDates.length === 0) {
+                return NextResponse.json({ created: 0, shifts: [] })
+            }
 
-                if (existing) continue // Überspringe existierende
+            // BATCH: Alle existierenden Schichten für diesen Mitarbeiter im Datumsbereich laden (1 Query statt N)
+            const existingShifts = await prisma.timesheet.findMany({
+                where: {
+                    employeeId,
+                    date: { in: candidateDates }
+                },
+                select: { date: true }
+            })
 
-                // Generiere sheetFileName für diese Schicht
+            // Set für O(1) Lookup: existierende Daten als ISO-String
+            const existingDateSet = new Set(
+                existingShifts.map(s => s.date.toISOString())
+            )
+
+            // Filtere Kandidaten: nur neue Daten behalten
+            const newDates = candidateDates.filter(
+                d => !existingDateSet.has(d.toISOString())
+            )
+
+            if (newDates.length === 0) {
+                return NextResponse.json({ created: 0, shifts: [] })
+            }
+
+            // BATCH: Alle Schichten in einem einzigen createMany-Aufruf erstellen (1 Query statt N)
+            const shiftsToCreate = newDates.map(shiftDate => {
+                const m = shiftDate.getUTCMonth() + 1
+                const y = shiftDate.getUTCFullYear()
                 const sheetFileName = employee.team
-                    ? `Team_${employee.team.name.replace(/\s+/g, '_')}_${year}`
+                    ? `Team_${employee.team.name.replace(/\s+/g, '_')}_${y}`
                     : null
 
-                const shiftDate = new Date(dateStr)
-                const shift = await prisma.timesheet.create({
-                    data: {
-                        employeeId,
-                        date: shiftDate,
-                        month,
-                        year,
-                        plannedStart,
-                        plannedEnd,
-                        backupEmployeeId: backupEmployeeId || null,
-                        note: note || null,
-                        teamId: employee.team?.id || null,
-                        sheetFileName,
-                        status: "PLANNED",
-                        source: "APP",
-                        syncVerified: true,
-                        absenceType: absenceType || null,
-                        actualStart: absenceType === "VACATION" ? plannedStart : null,
-                        actualEnd: absenceType === "VACATION" ? plannedEnd : null,
-                    }
-                })
-                createdShifts.push(shift)
-
-                // Auto-create VacationRequest for VACATION shifts
-                if (absenceType === "VACATION") {
-                    const existingVacation = await prisma.vacationRequest.findFirst({
-                        where: {
-                            employeeId,
-                            startDate: { lte: shiftDate },
-                            endDate: { gte: shiftDate }
-                        }
-                    })
-
-                    if (!existingVacation) {
-                        await prisma.vacationRequest.create({
-                            data: {
-                                employeeId,
-                                startDate: shiftDate,
-                                endDate: shiftDate,
-                                status: "APPROVED",
-                                reason: "Aus Dienstplan übernommen"
-                            }
-                        })
-                    }
+                return {
+                    employeeId,
+                    date: shiftDate,
+                    month: m,
+                    year: y,
+                    plannedStart,
+                    plannedEnd,
+                    backupEmployeeId: backupEmployeeId || null,
+                    note: note || null,
+                    teamId: employee.team?.id || null,
+                    sheetFileName,
+                    status: "PLANNED",
+                    source: "APP",
+                    syncVerified: true,
+                    absenceType: absenceType || null,
+                    actualStart: absenceType === "VACATION" ? plannedStart : null,
+                    actualEnd: absenceType === "VACATION" ? plannedEnd : null,
                 }
+            })
 
+            await prisma.timesheet.createMany({ data: shiftsToCreate })
+
+            // Auto-create VacationRequests für VACATION-Schichten (Batch)
+            if (absenceType === "VACATION" && newDates.length > 0) {
+                // BATCH: Alle existierenden VacationRequests im Datumsbereich laden (1 Query statt N)
+                const existingVacations = await prisma.vacationRequest.findMany({
+                    where: {
+                        employeeId,
+                        startDate: { lte: newDates[newDates.length - 1] },
+                        endDate: { gte: newDates[0] }
+                    },
+                    select: { startDate: true, endDate: true }
+                })
+
+                // Filtere Daten, die noch keinen VacationRequest haben
+                const vacationDatesToCreate = newDates.filter(shiftDate => {
+                    return !existingVacations.some(
+                        v => v.startDate <= shiftDate && v.endDate >= shiftDate
+                    )
+                })
+
+                if (vacationDatesToCreate.length > 0) {
+                    // BATCH: Alle VacationRequests in einem createMany erstellen (1 Query statt N)
+                    await prisma.vacationRequest.createMany({
+                        data: vacationDatesToCreate.map(d => ({
+                            employeeId,
+                            startDate: d,
+                            endDate: d,
+                            status: "APPROVED",
+                            reason: "Aus Dienstplan übernommen"
+                        }))
+                    })
+                }
             }
+
+            // Lade die erstellten Schichten für die Rückgabe
+            const createdShifts = await prisma.timesheet.findMany({
+                where: {
+                    employeeId,
+                    date: { in: newDates }
+                },
+                orderBy: { date: "asc" }
+            })
 
             // Log activity
             await logActivity({
@@ -603,7 +638,6 @@ export async function DELETE(req: NextRequest) {
 
                 if (remainingCount === 0) {
                     // Last timesheet deleted -> Delete orphaned TeamSubmission
-                    console.log(`[DELETE /api/admin/schedule] CLEANUP: Deleting orphaned TeamSubmission for ${timesheet.sheetFileName} ${timesheet.month}/${timesheet.year}`)
                     try {
                         await tx.teamSubmission.delete({
                             where: {
@@ -616,7 +650,6 @@ export async function DELETE(req: NextRequest) {
                         })
                     } catch {
                         // Submission might not exist (not yet submitted) - ignore error
-                        console.log("[DELETE /api/admin/schedule] No submission to delete (not yet submitted)")
                     }
                 }
             }

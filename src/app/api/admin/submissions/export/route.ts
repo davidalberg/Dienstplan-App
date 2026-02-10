@@ -16,8 +16,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const employeeId = searchParams.get("employeeId")
     const clientId = searchParams.get("clientId")
-    const month = parseInt(searchParams.get("month") || "")
-    const year = parseInt(searchParams.get("year") || "")
+    const month = parseInt(searchParams.get("month") || "", 10)
+    const year = parseInt(searchParams.get("year") || "", 10)
     const exportFormat = searchParams.get("format") || "pdf"
 
     if (!employeeId || isNaN(month) || isNaN(year)) {

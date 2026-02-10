@@ -7,9 +7,7 @@ export async function GET(req: NextRequest) {
     try {
         const authResult = await requireAuth()
         if (authResult instanceof NextResponse) return authResult
-        const session = authResult
-
-        const user = session.user as any
+        const { user } = authResult
         if (user.role !== "TEAMLEAD" && user.role !== "ADMIN") {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }

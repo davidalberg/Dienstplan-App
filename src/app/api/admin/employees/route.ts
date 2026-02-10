@@ -32,10 +32,10 @@ export async function GET(req: NextRequest) {
 
     // Limit: Default 50, Max 100 (nur wenn Pagination aktiviert)
     const limit = usePagination
-        ? Math.min(parseInt(limitParam || "50"), 100)
+        ? Math.min(parseInt(limitParam || "50", 10), 100)
         : undefined
     const offset = usePagination
-        ? parseInt(offsetParam || "0")
+        ? parseInt(offsetParam || "0", 10)
         : undefined
 
     try {
