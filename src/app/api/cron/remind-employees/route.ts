@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { Resend } from "resend"
 import { getReminderEmailHTML, getReminderEmailText, getReminderEmailSubject, ReminderType } from "@/lib/email-templates"
+import { PRE_SUBMISSION_STATUSES } from "@/lib/constants"
 
 /**
  * Cron Job: Remind Employees about Unsigned Timesheets
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
                     some: {
                         month: currentMonth,
                         year: currentYear,
-                        status: { in: ["PLANNED", "CONFIRMED", "CHANGED"] },
+                        status: { in: [...PRE_SUBMISSION_STATUSES] },
                         absenceType: null // Nur echte Schichten, keine Urlaub/Krank
                     }
                 }
@@ -112,7 +113,7 @@ export async function GET(req: NextRequest) {
                     where: {
                         month: currentMonth,
                         year: currentYear,
-                        status: { in: ["PLANNED", "CONFIRMED", "CHANGED"] },
+                        status: { in: [...PRE_SUBMISSION_STATUSES] },
                         absenceType: null
                     },
                     orderBy: { date: "desc" }

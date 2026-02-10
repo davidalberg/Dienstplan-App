@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
             where: {
                 month: currentMonth,
                 year: currentYear,
-                status: { in: ["CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                status: { not: "PLANNED" }
             }
         })
 

@@ -268,7 +268,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
                                         if (match) {
                                             const h = match[1].padStart(2, '0')
                                             const m = (match[2] || '00').padStart(2, '0')
-                                            if (parseInt(h) <= 24 && parseInt(m) <= 59) {
+                                            if (parseInt(h) <= 23 && parseInt(m) <= 59) {
                                                 setEditData({ ...editData, actualStart: `${h}:${m}` })
                                             }
                                         }
@@ -298,7 +298,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
                                         if (match) {
                                             const h = match[1].padStart(2, '0')
                                             const m = (match[2] || '00').padStart(2, '0')
-                                            if (parseInt(h) <= 24 && parseInt(m) <= 59) {
+                                            if (parseInt(h) <= 23 && parseInt(m) <= 59) {
                                                 setEditData({ ...editData, actualEnd: `${h}:${m}` })
                                             }
                                         }
@@ -324,9 +324,15 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
                             <textarea
                                 value={editData.note}
                                 onChange={e => setEditData({ ...editData, note: e.target.value })}
+                                maxLength={500}
                                 placeholder="Optional..."
                                 className="h-20 w-full rounded-lg border border-gray-300 p-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                             />
+                            {editData.note.length >= 400 && (
+                                <p className={`text-xs mt-1 ${editData.note.length >= 500 ? 'text-red-500' : 'text-gray-400'}`}>
+                                    {editData.note.length}/500
+                                </p>
+                            )}
                         </div>
                         <div className="flex gap-2 pt-2">
                             <button

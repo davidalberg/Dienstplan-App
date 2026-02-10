@@ -4,18 +4,49 @@ import prisma from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
+const TIME_FORMAT = /^\d{2}:\d{2}$/
+
 const timesheetUpdateSchema = z.object({
-    id: z.string(), // Required - must have an ID to update
+    id: z.string(),
     date: z.string().optional(),
-    actualStart: z.string().nullable().optional(),
-    actualEnd: z.string().nullable().optional(),
+    actualStart: z.string().nullable().optional().refine(
+        val => val === null || val === undefined || TIME_FORMAT.test(val),
+        { message: "Ungültiges Zeitformat (erwartet HH:MM)" }
+    ),
+    actualEnd: z.string().nullable().optional().refine(
+        val => val === null || val === undefined || TIME_FORMAT.test(val),
+        { message: "Ungültiges Zeitformat (erwartet HH:MM)" }
+    ),
     note: z.string().max(500).optional(),
     absenceType: z.union([
         z.enum(["SICK", "VACATION"]),
         z.literal(""),
         z.null()
-    ]).optional().transform(val => val === "" ? null : val), // Accept empty string and convert to null
+    ]).optional().transform(val => val === "" ? null : val),
     action: z.enum(["CONFIRM", "UPDATE", "UNCONFIRM"]).optional(),
+}).refine(data => {
+    // Only validate duration when both times are provided
+    if (!data.actualStart || !data.actualEnd) return true
+    if (!TIME_FORMAT.test(data.actualStart) || !TIME_FORMAT.test(data.actualEnd)) return true
+
+    const [startH, startM] = data.actualStart.split(":").map(Number)
+    const [endH, endM] = data.actualEnd.split(":").map(Number)
+    const startMinutes = startH * 60 + startM
+    const endMinutes = endH * 60 + endM
+
+    // Calculate duration (handle overnight shifts where end < start)
+    let durationMinutes = endMinutes - startMinutes
+    if (durationMinutes < 0) durationMinutes += 24 * 60
+
+    // Duration must not exceed 24 hours
+    if (durationMinutes > 24 * 60) return false
+
+    // Duration must not be exactly 0 unless it's an absence
+    if (durationMinutes === 0 && !data.absenceType) return false
+
+    return true
+}, {
+    message: "Ungültige Schichtdauer",
 })
 
 export async function GET(req: NextRequest) {
@@ -149,6 +180,32 @@ export async function POST(req: NextRequest) {
 
         const { id, actualStart, actualEnd, note, absenceType, action } = validated.data
         const user = session.user
+
+    // Detaillierte Schichtdauer-Validierung (nur bei manueller Zeiteingabe, nicht bei CONFIRM/UNCONFIRM)
+    if (actualStart && actualEnd && action !== "CONFIRM" && action !== "UNCONFIRM") {
+        const [startH, startM] = actualStart.split(":").map(Number)
+        const [endH, endM] = actualEnd.split(":").map(Number)
+        const startMinutes = startH * 60 + startM
+        const endMinutes = endH * 60 + endM
+
+        // Dauer berechnen (Nachtschicht: Ende < Start → +24h)
+        let durationMinutes = endMinutes - startMinutes
+        if (durationMinutes < 0) durationMinutes += 24 * 60
+
+        if (durationMinutes > 24 * 60) {
+            return NextResponse.json(
+                { error: "Schichtdauer darf maximal 24 Stunden betragen" },
+                { status: 400 }
+            )
+        }
+
+        if (durationMinutes === 0 && !absenceType) {
+            return NextResponse.json(
+                { error: "Schichtbeginn und -ende dürfen nicht identisch sein (außer bei Abwesenheit)" },
+                { status: 400 }
+            )
+        }
+    }
 
     const existing = await prisma.timesheet.findUnique({
         where: { id },
@@ -316,11 +373,14 @@ export async function POST(req: NextRequest) {
             })
 
             if (backupShift && backupShift.note?.includes("Backup-Schicht anfallend")) {
-                // Lösche die Backup-Schicht komplett
-                await prisma.timesheet.delete({
-                    where: { id: backupShift.id }
-                })
-                console.log(`[BACKUP CLEAR] Deleted backup shift for employee ${existing.backupEmployeeId}`)
+                if (backupShift.status === "PLANNED") {
+                    await prisma.timesheet.delete({
+                        where: { id: backupShift.id }
+                    })
+                    console.log(`[BACKUP CLEAR] Deleted unconfirmed backup shift for employee ${existing.backupEmployeeId}`)
+                } else {
+                    console.warn(`[BACKUP CLEAR] Backup shift for employee ${existing.backupEmployeeId} has status "${backupShift.status}" - NOT deleting (backup already confirmed)`)
+                }
             }
         } catch (error) {
             console.error("[BACKUP CLEAR] Failed to clear backup shift (non-critical):", error)

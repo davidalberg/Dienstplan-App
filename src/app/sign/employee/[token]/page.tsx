@@ -5,6 +5,7 @@ import { useParams } from "next/navigation"
 import { FileText, CheckCircle, AlertCircle, Loader2, Clock, User, Calendar } from "lucide-react"
 import SignaturePad from "@/components/SignaturePad"
 import { showToast } from "@/lib/toast-utils"
+import { WORKED_TIMESHEET_STATUSES } from "@/lib/constants"
 
 interface EmployeeData {
     id: string
@@ -161,7 +162,7 @@ export default function EmployeeSignPage() {
         } else if (ts.actualStart && ts.actualEnd) {
             stats.totalHours += calculateHours(ts.actualStart, ts.actualEnd)
             stats.workDays++
-        } else if (ts.plannedStart && ts.plannedEnd && ["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status)) {
+        } else if (ts.plannedStart && ts.plannedEnd && ([...WORKED_TIMESHEET_STATUSES] as string[]).includes(ts.status)) {
             stats.totalHours += calculateHours(ts.plannedStart, ts.plannedEnd)
             stats.workDays++
         }
@@ -337,7 +338,7 @@ export default function EmployeeSignPage() {
                                                 </span>
                                             ) : ts.actualStart && ts.actualEnd ? (
                                                 <span className="text-gray-900">{formatTime(ts.actualStart, ts.actualEnd)}</span>
-                                            ) : ["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status) ? (
+                                            ) : ([...WORKED_TIMESHEET_STATUSES] as string[]).includes(ts.status) ? (
                                                 <span className="text-gray-600">{formatTime(ts.plannedStart, ts.plannedEnd)}</span>
                                             ) : (
                                                 <span className="text-gray-400">-</span>

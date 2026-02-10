@@ -145,6 +145,18 @@ export async function POST(req: NextRequest) {
                 where: { id: employeeSignature.id }
             })
 
+            // FRESH CHECK inside transaction: Verify recipient hasn't signed since our initial check
+            const freshSubmission = await tx.teamSubmission.findUnique({
+                where: { id: submissionWithSignature.id },
+                select: { recipientSignature: true, status: true }
+            })
+            if (freshSubmission?.recipientSignature) {
+                throw new Error("RECIPIENT_ALREADY_SIGNED")
+            }
+            if (freshSubmission?.status === "COMPLETED") {
+                throw new Error("SUBMISSION_COMPLETED")
+            }
+
             // 2. Update employee's timesheets back to CONFIRMED
             // Only update SUBMITTED timesheets, not other statuses
             await tx.timesheet.updateMany({
@@ -202,6 +214,27 @@ export async function POST(req: NextRequest) {
                 {
                     error: "Der Status der Einreichung hat sich geaendert. Der Rueckzug ist nicht mehr moeglich.",
                     code: "STATUS_CHANGED"
+                },
+                { status: 409 }
+            )
+        }
+
+        // Handle race condition: recipient signed between check and transaction
+        if (error?.message === "RECIPIENT_ALREADY_SIGNED") {
+            return NextResponse.json(
+                {
+                    error: "Der Assistenznehmer hat zwischenzeitlich unterschrieben. Die Unterschrift kann nicht mehr zurueckgezogen werden.",
+                    code: "RECIPIENT_ALREADY_SIGNED"
+                },
+                { status: 409 }
+            )
+        }
+
+        if (error?.message === "SUBMISSION_COMPLETED") {
+            return NextResponse.json(
+                {
+                    error: "Diese Einreichung wurde zwischenzeitlich abgeschlossen. Der Rueckzug ist nicht mehr moeglich.",
+                    code: "SUBMISSION_COMPLETED"
                 },
                 { status: 409 }
             )

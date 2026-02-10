@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/api-auth"
+import { checkRateLimit } from "@/lib/rate-limiter"
 import { sendSignatureRequestEmail } from "@/lib/email"
 
 /**
@@ -10,6 +11,14 @@ export async function POST(req: NextRequest) {
     try {
         const result = await requireAdmin()
         if (result instanceof NextResponse) return result
+
+        const { limited, headers } = checkRateLimit("test-email:test-email", 2, 60_000)
+        if (limited) {
+            return NextResponse.json(
+                { error: "Zu viele Test-E-Mails. Bitte warte eine Minute." },
+                { status: 429, headers }
+            )
+        }
 
         const body = await req.json()
         const { recipientEmail, recipientName } = body

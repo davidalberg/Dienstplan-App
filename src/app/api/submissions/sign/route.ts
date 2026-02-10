@@ -7,6 +7,7 @@ import {
     getAllEmployeesInDienstplan,
     areAllEmployeesSigned
 } from "@/lib/team-submission-utils"
+import { ALL_TIMESHEET_STATUSES, CONFIRMED_TIMESHEET_STATUSES } from "@/lib/constants"
 
 /**
  * POST /api/submissions/sign
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
                     month: teamSubmission.month,
                     year: teamSubmission.year,
                     sheetFileName: teamSubmission.sheetFileName,
-                    status: { in: ["CONFIRMED", "CHANGED"] }
+                    status: { in: [...CONFIRMED_TIMESHEET_STATUSES] }
                 },
                 data: {
                     status: "SUBMITTED",
@@ -137,7 +138,7 @@ export async function POST(req: NextRequest) {
                     sheetFileName: teamSubmission.sheetFileName,
                     month: teamSubmission.month,
                     year: teamSubmission.year,
-                    status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                    status: { in: [...ALL_TIMESHEET_STATUSES] }
                 },
                 select: { employeeId: true },
                 distinct: ['employeeId']

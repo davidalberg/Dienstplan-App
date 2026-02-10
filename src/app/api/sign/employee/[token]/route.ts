@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-// sendEmployeeConfirmationEmail import entfernt - Mitarbeiter sieht Status im Dashboard
+import { sendSignatureRequestEmail, sendEmployeeConfirmationEmail } from "@/lib/email"
 import { headers } from "next/headers"
 
 /**
@@ -211,6 +211,7 @@ export async function POST(
             where: { id: employeeSignature.teamSubmissionId },
             include: {
                 client: true,
+                dienstplanConfig: true,
                 employeeSignatures: {
                     include: {
                         employee: {
@@ -241,11 +242,54 @@ export async function POST(
                 where: { id: teamSubmission.id },
                 data: { status: "PENDING_RECIPIENT" }
             })
+
+            // Send email to Assistenznehmer (client)
+            try {
+                const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+                const signatureUrl = `${baseUrl}/sign/${teamSubmission.signatureToken}`
+
+                const recipientEmail = teamSubmission.dienstplanConfig?.assistantRecipientEmail || client?.email
+                const recipientName = teamSubmission.dienstplanConfig?.assistantRecipientName || clientName
+
+                if (recipientEmail && recipientName) {
+                    await sendSignatureRequestEmail({
+                        recipientEmail,
+                        recipientName,
+                        employeeName: "Team",
+                        month: teamSubmission.month,
+                        year: teamSubmission.year,
+                        signatureUrl,
+                        expiresAt: teamSubmission.tokenExpiresAt
+                    })
+                    console.log(`[SIGN TOKEN] Signature request email sent to ${recipientEmail}`)
+                } else {
+                    console.warn(`[SIGN TOKEN] No recipient email configured for client ${clientName}`)
+                }
+            } catch (emailError) {
+                // Email failure must NOT block the signature
+                console.error("[SIGN TOKEN] Failed to send signature request email:", emailError)
+            }
         }
 
-        // Mitarbeiter-Confirmation-E-Mail deaktiviert
-        // (Mitarbeiter sieht Status direkt im Dashboard)
-        // Die sendEmployeeConfirmationEmail Funktion wird nicht mehr aufgerufen.
+        // Send confirmation email to the employee who just signed
+        if (employeeSignature.employee.email) {
+            try {
+                await sendEmployeeConfirmationEmail({
+                    employeeEmail: employeeSignature.employee.email,
+                    employeeName: employeeSignature.employee.name || "Mitarbeiter",
+                    clientName,
+                    month: teamSubmission.month,
+                    year: teamSubmission.year,
+                    signedAt,
+                    totalSigned: signedCount,
+                    totalRequired: totalCount
+                })
+                console.log(`[SIGN TOKEN] Confirmation email sent to ${employeeSignature.employee.email}`)
+            } catch (emailError) {
+                // Email failure must NOT block the signature
+                console.error("[SIGN TOKEN] Failed to send confirmation email:", emailError)
+            }
+        }
 
         return NextResponse.json({
             success: true,

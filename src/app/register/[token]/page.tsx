@@ -39,12 +39,37 @@ export default function RegisterPage({ params }: { params: Promise<{ token: stri
         validateToken()
     }, [token])
 
+    function getPasswordStrength(pw: string): { score: number; label: string; color: string } {
+        let score = 0
+        if (pw.length >= 8) score++
+        if (/[A-Z]/.test(pw)) score++
+        if (/[a-z]/.test(pw)) score++
+        if (/[0-9]/.test(pw)) score++
+
+        if (score <= 1) return { score, label: "Schwach", color: "bg-red-500" }
+        if (score === 2) return { score, label: "Mittel", color: "bg-yellow-500" }
+        if (score === 3) return { score, label: "Gut", color: "bg-blue-500" }
+        return { score, label: "Stark", color: "bg-green-500" }
+    }
+
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError("")
 
         if (password.length < 8) {
             setError("Passwort muss mindestens 8 Zeichen lang sein.")
+            return
+        }
+        if (!/[A-Z]/.test(password)) {
+            setError("Passwort muss mindestens einen Großbuchstaben enthalten.")
+            return
+        }
+        if (!/[a-z]/.test(password)) {
+            setError("Passwort muss mindestens einen Kleinbuchstaben enthalten.")
+            return
+        }
+        if (!/[0-9]/.test(password)) {
+            setError("Passwort muss mindestens eine Zahl enthalten.")
             return
         }
 
@@ -146,11 +171,43 @@ export default function RegisterPage({ params }: { params: Promise<{ token: stri
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Mindestens 8 Zeichen"
+                            placeholder="Min. 8 Zeichen, Groß-/Kleinbuchstaben, Zahl"
                             required
                             minLength={8}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                         />
+                        {password && (
+                            <div className="mt-3 space-y-2">
+                                <div className="flex gap-1">
+                                    {[1, 2, 3, 4].map((i) => (
+                                        <div
+                                            key={i}
+                                            className={`h-1.5 flex-1 rounded-full transition-colors ${
+                                                i <= getPasswordStrength(password).score
+                                                    ? getPasswordStrength(password).color
+                                                    : "bg-gray-200"
+                                            }`}
+                                        />
+                                    ))}
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <p className={`text-xs font-medium ${
+                                        getPasswordStrength(password).score <= 1 ? "text-red-600" :
+                                        getPasswordStrength(password).score === 2 ? "text-yellow-600" :
+                                        getPasswordStrength(password).score === 3 ? "text-blue-600" :
+                                        "text-green-600"
+                                    }`}>
+                                        {getPasswordStrength(password).label}
+                                    </p>
+                                    <div className="text-xs text-gray-400 space-x-2">
+                                        <span className={password.length >= 8 ? "text-green-600" : ""}>8+ Zeichen</span>
+                                        <span className={/[A-Z]/.test(password) ? "text-green-600" : ""}>ABC</span>
+                                        <span className={/[a-z]/.test(password) ? "text-green-600" : ""}>abc</span>
+                                        <span className={/[0-9]/.test(password) ? "text-green-600" : ""}>123</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div>

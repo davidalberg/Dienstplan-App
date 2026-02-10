@@ -492,6 +492,30 @@ export async function PUT(req: NextRequest) {
             Object.entries(updateData).filter(([_, v]) => v !== undefined)
         )
 
+        // Ensure sheetFileName exists (fix for legacy data with null sheetFileName)
+        const existingShift = await prisma.timesheet.findUnique({
+            where: { id },
+            select: { sheetFileName: true, employeeId: true }
+        })
+
+        if (existingShift && !existingShift.sheetFileName) {
+            const shiftEmployee = await prisma.user.findUnique({
+                where: { id: existingShift.employeeId },
+                select: {
+                    team: {
+                        select: { name: true }
+                    }
+                }
+            })
+            if (shiftEmployee?.team) {
+                const existingDate = await prisma.timesheet.findUnique({
+                    where: { id },
+                    select: { year: true }
+                })
+                ;(cleanData as Record<string, unknown>).sheetFileName = `Team_${shiftEmployee.team.name.replace(/\s+/g, '_')}_${existingDate?.year || new Date().getFullYear()}`
+            }
+        }
+
         const rawShift = await prisma.timesheet.update({
             where: { id },
             data: cleanData,

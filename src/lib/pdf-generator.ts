@@ -2,6 +2,7 @@ import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
+import { WORKED_TIMESHEET_STATUSES } from "@/lib/constants"
 
 interface TimesheetEntry {
     date: Date
@@ -199,7 +200,7 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
             }
             if (ts.actualStart && ts.actualEnd) {
                 actualStr = formatTimeRangeForPdf(ts.actualStart, ts.actualEnd)
-            } else if (["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status)) {
+            } else if (([...WORKED_TIMESHEET_STATUSES] as string[]).includes(ts.status)) {
                 actualStr = plannedStr // Use planned if confirmed but no actual times
             }
 
@@ -207,7 +208,7 @@ export function generateTimesheetPdf(options: GeneratePdfOptions): ArrayBuffer {
                 const plannedHours = calculateHoursFromTimes(ts.plannedStart, ts.plannedEnd)
                 const actualHours = ts.actualStart && ts.actualEnd
                     ? calculateHoursFromTimes(ts.actualStart, ts.actualEnd)
-                    : (["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status) ? plannedHours : 0)
+                    : (([...WORKED_TIMESHEET_STATUSES] as string[]).includes(ts.status) ? plannedHours : 0)
                 diffStr = formatDiff(plannedHours, actualHours)
             }
         }
@@ -723,7 +724,7 @@ export function generateCombinedTeamPdf(options: GenerateCombinedPdfOptions): Ar
             }
             if (ts.actualStart && ts.actualEnd) {
                 actualStr = formatTimeRangeForPdf(ts.actualStart, ts.actualEnd)
-            } else if (["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status)) {
+            } else if (([...WORKED_TIMESHEET_STATUSES] as string[]).includes(ts.status)) {
                 // Use planned times if confirmed but no actual times recorded
                 actualStr = plannedStr
             }

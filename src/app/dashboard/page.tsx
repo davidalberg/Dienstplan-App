@@ -378,9 +378,17 @@ export default function DashboardPage() {
                                 ))
                             )}
 
-                            {!loading && timesheets.length === 0 && (
-                                <div className="rounded-xl border-2 border-dashed border-gray-200 py-12 text-center text-black font-medium">
-                                    Keine geplanten Dienste für diesen Monat.
+                            {!loading && timesheets.length === 0 && !fetchError && (
+                                <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white py-12 px-6 text-center">
+                                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
+                                        <CalendarDays size={28} className="text-blue-400" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">
+                                        Keine Schichten in diesem Monat
+                                    </h3>
+                                    <p className="text-sm text-gray-500 max-w-xs mx-auto">
+                                        Du hast noch keine geplanten Dienste für diesen Monat. Dein Admin wird deinen Dienstplan bald erstellen.
+                                    </p>
                                 </div>
                             )}
                         </div>

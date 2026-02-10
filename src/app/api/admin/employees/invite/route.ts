@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/api-auth"
+import { checkRateLimit } from "@/lib/rate-limiter"
 import prisma from "@/lib/prisma"
 import { randomBytes } from "crypto"
 import { sendInvitationEmail } from "@/lib/email"
@@ -13,6 +14,14 @@ export async function POST(req: NextRequest) {
     const result = await requireAdmin()
     if (result instanceof NextResponse) return result
     const session = result
+
+    const { limited, headers } = checkRateLimit(`invite:${session.user.id}`, 10, 60_000)
+    if (limited) {
+        return NextResponse.json(
+            { error: "Zu viele Einladungen. Bitte warte eine Minute." },
+            { status: 429, headers }
+        )
+    }
 
     try {
         const { employeeId } = await req.json()

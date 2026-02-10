@@ -109,7 +109,7 @@ export default function HistoryPage() {
                     <div className="space-y-2">
                         {shifts.map(shift => {
                             const date = new Date(shift.date)
-                            const isConfirmed = ["CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"].includes(shift.status)
+                            const isConfirmed = shift.status !== "PLANNED"
 
                             return (
                                 <div key={shift.id} className="bg-white rounded-xl shadow-sm p-4">

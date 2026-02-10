@@ -56,39 +56,50 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // Setze Status zurück
-        const updatedShifts = await Promise.all(
-            submittedShifts.map(shift =>
-                prisma.timesheet.update({
-                    where: { id: shift.id },
-                    data: {
-                        status: shift.actualStart && shift.actualEnd ? "CONFIRMED" : "CHANGED",
-                        lastUpdatedBy: user.email
-                    }
-                })
-            )
-        )
+        // Atomically reset status and create audit logs
+        const updatedCount = await prisma.$transaction(async (tx) => {
+            // Split shifts into confirmed (has actual times) and changed (no actual times)
+            const confirmedIds = submittedShifts
+                .filter(s => s.actualStart && s.actualEnd)
+                .map(s => s.id)
+            const changedIds = submittedShifts
+                .filter(s => !(s.actualStart && s.actualEnd))
+                .map(s => s.id)
 
-        // Erstelle Audit Log Einträge
-        await Promise.all(
-            submittedShifts.map(shift =>
-                prisma.auditLog.create({
-                    data: {
-                        employeeId: user.id,
-                        date: shift.date,
-                        changedBy: user.email || user.name || "System",
-                        field: "status",
-                        oldValue: "SUBMITTED",
-                        newValue: shift.actualStart && shift.actualEnd ? "CONFIRMED" : "CHANGED"
-                    }
-                })
-            )
-        )
+            const results = await Promise.all([
+                confirmedIds.length > 0
+                    ? tx.timesheet.updateMany({
+                        where: { id: { in: confirmedIds } },
+                        data: { status: "CONFIRMED", lastUpdatedBy: user.email }
+                    })
+                    : { count: 0 },
+                changedIds.length > 0
+                    ? tx.timesheet.updateMany({
+                        where: { id: { in: changedIds } },
+                        data: { status: "CHANGED", lastUpdatedBy: user.email }
+                    })
+                    : { count: 0 },
+            ])
+
+            // Create audit log entries
+            await tx.auditLog.createMany({
+                data: submittedShifts.map(shift => ({
+                    employeeId: user.id,
+                    date: shift.date,
+                    changedBy: user.email || user.name || "System",
+                    field: "status",
+                    oldValue: "SUBMITTED",
+                    newValue: shift.actualStart && shift.actualEnd ? "CONFIRMED" : "CHANGED"
+                }))
+            })
+
+            return results[0].count + results[1].count
+        })
 
         return NextResponse.json({
             success: true,
-            count: updatedShifts.length,
-            message: `${updatedShifts.length} Schichten wurden zurückgesetzt`
+            count: updatedCount,
+            message: `${updatedCount} Schichten wurden zurückgesetzt`
         })
     } catch (error: any) {
         console.error("[POST /api/timesheets/cancel-submit] Error:", error)

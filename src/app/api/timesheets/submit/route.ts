@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
+import { CONFIRMED_TIMESHEET_STATUSES } from "@/lib/constants"
 
 export async function POST(req: NextRequest) {
     try {
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
                 employeeId: user.id,
                 month,
                 year,
-                status: { in: ["CONFIRMED", "CHANGED"] }
+                status: { in: [...CONFIRMED_TIMESHEET_STATUSES] }
             },
             data: {
                 status: "SUBMITTED",

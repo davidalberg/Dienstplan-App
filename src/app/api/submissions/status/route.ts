@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
+import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 
 /**
  * GET /api/submissions/status?month=X&year=Y
@@ -121,7 +122,7 @@ export async function GET(req: NextRequest) {
                 sheetFileName: teamSubmission.sheetFileName,
                 month,
                 year,
-                status: { in: ["PLANNED", "CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
+                status: { in: [...ALL_TIMESHEET_STATUSES] }
             },
             select: { employeeId: true },
             distinct: ['employeeId']

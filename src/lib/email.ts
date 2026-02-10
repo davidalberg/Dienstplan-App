@@ -773,14 +773,14 @@ export async function sendInvitationEmail(params: SendInvitationEmailParams) {
         </p>
 
         <div style="text-align: center; margin: 30px 0;">
-            <a href="${registrationUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);">
+            <a href="${escapeHtml(registrationUrl)}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);">
                 Passwort erstellen
             </a>
         </div>
 
         <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0;">
             <p style="margin: 0; color: #92400e; font-size: 14px;">
-                <strong>Hinweis:</strong> Dieser Link ist bis zum <strong>${expiresFormatted}</strong> gültig.
+                <strong>Hinweis:</strong> Dieser Link ist bis zum <strong>${escapeHtml(expiresFormatted)}</strong> gültig.
             </p>
         </div>
 
@@ -788,7 +788,7 @@ export async function sendInvitationEmail(params: SendInvitationEmailParams) {
 
         <p style="font-size: 13px; color: #6b7280;">
             Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:<br>
-            <a href="${registrationUrl}" style="color: #3b82f6; word-break: break-all;">${registrationUrl}</a>
+            <a href="${escapeHtml(registrationUrl)}" style="color: #3b82f6; word-break: break-all;">${escapeHtml(registrationUrl)}</a>
         </p>
     </div>
 

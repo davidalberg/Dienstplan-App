@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import bcrypt from "bcryptjs"
+import { validatePassword } from "@/lib/constants"
+import { checkRateLimit } from "@/lib/rate-limiter"
 
 /**
  * GET /api/register/[token]
@@ -44,7 +46,9 @@ export async function GET(
 
 /**
  * POST /api/register/[token]
- * Set password for invited employee
+ * Set password for invited employee.
+ * Uses atomic updateMany to prevent TOCTOU race condition:
+ * the token is validated and consumed in a single database operation.
  */
 export async function POST(
     req: NextRequest,
@@ -52,33 +56,36 @@ export async function POST(
 ) {
     try {
         const { token } = await params
+
+        const { limited, headers } = checkRateLimit(`register:${token}`, 3, 60_000)
+        if (limited) {
+            return NextResponse.json(
+                { error: "Zu viele Versuche. Bitte warte eine Minute." },
+                { status: 429, headers }
+            )
+        }
+
         const { password } = await req.json()
 
-        if (!password || password.length < 8) {
+        const passwordCheck = validatePassword(password)
+        if (!passwordCheck.valid) {
             return NextResponse.json(
-                { error: "Passwort muss mindestens 8 Zeichen lang sein" },
+                { error: passwordCheck.error },
                 { status: 400 }
             )
         }
 
-        const user = await prisma.user.findFirst({
+        // Hash password before the atomic update so the DB operation is as fast as possible
+        const hashedPassword = await bcrypt.hash(password, 12)
+
+        // Atomic: validate token + consume it in one operation.
+        // If two requests race with the same token, only one will match
+        // (the other sees invitationToken already set to null).
+        const result = await prisma.user.updateMany({
             where: {
                 invitationToken: token,
                 invitationExpiry: { gt: new Date() }
-            }
-        })
-
-        if (!user) {
-            return NextResponse.json(
-                { error: "Ungültiger oder abgelaufener Einladungslink" },
-                { status: 404 }
-            )
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 12)
-
-        await prisma.user.update({
-            where: { id: user.id },
+            },
             data: {
                 password: hashedPassword,
                 invitationToken: null,
@@ -86,8 +93,15 @@ export async function POST(
             }
         })
 
+        if (result.count === 0) {
+            return NextResponse.json(
+                { error: "Dieser Einladungslink wurde bereits verwendet oder ist abgelaufen" },
+                { status: 409 }
+            )
+        }
+
         return NextResponse.json({ success: true })
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[POST /api/register] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }

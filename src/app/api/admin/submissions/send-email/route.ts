@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/api-auth"
+import { checkRateLimit } from "@/lib/rate-limiter"
 import prisma from "@/lib/prisma"
 import { sendSignatureRequestEmail, isEmailServiceConfigured } from "@/lib/email"
 import { randomBytes } from "crypto"
@@ -17,6 +18,14 @@ export async function POST(req: NextRequest) {
     try {
     const result = await requireAdmin()
     if (result instanceof NextResponse) return result
+
+    const { limited, headers } = checkRateLimit(`email-send:${result.user.id}`, 5, 60_000)
+    if (limited) {
+        return NextResponse.json(
+            { error: "Zu viele E-Mails. Bitte warte eine Minute." },
+            { status: 429, headers }
+        )
+    }
 
     let body
     try {

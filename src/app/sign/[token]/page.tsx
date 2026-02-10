@@ -5,6 +5,7 @@ import { useParams } from "next/navigation"
 import { FileText, CheckCircle, AlertCircle, Loader2, Clock, User, Download } from "lucide-react"
 import SignaturePad from "@/components/SignaturePad"
 import { showToast } from "@/lib/toast-utils"
+import { WORKED_TIMESHEET_STATUSES } from "@/lib/constants"
 
 interface SubmissionData {
     id: string
@@ -186,7 +187,7 @@ export default function SignPage() {
         } else if (ts.actualStart && ts.actualEnd) {
             emp.workDays++
             emp.totalHours += calculateHours(ts.actualStart, ts.actualEnd)
-        } else if (ts.plannedStart && ts.plannedEnd && ["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status)) {
+        } else if (ts.plannedStart && ts.plannedEnd && ([...WORKED_TIMESHEET_STATUSES] as string[]).includes(ts.status)) {
             emp.workDays++
             emp.totalHours += calculateHours(ts.plannedStart, ts.plannedEnd)
         }
@@ -210,7 +211,7 @@ export default function SignPage() {
         } else if (ts.actualStart && ts.actualEnd) {
             stats.totalHours += calculateHours(ts.actualStart, ts.actualEnd)
             stats.workDays++
-        } else if (ts.plannedStart && ts.plannedEnd && ["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status)) {
+        } else if (ts.plannedStart && ts.plannedEnd && ([...WORKED_TIMESHEET_STATUSES] as string[]).includes(ts.status)) {
             stats.totalHours += calculateHours(ts.plannedStart, ts.plannedEnd)
             stats.workDays++
         }
@@ -433,7 +434,7 @@ export default function SignPage() {
                                                 </span>
                                             ) : ts.actualStart && ts.actualEnd ? (
                                                 <span className="text-white">{formatTime(ts.actualStart, ts.actualEnd)}</span>
-                                            ) : ["CONFIRMED", "CHANGED", "SUBMITTED"].includes(ts.status) ? (
+                                            ) : ([...WORKED_TIMESHEET_STATUSES] as string[]).includes(ts.status) ? (
                                                 <span className="text-neutral-400">{formatTime(ts.plannedStart, ts.plannedEnd)}</span>
                                             ) : (
                                                 <span className="text-neutral-600">-</span>
