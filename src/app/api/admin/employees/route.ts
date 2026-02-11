@@ -182,6 +182,16 @@ export async function POST(req: NextRequest) {
         // Statt findUnique + create (Race Condition möglich), nutzen wir
         // die unique constraint des DB als Schutz
         try {
+            // Wenn Team zugewiesen, Client des Teams ermitteln für many-to-many
+            let teamClientId: string | null = null
+            if (resolvedTeamId) {
+                const teamWithClient = await prisma.team.findUnique({
+                    where: { id: resolvedTeamId },
+                    select: { clientId: true }
+                })
+                teamClientId = teamWithClient?.clientId || null
+            }
+
             const employee = await prisma.user.create({
                 data: {
                     email,
@@ -201,7 +211,11 @@ export async function POST(req: NextRequest) {
                     holidayPremiumPercent: safeParseFloat(holidayPremiumPercent, 125, "holidayPremiumPercent"),
                     assignedSheetId: assignedSheetId || null,
                     assignedPlanTab: assignedPlanTab || null,
-                    teamId: resolvedTeamId
+                    teamId: resolvedTeamId,
+                    // Automatisch Client des Teams zuweisen (many-to-many)
+                    ...(teamClientId && {
+                        clients: { connect: { id: teamClientId } }
+                    })
                 }
             })
 

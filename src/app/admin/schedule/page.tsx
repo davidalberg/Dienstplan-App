@@ -1883,9 +1883,16 @@ function SchedulePageContent() {
 
                                         {/* Datum */}
                                         <div>
-                                            <label className="block text-sm font-medium text-neutral-400 mb-1">
-                                                Datum *
-                                            </label>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <label className="block text-sm font-medium text-neutral-400">
+                                                    Datum *
+                                                </label>
+                                                {formData.date && (
+                                                    <span className="text-sm text-violet-400 font-medium">
+                                                        {format(new Date(formData.date + "T12:00:00"), "EEEE", { locale: de })}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <input
                                                 type="date"
                                                 value={formData.date}
@@ -1980,12 +1987,19 @@ function SchedulePageContent() {
                                                             <div key={idx} className="bg-neutral-800/50 rounded-lg p-3 space-y-2">
                                                                 <div className="flex items-center gap-2">
                                                                     <div className="flex-1">
-                                                                        <input
-                                                                            type="date"
-                                                                            value={entry.date}
-                                                                            onChange={(e) => updateAdditionalDate(idx, "date", e.target.value)}
-                                                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors text-sm"
-                                                                        />
+                                                                        <div className="flex items-center gap-2">
+                                                                            <input
+                                                                                type="date"
+                                                                                value={entry.date}
+                                                                                onChange={(e) => updateAdditionalDate(idx, "date", e.target.value)}
+                                                                                className="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors text-sm"
+                                                                            />
+                                                                            {entry.date && (
+                                                                                <span className="text-xs text-violet-400 font-medium whitespace-nowrap">
+                                                                                    {format(new Date(entry.date + "T12:00:00"), "EEE", { locale: de })}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                     <button
                                                                         type="button"
