@@ -29,7 +29,7 @@ import { formatTimeRange } from "@/lib/time-utils"
 import { useAdminSchedule } from "@/hooks/use-admin-data"
 import { useAdminData } from "@/components/AdminDataProvider"
 import TimesheetDetail from "@/components/TimesheetDetail"
-import DuplicateShiftModal from "@/components/DuplicateShiftModal"
+
 import ShiftTemplateManager from "@/components/ShiftTemplateManager"
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
@@ -345,10 +345,6 @@ function SchedulePageContent() {
         employeeId: string
         clientId: string
     } | null>(null)
-
-    // Duplicate Shift Modal State
-    const [showDuplicateModal, setShowDuplicateModal] = useState(false)
-    const [shiftToDuplicate, setShiftToDuplicate] = useState<Shift | null>(null)
 
     // Keyboard Shortcuts Help Modal State
     const [showShortcutsHelp, setShowShortcutsHelp] = useState(false)
@@ -1197,34 +1193,40 @@ function SchedulePageContent() {
         setHasInitialExpand(false)
     }
 
-    // Duplicate Shift Handler
-    const openDuplicateModal = (shift: Shift) => {
-        setShiftToDuplicate(shift)
-        setShowDuplicateModal(true)
-    }
+    // Duplicate Shift Handler - Direkt nächsten Tag duplizieren (kein Modal)
+    const handleQuickDuplicate = useCallback((shift: Shift) => {
+        // Nächsten freien Tag finden (ab morgen des Schicht-Datums)
+        const shiftDate = new Date(shift.date)
+        let targetDate = new Date(shiftDate)
+        targetDate.setDate(targetDate.getDate() + 1)
 
-    const closeDuplicateModal = () => {
-        setShowDuplicateModal(false)
-        setShiftToDuplicate(null)
-    }
+        // Prüfe ob der Mitarbeiter an dem Tag schon eine Schicht hat
+        const employeeShiftDates = new Set(
+            shifts.filter(s => s.employee.id === shift.employee.id).map(s => s.date.split("T")[0])
+        )
+        // Maximal 30 Tage voraus suchen
+        for (let i = 0; i < 30; i++) {
+            const dateStr = format(targetDate, "yyyy-MM-dd")
+            if (!employeeShiftDates.has(dateStr)) break
+            targetDate.setDate(targetDate.getDate() + 1)
+        }
 
-    const handleDuplicateShift = (targetDate: string) => {
-        if (!shiftToDuplicate) return
+        const targetDateStr = format(targetDate, "yyyy-MM-dd")
 
         // 1. Build optimistic shift with temp ID
         const tempId = `temp_${Date.now()}_dup`
         const optimisticShift: Shift = {
             id: tempId,
-            date: targetDate,
-            plannedStart: shiftToDuplicate.plannedStart,
-            plannedEnd: shiftToDuplicate.plannedEnd,
+            date: targetDateStr,
+            plannedStart: shift.plannedStart,
+            plannedEnd: shift.plannedEnd,
             actualStart: null,
             actualEnd: null,
             status: "PLANNED",
-            note: shiftToDuplicate.note || null,
-            absenceType: shiftToDuplicate.absenceType || null,
-            employee: { ...shiftToDuplicate.employee },
-            backupEmployee: shiftToDuplicate.backupEmployee ? { ...shiftToDuplicate.backupEmployee } : null
+            note: shift.note || null,
+            absenceType: shift.absenceType || null,
+            employee: { ...shift.employee },
+            backupEmployee: shift.backupEmployee ? { ...shift.backupEmployee } : null
         }
 
         // 2. Instantly add to state
@@ -1232,22 +1234,22 @@ function SchedulePageContent() {
             new Date(a.date).getTime() - new Date(b.date).getTime()
         ))
 
-        // 3. Close modal and show toast immediately
-        setShowDuplicateModal(false)
-        setShiftToDuplicate(null)
-        showToast("success", "Schicht erfolgreich dupliziert")
+        // 3. Show toast immediately
+        const dayName = format(targetDate, "EEE dd.MM.", { locale: de })
+        showToast("success", `Schicht dupliziert → ${dayName}`)
 
         // 4. API call in background (non-blocking)
         fetch("/api/admin/schedule", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                employeeId: shiftToDuplicate.employee.id,
-                date: targetDate,
-                plannedStart: shiftToDuplicate.plannedStart,
-                plannedEnd: shiftToDuplicate.plannedEnd,
-                backupEmployeeId: shiftToDuplicate.backupEmployee?.id || null,
-                note: shiftToDuplicate.note || null
+                employeeId: shift.employee.id,
+                date: targetDateStr,
+                plannedStart: shift.plannedStart,
+                plannedEnd: shift.plannedEnd,
+                backupEmployeeId: shift.backupEmployee?.id || null,
+                note: shift.note || null,
+                absenceType: shift.absenceType || null
             })
         }).then(async (res) => {
             if (!res.ok) {
@@ -1279,7 +1281,7 @@ function SchedulePageContent() {
             setShifts(prev => prev.filter(s => s.id !== tempId))
             showToast("error", "Netzwerkfehler beim Duplizieren")
         })
-    }
+    }, [shifts, mutate])
 
     // Keyboard Shortcuts Handlers
     const handleCloseModal = useCallback(() => {
@@ -1287,12 +1289,10 @@ function SchedulePageContent() {
             closeModal()
         } else if (showShortcutsHelp) {
             setShowShortcutsHelp(false)
-        } else if (showDuplicateModal) {
-            closeDuplicateModal()
         } else if (showTimesheetDetail) {
             closeTimesheetPreview()
         }
-    }, [showModal, showShortcutsHelp, showDuplicateModal, showTimesheetDetail, closeModal])
+    }, [showModal, showShortcutsHelp, showTimesheetDetail, closeModal])
 
     const handleSaveShortcut = useCallback(() => {
         if (showModal) {
@@ -1659,10 +1659,10 @@ function SchedulePageContent() {
                                                                         <button
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation()
-                                                                                openDuplicateModal(shift)
+                                                                                handleQuickDuplicate(shift)
                                                                             }}
                                                                             className="p-1.5 text-neutral-500 hover:text-green-400 hover:bg-green-900/30 rounded transition"
-                                                                            title="Schicht duplizieren"
+                                                                            title="Schicht duplizieren (nächster freier Tag)"
                                                                         >
                                                                             <Copy size={14} />
                                                                         </button>
@@ -2279,15 +2279,6 @@ function SchedulePageContent() {
                         month={month}
                         year={year}
                         onClose={closeTimesheetPreview}
-                    />
-                )}
-
-                {/* Duplicate Shift Modal */}
-                {showDuplicateModal && shiftToDuplicate && (
-                    <DuplicateShiftModal
-                        shift={shiftToDuplicate}
-                        onClose={closeDuplicateModal}
-                        onDuplicate={handleDuplicateShift}
                     />
                 )}
 
