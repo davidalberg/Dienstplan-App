@@ -334,6 +334,11 @@ function SchedulePageContent() {
         repeatDays: [1, 2, 3, 4, 5] as number[] // Mo-Fr default
     })
 
+    // Multi-Datum State für Plus-Button
+    const [additionalDates, setAdditionalDates] = useState<
+        { date: string; plannedStart: string; plannedEnd: string }[]
+    >([])
+
     // TimesheetDetail Modal State
     const [showTimesheetDetail, setShowTimesheetDetail] = useState(false)
     const [selectedTimesheetData, setSelectedTimesheetData] = useState<{
@@ -469,6 +474,7 @@ function SchedulePageContent() {
             repeatEndDate: "",
             repeatDays: [1, 2, 3, 4, 5]
         })
+        setAdditionalDates([])
     }, [])
 
     const handleCreateOrUpdate = useCallback(async () => {
@@ -495,6 +501,21 @@ function SchedulePageContent() {
             if (formData.repeatDays.length === 0) {
                 showToast("error", "Bitte waehlen Sie mindestens einen Wochentag aus")
                 return
+            }
+        }
+
+        // Multi-Datum: Alle Einträge validieren
+        if (additionalDates.length > 0) {
+            for (let i = 0; i < additionalDates.length; i++) {
+                const entry = additionalDates[i]
+                if (!entry.date) {
+                    showToast("error", `Bitte Datum für Termin ${i + 2} auswählen`)
+                    return
+                }
+                if (!entry.plannedStart || !entry.plannedEnd) {
+                    showToast("error", `Start- und Endzeit für Termin ${i + 2} sind erforderlich`)
+                    return
+                }
             }
         }
 
@@ -590,6 +611,15 @@ function SchedulePageContent() {
             const tempPrefix = `temp_${Date.now()}_`
             const optimisticShifts: Shift[] = []
 
+            // Sammle alle Datum+Zeiten-Paare (Multi-Datum oder Single/Repeat)
+            const isMultiDate = additionalDates.length > 0 && !formData.isRepeating
+            const allDateEntries = isMultiDate
+                ? [
+                    { date: formData.date, plannedStart: formData.plannedStart, plannedEnd: formData.plannedEnd },
+                    ...additionalDates
+                  ]
+                : null
+
             if (formData.isRepeating && formData.repeatEndDate) {
                 // Bulk: generate dates from startDate to endDate filtered by repeatDays
                 const allDays = eachDayOfInterval({
@@ -605,6 +635,23 @@ function SchedulePageContent() {
                         date: format(day, "yyyy-MM-dd"),
                         plannedStart: formData.plannedStart,
                         plannedEnd: formData.plannedEnd,
+                        actualStart: null,
+                        actualEnd: null,
+                        status: "PLANNED",
+                        note: formData.note || null,
+                        absenceType: formData.absenceType || null,
+                        employee: employeeData,
+                        backupEmployee: backupEmp
+                    })
+                })
+            } else if (allDateEntries) {
+                // Multi-Datum: Optimistic shifts für alle Einträge
+                allDateEntries.forEach((entry, idx) => {
+                    optimisticShifts.push({
+                        id: `${tempPrefix}${idx}`,
+                        date: entry.date,
+                        plannedStart: entry.plannedStart,
+                        plannedEnd: entry.plannedEnd,
                         actualStart: null,
                         actualEnd: null,
                         status: "PLANNED",
@@ -643,83 +690,140 @@ function SchedulePageContent() {
                 : "Schicht erstellt"
             showToast("success", toastMsg)
 
-            // 3. API-Call im Hintergrund
-            const body: Record<string, unknown> = {
-                employeeId: formData.employeeId,
-                plannedStart: formData.plannedStart,
-                plannedEnd: formData.plannedEnd,
-                backupEmployeeId: formData.backupEmployeeId || null,
-                note: formData.note || null,
-                absenceType: formData.absenceType || null,
-            }
-
-            if (formData.isRepeating && formData.repeatEndDate) {
-                body.bulk = true
-                body.startDate = formData.date
-                body.endDate = formData.repeatEndDate
-                body.repeatDays = formData.repeatDays
-            } else {
-                body.date = formData.date
-            }
-
             const tempIds = optimisticShifts.map(s => s.id)
 
-            fetch("/api/admin/schedule", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body)
-            }).then(async (res) => {
-                if (!res.ok) {
-                    // Rollback: remove optimistic shifts
-                    setShifts(prev => prev.filter(s => !tempIds.includes(s.id)))
-                    const data = await res.json().catch(() => ({}))
-                    showToast("error", data.error || "Fehler beim Erstellen")
-                    return
-                }
-
-                const responseData = await res.json().catch(() => ({}))
-
-                // Replace temp IDs with real IDs from server
-                if (responseData.shifts && Array.isArray(responseData.shifts)) {
-                    // Bulk response - replace all temp shifts with real data
-                    setShifts(prev => {
-                        const withoutTemp = prev.filter(s => !tempIds.includes(s.id))
-                        const realShifts: Shift[] = responseData.shifts.map((s: Shift) => ({
-                            id: s.id,
-                            date: s.date,
-                            plannedStart: s.plannedStart || formData.plannedStart,
-                            plannedEnd: s.plannedEnd || formData.plannedEnd,
-                            actualStart: s.actualStart || null,
-                            actualEnd: s.actualEnd || null,
-                            status: s.status || "PLANNED",
-                            note: s.note || null,
-                            absenceType: s.absenceType || null,
-                            employee: s.employee || employeeData,
-                            backupEmployee: s.backupEmployee || backupEmp
-                        }))
-                        return [...withoutTemp, ...realShifts].sort((a, b) =>
-                            new Date(a.date).getTime() - new Date(b.date).getTime()
-                        )
+            if (allDateEntries) {
+                // Multi-Datum: Parallele einzelne POSTs via Promise.all
+                const requests = allDateEntries.map((entry, idx) => {
+                    const body: Record<string, unknown> = {
+                        employeeId: formData.employeeId,
+                        date: entry.date,
+                        plannedStart: entry.plannedStart,
+                        plannedEnd: entry.plannedEnd,
+                        backupEmployeeId: formData.backupEmployeeId || null,
+                        note: formData.note || null,
+                        absenceType: formData.absenceType || null,
+                    }
+                    return fetch("/api/admin/schedule", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body)
+                    }).then(async (res) => {
+                        if (!res.ok) {
+                            const data = await res.json().catch(() => ({}))
+                            return { success: false, tempId: tempIds[idx], error: data.error }
+                        }
+                        const data = await res.json().catch(() => ({}))
+                        return { success: true, tempId: tempIds[idx], data }
+                    }).catch(() => {
+                        return { success: false, tempId: tempIds[idx], error: "Netzwerkfehler" }
                     })
-                } else if (responseData.id) {
-                    // Single response - replace temp shift with real data
-                    setShifts(prev => prev.map(s =>
-                        s.id === tempIds[0] ? {
-                            ...s,
-                            id: responseData.id,
-                            date: responseData.date || s.date,
-                            status: responseData.status || s.status,
-                        } : s
-                    ))
+                })
+
+                Promise.all(requests).then((results) => {
+                    const failed = results.filter(r => !r.success)
+                    const succeeded = results.filter(r => r.success)
+
+                    // Rollback gescheiterte Shifts
+                    if (failed.length > 0) {
+                        const failedIds = failed.map(r => r.tempId)
+                        setShifts(prev => prev.filter(s => !failedIds.includes(s.id)))
+                        showToast("error", `${failed.length} von ${results.length} Schichten konnten nicht erstellt werden`)
+                    }
+
+                    // Ersetze temp IDs mit echten IDs für erfolgreiche Shifts
+                    succeeded.forEach(r => {
+                        const responseData = (r as { data?: { id?: string; date?: string; status?: string } }).data
+                        if (responseData?.id) {
+                            const realId = responseData.id
+                            const realDate = responseData.date
+                            const realStatus = responseData.status
+                            setShifts(prev => prev.map(s =>
+                                s.id === r.tempId ? { ...s, id: realId, date: realDate || s.date, status: realStatus || s.status } : s
+                            ))
+                        }
+                    })
+
+                    // Background-Revalidierung für Konsistenz
+                    mutate()
+                })
+            } else {
+                // 3. API-Call im Hintergrund (Single oder Repeat)
+                const body: Record<string, unknown> = {
+                    employeeId: formData.employeeId,
+                    plannedStart: formData.plannedStart,
+                    plannedEnd: formData.plannedEnd,
+                    backupEmployeeId: formData.backupEmployeeId || null,
+                    note: formData.note || null,
+                    absenceType: formData.absenceType || null,
                 }
 
-                // Background-Revalidierung für Konsistenz
-                mutate()
-            }).catch(() => {
-                // Rollback bei Netzwerkfehler
-                setShifts(prev => prev.filter(s => !tempIds.includes(s.id)))
-                showToast("error", "Netzwerkfehler - bitte prüfen Sie Ihre Verbindung")
-            })
+                if (formData.isRepeating && formData.repeatEndDate) {
+                    body.bulk = true
+                    body.startDate = formData.date
+                    body.endDate = formData.repeatEndDate
+                    body.repeatDays = formData.repeatDays
+                } else {
+                    body.date = formData.date
+                }
+
+                fetch("/api/admin/schedule", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                }).then(async (res) => {
+                    if (!res.ok) {
+                        // Rollback: remove optimistic shifts
+                        setShifts(prev => prev.filter(s => !tempIds.includes(s.id)))
+                        const data = await res.json().catch(() => ({}))
+                        showToast("error", data.error || "Fehler beim Erstellen")
+                        return
+                    }
+
+                    const responseData = await res.json().catch(() => ({}))
+
+                    // Replace temp IDs with real IDs from server
+                    if (responseData.shifts && Array.isArray(responseData.shifts)) {
+                        // Bulk response - replace all temp shifts with real data
+                        setShifts(prev => {
+                            const withoutTemp = prev.filter(s => !tempIds.includes(s.id))
+                            const realShifts: Shift[] = responseData.shifts.map((s: Shift) => ({
+                                id: s.id,
+                                date: s.date,
+                                plannedStart: s.plannedStart || formData.plannedStart,
+                                plannedEnd: s.plannedEnd || formData.plannedEnd,
+                                actualStart: s.actualStart || null,
+                                actualEnd: s.actualEnd || null,
+                                status: s.status || "PLANNED",
+                                note: s.note || null,
+                                absenceType: s.absenceType || null,
+                                employee: s.employee || employeeData,
+                                backupEmployee: s.backupEmployee || backupEmp
+                            }))
+                            return [...withoutTemp, ...realShifts].sort((a, b) =>
+                                new Date(a.date).getTime() - new Date(b.date).getTime()
+                            )
+                        })
+                    } else if (responseData.id) {
+                        // Single response - replace temp shift with real data
+                        setShifts(prev => prev.map(s =>
+                            s.id === tempIds[0] ? {
+                                ...s,
+                                id: responseData.id,
+                                date: responseData.date || s.date,
+                                status: responseData.status || s.status,
+                            } : s
+                        ))
+                    }
+
+                    // Background-Revalidierung für Konsistenz
+                    mutate()
+                }).catch(() => {
+                    // Rollback bei Netzwerkfehler
+                    setShifts(prev => prev.filter(s => !tempIds.includes(s.id)))
+                    showToast("error", "Netzwerkfehler - bitte prüfen Sie Ihre Verbindung")
+                })
+            }
 
             return // Früher Return, da async im Hintergrund läuft
         } catch (err) {
@@ -728,7 +832,7 @@ function SchedulePageContent() {
         } finally {
             setLoading(false)
         }
-    }, [editingShift, formData, fetchData, mutate, clients, employees, teams, selectedClientId, shifts, closeModal])
+    }, [editingShift, formData, additionalDates, fetchData, mutate, clients, employees, teams, selectedClientId, shifts, closeModal])
 
     // Cleanup-Funktion für Undo-Queue
     useEffect(() => {
@@ -949,6 +1053,7 @@ function SchedulePageContent() {
         setSelectedClientId("")
         setSuggestedTimes(null) // Reset suggestions
         setConflicts([]) // Reset conflicts
+        setAdditionalDates([]) // Reset multi-date
         setFormData({
             employeeId: "",
             date: date ? format(date, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
@@ -985,6 +1090,32 @@ function SchedulePageContent() {
             repeatDays: [1, 2, 3, 4, 5]
         })
         setShowModal(true)
+    }
+
+    // Multi-Datum Handlers
+    const addAdditionalDate = () => {
+        const lastEntry = additionalDates.length > 0
+            ? additionalDates[additionalDates.length - 1]
+            : { plannedStart: formData.plannedStart, plannedEnd: formData.plannedEnd }
+        setAdditionalDates(prev => [...prev, {
+            date: "",
+            plannedStart: lastEntry.plannedStart,
+            plannedEnd: lastEntry.plannedEnd
+        }])
+        // Wiederholung deaktivieren
+        if (formData.isRepeating) {
+            setFormData(prev => ({ ...prev, isRepeating: false, repeatEndDate: "", repeatDays: [1, 2, 3, 4, 5] }))
+        }
+    }
+
+    const removeAdditionalDate = (index: number) => {
+        setAdditionalDates(prev => prev.filter((_, i) => i !== index))
+    }
+
+    const updateAdditionalDate = (index: number, field: string, value: string) => {
+        setAdditionalDates(prev => prev.map((entry, i) =>
+            i === index ? { ...entry, [field]: value } : entry
+        ))
     }
 
     // ✅ PERFORMANCE: Prefetch TimesheetDetail data on hover
@@ -1792,6 +1923,114 @@ function SchedulePageContent() {
                                             </div>
                                         </div>
 
+                                        {/* Multi-Datum: Plus-Button + zusätzliche Termine (nur Neuanlage, nicht bei Wiederholung) */}
+                                        {!editingShift && !formData.isRepeating && (
+                                            <div className="space-y-3">
+                                                {/* Zusätzliche Termine */}
+                                                {additionalDates.length > 0 && (
+                                                    <div className="border-t border-neutral-800 pt-3 space-y-3">
+                                                        <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
+                                                            Zusätzliche Termine
+                                                        </span>
+                                                        {additionalDates.map((entry, idx) => (
+                                                            <div key={idx} className="bg-neutral-800/50 rounded-lg p-3 space-y-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="flex-1">
+                                                                        <input
+                                                                            type="date"
+                                                                            value={entry.date}
+                                                                            onChange={(e) => updateAdditionalDate(idx, "date", e.target.value)}
+                                                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors text-sm"
+                                                                        />
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeAdditionalDate(idx)}
+                                                                        className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                                                                        title="Termin entfernen"
+                                                                    >
+                                                                        <X size={16} />
+                                                                    </button>
+                                                                </div>
+                                                                <div className="grid grid-cols-2 gap-3">
+                                                                    <div>
+                                                                        <label className="block text-xs text-neutral-500 mb-1">Start</label>
+                                                                        <input
+                                                                            type="text"
+                                                                            inputMode="numeric"
+                                                                            placeholder="08:00"
+                                                                            value={entry.plannedStart}
+                                                                            onChange={(e) => {
+                                                                                let val = e.target.value.replace(/[^0-9:]/g, '')
+                                                                                if (val.length === 2 && !val.includes(':') && entry.plannedStart.length < 2) {
+                                                                                    val = val + ':'
+                                                                                }
+                                                                                if (val.length <= 5) {
+                                                                                    updateAdditionalDate(idx, "plannedStart", val)
+                                                                                }
+                                                                            }}
+                                                                            onBlur={(e) => {
+                                                                                const val = e.target.value
+                                                                                const match = val.match(/^(\d{1,2}):?(\d{0,2})$/)
+                                                                                if (match) {
+                                                                                    const h = match[1].padStart(2, '0')
+                                                                                    const m = (match[2] || '00').padStart(2, '0')
+                                                                                    if (parseInt(h, 10) <= 24 && parseInt(m, 10) <= 59) {
+                                                                                        updateAdditionalDate(idx, "plannedStart", `${h}:${m}`)
+                                                                                    }
+                                                                                }
+                                                                            }}
+                                                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors font-mono text-sm"
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-xs text-neutral-500 mb-1">Ende</label>
+                                                                        <input
+                                                                            type="text"
+                                                                            inputMode="numeric"
+                                                                            placeholder="16:00"
+                                                                            value={entry.plannedEnd}
+                                                                            onChange={(e) => {
+                                                                                let val = e.target.value.replace(/[^0-9:]/g, '')
+                                                                                if (val.length === 2 && !val.includes(':') && entry.plannedEnd.length < 2) {
+                                                                                    val = val + ':'
+                                                                                }
+                                                                                if (val.length <= 5) {
+                                                                                    updateAdditionalDate(idx, "plannedEnd", val)
+                                                                                }
+                                                                            }}
+                                                                            onBlur={(e) => {
+                                                                                const val = e.target.value
+                                                                                const match = val.match(/^(\d{1,2}):?(\d{0,2})$/)
+                                                                                if (match) {
+                                                                                    const h = match[1].padStart(2, '0')
+                                                                                    const m = (match[2] || '00').padStart(2, '0')
+                                                                                    if (parseInt(h, 10) <= 24 && parseInt(m, 10) <= 59) {
+                                                                                        updateAdditionalDate(idx, "plannedEnd", `${h}:${m}`)
+                                                                                    }
+                                                                                }
+                                                                            }}
+                                                                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-colors font-mono text-sm"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* Plus-Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={addAdditionalDate}
+                                                    className="w-full flex items-center justify-center gap-2 py-2 px-3 border border-dashed border-neutral-700 rounded-lg text-sm text-neutral-400 hover:text-violet-400 hover:border-violet-500/50 hover:bg-violet-900/10 transition-colors"
+                                                >
+                                                    <Plus size={16} />
+                                                    Weiteres Datum hinzufügen
+                                                </button>
+                                            </div>
+                                        )}
+
                                         {/* Conflict Warnings - Fixed height container prevents jumping */}
                                         <div className="min-h-[44px]">
                                             {validating && (
@@ -1881,11 +2120,20 @@ function SchedulePageContent() {
                                                     <input
                                                         type="checkbox"
                                                         checked={formData.isRepeating}
-                                                        onChange={(e) => setFormData({ ...formData, isRepeating: e.target.checked })}
-                                                        className="w-4 h-4 rounded border-neutral-600 bg-neutral-800 checked:bg-violet-600 checked:border-violet-600 accent-violet-600 focus:ring-1 focus:ring-violet-500/50 focus:ring-offset-0"
+                                                        disabled={additionalDates.length > 0}
+                                                        onChange={(e) => {
+                                                            setFormData({ ...formData, isRepeating: e.target.checked })
+                                                            if (e.target.checked) {
+                                                                setAdditionalDates([])
+                                                            }
+                                                        }}
+                                                        className="w-4 h-4 rounded border-neutral-600 bg-neutral-800 checked:bg-violet-600 checked:border-violet-600 accent-violet-600 focus:ring-1 focus:ring-violet-500/50 focus:ring-offset-0 disabled:opacity-40"
                                                     />
-                                                    <span className="text-sm font-medium text-neutral-300">
+                                                    <span className={`text-sm font-medium ${additionalDates.length > 0 ? "text-neutral-500" : "text-neutral-300"}`}>
                                                         Schicht wiederholen
+                                                        {additionalDates.length > 0 && (
+                                                            <span className="text-xs text-neutral-600 ml-1">(deaktiviert bei Mehrfach-Datum)</span>
+                                                        )}
                                                     </span>
                                                 </label>
 
