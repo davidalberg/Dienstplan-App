@@ -7,7 +7,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns"
 import { de } from "date-fns/locale"
 import TimesheetDay from "@/components/TimesheetDay"
 import MonthlySummary from "@/components/MonthlySummary"
-import { ChevronDown, ChevronRight, Shield, Download, CalendarDays, Clock, CheckCircle2, RefreshCw } from "lucide-react"
+import { ChevronDown, ChevronRight, Shield, CalendarDays, Clock, CheckCircle2, RefreshCw } from "lucide-react"
 import { formatTimeRange } from "@/lib/time-utils"
 import ConnectionStatus from "@/components/ConnectionStatus"
 
@@ -305,20 +305,7 @@ export default function DashboardPage() {
                             year={currentDate.getFullYear()}
                         />
 
-                        {/* Excel Export Button */}
-                        {!loading && timesheets.length > 0 && (
-                            <button
-                                onClick={() => {
-                                    const month = currentDate.getMonth() + 1
-                                    const year = currentDate.getFullYear()
-                                    window.open(`/api/timesheets/export?month=${month}&year=${year}`, '_blank')
-                                }}
-                                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-sm font-medium text-gray-700 shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors"
-                            >
-                                <Download size={16} />
-                                Excel Export
-                            </button>
-                        )}
+                        {/* Excel Export entfernt - PDF Download ist in MonthlySummary nach Unterschrift */}
 
                         {/* Backup-Schichten Sektion (eingeklappt) */}
                         {potentialBackupShifts.length > 0 && (

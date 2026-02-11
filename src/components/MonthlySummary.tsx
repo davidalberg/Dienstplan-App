@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Send, Clock, CheckCircle, X, AlertCircle, FileSignature, Undo2, Lock } from "lucide-react"
+import { Send, Clock, CheckCircle, X, AlertCircle, FileSignature, Undo2, Lock, Download } from "lucide-react"
 import { calculateHoursBreakdown } from "@/lib/time-utils"
 import SubmitModal from "./SubmitModal"
 
@@ -344,6 +344,20 @@ export default function MonthlySummary({ timesheets, onRefresh, month, year }: M
                                 <Lock size={14} />
                                 Dieser Monat ist abgeschlossen
                             </div>
+                        )}
+
+                        {/* PDF Download - nur wenn Mitarbeiter unterschrieben hat UND Monat abgeschlossen */}
+                        {hasSigned && clientSigned && submissionStatus?.submissionId && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    window.open(`/api/timesheets/download/${submissionStatus.submissionId}`, '_blank')
+                                }}
+                                className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 font-semibold transition-all bg-white/20 text-white hover:bg-white/30"
+                            >
+                                <Download size={18} />
+                                Stundennachweis herunterladen (PDF)
+                            </button>
                         )}
 
                         {/* Legacy cancel button - only show if no signature system is active */}
