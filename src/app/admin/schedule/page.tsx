@@ -1069,6 +1069,28 @@ function SchedulePageContent() {
         setShowModal(true)
     }
 
+    // Schicht erstellen mit vorausgewähltem Client (Skip Stufe 1)
+    const openCreateModalForClient = (clientId: string) => {
+        setEditingShift(null)
+        setSelectedClientId(clientId)
+        setSuggestedTimes(null)
+        setConflicts([])
+        setAdditionalDates([])
+        setFormData({
+            employeeId: "",
+            date: format(new Date(), "yyyy-MM-dd"),
+            plannedStart: "08:00",
+            plannedEnd: "16:00",
+            backupEmployeeId: "",
+            note: "",
+            absenceType: "",
+            isRepeating: false,
+            repeatEndDate: "",
+            repeatDays: [1, 2, 3, 4, 5]
+        })
+        setShowModal(true)
+    }
+
     const openEditModal = (shift: Shift) => {
         setEditingShift(shift)
         setSuggestedTimes(null) // No suggestions in edit mode
@@ -1096,9 +1118,16 @@ function SchedulePageContent() {
     const addAdditionalDate = () => {
         const lastEntry = additionalDates.length > 0
             ? additionalDates[additionalDates.length - 1]
-            : { plannedStart: formData.plannedStart, plannedEnd: formData.plannedEnd }
+            : { date: formData.date, plannedStart: formData.plannedStart, plannedEnd: formData.plannedEnd }
+        // Nächsten Tag berechnen basierend auf letztem Datum
+        let nextDate = ""
+        if (lastEntry.date) {
+            const lastDate = new Date(lastEntry.date)
+            lastDate.setDate(lastDate.getDate() + 1)
+            nextDate = format(lastDate, "yyyy-MM-dd")
+        }
         setAdditionalDates(prev => [...prev, {
-            date: "",
+            date: nextDate,
             plannedStart: lastEntry.plannedStart,
             plannedEnd: lastEntry.plannedEnd
         }])
@@ -1485,19 +1514,34 @@ function SchedulePageContent() {
                                                     {group.shifts.length}
                                                 </span>
                                             </button>
-                                            {clientId !== "unassigned" && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        router.push(`/admin/submissions?clientId=${clientId}&month=${month}&year=${year}`)
-                                                    }}
-                                                    className="p-2 rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-violet-400 transition-colors"
-                                                    aria-label="Zu den Nachweisen"
-                                                    title="Zu den Nachweisen"
-                                                >
-                                                    <ExternalLink size={16} />
-                                                </button>
-                                            )}
+                                            <div className="flex items-center gap-1">
+                                                {clientId !== "unassigned" && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            openCreateModalForClient(clientId)
+                                                        }}
+                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-neutral-400 hover:text-violet-400 hover:bg-violet-900/20 transition-colors"
+                                                        title="Schicht erstellen"
+                                                    >
+                                                        <Plus size={14} />
+                                                        <span className="hidden sm:inline">Schicht</span>
+                                                    </button>
+                                                )}
+                                                {clientId !== "unassigned" && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            router.push(`/admin/submissions?clientId=${clientId}&month=${month}&year=${year}`)
+                                                        }}
+                                                        className="p-2 rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-violet-400 transition-colors"
+                                                        aria-label="Zu den Nachweisen"
+                                                        title="Zu den Nachweisen"
+                                                    >
+                                                        <ExternalLink size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
 
                                         {/* Schichten-Tabelle (nur wenn expanded) */}
