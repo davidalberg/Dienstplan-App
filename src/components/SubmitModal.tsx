@@ -622,8 +622,11 @@ export default function SubmitModal({ isOpen, onClose, month, year, onSuccess }:
                             <div className="flex gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => setStep("info")}
-                                    className="flex-1 rounded-xl bg-gray-100 py-3 font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+                                    onClick={() => {
+                                        setError(null)
+                                        setStep(submissionId ? "signature" : "preview")
+                                    }}
+                                    className="flex-1 rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 transition-colors"
                                 >
                                     Erneut versuchen
                                 </button>

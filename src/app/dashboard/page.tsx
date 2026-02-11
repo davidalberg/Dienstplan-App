@@ -7,8 +7,9 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns"
 import { de } from "date-fns/locale"
 import TimesheetDay from "@/components/TimesheetDay"
 import MonthlySummary from "@/components/MonthlySummary"
-import { ChevronDown, ChevronRight, Shield, Download, CalendarDays, Clock, CheckCircle2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Shield, Download, CalendarDays, Clock, CheckCircle2, RefreshCw } from "lucide-react"
 import { formatTimeRange } from "@/lib/time-utils"
+import ConnectionStatus from "@/components/ConnectionStatus"
 
 interface DashboardClient {
     id: string
@@ -182,6 +183,7 @@ export default function DashboardPage() {
 
     return (
         <div className="pb-20">
+            <ConnectionStatus />
             <header className="sticky top-0 z-10 border-b bg-white p-4 shadow-sm">
                 <div className="mx-auto flex max-w-2xl items-center justify-between">
                     <div>
@@ -362,8 +364,15 @@ export default function DashboardPage() {
                         <div className="mt-6 space-y-4">
                             <h2 className="text-lg font-bold text-black">Tageskarten</h2>
                             {fetchError ? (
-                                <div className="rounded-xl border-2 border-red-200 bg-red-50 py-6 text-center text-red-700 font-medium">
-                                    {fetchError}
+                                <div className="rounded-xl border-2 border-red-200 bg-red-50 py-6 text-center">
+                                    <p className="text-red-700 font-medium">{fetchError}</p>
+                                    <button
+                                        onClick={fetchTimesheets}
+                                        className="mt-3 inline-flex items-center gap-2 rounded-lg bg-red-100 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-200 transition-colors"
+                                    >
+                                        <RefreshCw size={16} />
+                                        Erneut laden
+                                    </button>
                                 </div>
                             ) : loading ? (
                                 <div className="py-10 text-center text-black font-medium">Lade Daten...</div>

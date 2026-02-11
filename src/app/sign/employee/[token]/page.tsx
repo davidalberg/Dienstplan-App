@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { FileText, CheckCircle, AlertCircle, Loader2, Clock, User, Calendar } from "lucide-react"
 import SignaturePad from "@/components/SignaturePad"
+import ConnectionStatus from "@/components/ConnectionStatus"
 import { showToast } from "@/lib/toast-utils"
 import { WORKED_TIMESHEET_STATUSES } from "@/lib/constants"
 
@@ -131,7 +132,7 @@ export default function EmployeeSignPage() {
             const data = await res.json()
 
             if (!res.ok) {
-                setError(data.error || "Fehler beim Unterschreiben")
+                showToast("error", data.error || "Fehler beim Unterschreiben. Bitte erneut versuchen.")
                 setSigning(false)
                 return
             }
@@ -140,7 +141,7 @@ export default function EmployeeSignPage() {
             setCompleted(true)
         } catch (err) {
             console.error(err)
-            setError("Netzwerkfehler. Bitte erneut versuchen.")
+            showToast("error", "Netzwerkfehler. Bitte erneut versuchen.")
         } finally {
             setSigning(false)
         }
@@ -233,6 +234,7 @@ export default function EmployeeSignPage() {
     // Main signing view
     return (
         <div className="min-h-screen bg-gray-100 py-8 px-4">
+            <ConnectionStatus />
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Header */}
                 <div className="bg-gradient-to-r from-violet-600 to-violet-700 rounded-2xl shadow-xl p-6 text-white">
