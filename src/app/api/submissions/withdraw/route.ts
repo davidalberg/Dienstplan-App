@@ -135,6 +135,12 @@ export async function POST(req: NextRequest) {
         }
 
         const employeeSignature = submissionWithSignature.employeeSignatures[0]
+        if (!employeeSignature) {
+            return NextResponse.json(
+                { error: "Unterschrift nicht gefunden" },
+                { status: 404 }
+            )
+        }
 
         // Use transaction with Serializable isolation to prevent race conditions
         await prisma.$transaction(async (tx) => {

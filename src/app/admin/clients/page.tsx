@@ -146,7 +146,9 @@ export default function ClientsPage() {
             return
         }
 
-        setLoading(true)
+        // Modal sofort schließen für bessere UX
+        setShowModal(false)
+
         try {
             if (editingClient) {
                 // Update
@@ -158,7 +160,6 @@ export default function ClientsPage() {
 
                 if (res.ok) {
                     showToast("success", "Klient aktualisiert")
-                    setShowModal(false)
                     fetchClients()
                 } else {
                     const err = await res.json()
@@ -174,7 +175,6 @@ export default function ClientsPage() {
 
                 if (res.ok) {
                     showToast("success", "Klient erstellt")
-                    setShowModal(false)
                     fetchClients()
                 } else {
                     const err = await res.json()
@@ -183,8 +183,6 @@ export default function ClientsPage() {
             }
         } catch {
             showToast("error", "Fehler beim Speichern")
-        } finally {
-            setLoading(false)
         }
     }
 

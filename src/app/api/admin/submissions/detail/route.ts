@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const month = parseInt(searchParams.get("month") || "", 10)
     const year = parseInt(searchParams.get("year") || "", 10)
 
-    if (!employeeId || isNaN(month) || isNaN(year)) {
+    if (!employeeId || isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100) {
         return NextResponse.json({
             error: "employeeId, month und year sind erforderlich"
         }, { status: 400 })

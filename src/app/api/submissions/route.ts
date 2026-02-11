@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
         const month = parseInt(searchParams.get("month") || "", 10)
         const year = parseInt(searchParams.get("year") || "", 10)
 
-        if (isNaN(month) || isNaN(year)) {
+        if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100) {
             return NextResponse.json({ error: "Invalid month/year" }, { status: 400 })
         }
 
@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
 
         const body = await req.json()
         const { month, year } = body
-        if (!month || !year) {
+        if (!month || !year || month < 1 || month > 12 || year < 2020 || year > 2100) {
             return NextResponse.json({ error: "Month and year required" }, { status: 400 })
         }
 

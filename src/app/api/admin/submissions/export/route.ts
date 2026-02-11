@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const year = parseInt(searchParams.get("year") || "", 10)
     const exportFormat = searchParams.get("format") || "pdf"
 
-    if (!employeeId || isNaN(month) || isNaN(year)) {
+    if (!employeeId || isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100) {
         return NextResponse.json({
             error: "employeeId, month und year sind erforderlich"
         }, { status: 400 })
@@ -139,7 +139,7 @@ export async function GET(req: NextRequest) {
         const totalHours = totalActualHours
 
         const monthName = format(new Date(year, month - 1), "MMMM yyyy", { locale: de })
-        const filename = `Stundennachweis_${employee.name?.replace(/\s+/g, "_")}_${month}_${year}`
+        const filename = `Stundennachweis_${(employee.name || "Unbekannt").replace(/\s+/g, "_")}_${month}_${year}`
 
         // Export je nach Format
         if (exportFormat === "csv") {

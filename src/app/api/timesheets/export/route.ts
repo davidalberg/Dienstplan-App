@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const employeeId = searchParams.get("employeeId")
     const source = searchParams.get("source")
 
-    if (isNaN(month) || isNaN(year) || month < 1 || month > 12) {
+    if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100) {
         return NextResponse.json({ error: "Invalid month/year" }, { status: 400 })
     }
 

@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
     const year = parseInt(searchParams.get("year") || "", 10)
     const teamId = searchParams.get("teamId") || undefined
 
-    if (isNaN(month) || isNaN(year)) {
+    if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100) {
         return NextResponse.json({ error: "Month and year required" }, { status: 400 })
     }
 
@@ -235,6 +235,17 @@ export async function POST(req: NextRequest) {
             // Generiere alle Kandidaten-Daten zwischen Start und Ende
             const start = new Date(startDate)
             const end = new Date(endDate)
+
+            if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+                return NextResponse.json({ error: "Ungültiges Datumsformat" }, { status: 400 })
+            }
+            if (end < start) {
+                return NextResponse.json({ error: "Enddatum muss nach Startdatum liegen" }, { status: 400 })
+            }
+            const daySpan = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+            if (daySpan > 366) {
+                return NextResponse.json({ error: "Zeitraum darf maximal 366 Tage umfassen" }, { status: 400 })
+            }
 
             // Sammle alle Kandidaten-Daten, die auf einen gewählten Wochentag fallen
             const candidateDates: Date[] = []

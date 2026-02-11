@@ -172,10 +172,6 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        const clientMissing = !resolvedClient
-        if (clientMissing) {
-        }
-
         // Check if any employees found
         if (employeeIds.length === 0) {
             return NextResponse.json({
