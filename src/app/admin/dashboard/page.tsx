@@ -12,7 +12,6 @@ import {
     CalendarCheck,
     ChevronRight,
     Sunrise,
-    PenLine,
     CalendarDays,
     UserX
 } from "lucide-react"
@@ -61,15 +60,9 @@ interface DashboardData {
         userName: string | null
         createdAt: string
     }[]
-    clientCoverage: {
-        id: string
-        name: string
-        employeeCount: number
-    }[]
     sickByEmployee: { employeeName: string; days: number }[]
     upcomingVacations: { employeeName: string; startDate: string; endDate: string }[]
     employeesWithoutShifts: { id: string; name: string }[]
-    pendingSignaturesList: { clientName: string; status: string; detail: string }[]
     weekPreview: { date: string; shiftCount: number }[]
 }
 
@@ -361,7 +354,7 @@ export default function AdminDashboardPage() {
                     </div>
                 </div>
 
-                {/* Reihe 4: Wochenvorschau + Offene Unterschriften */}
+                {/* Reihe 4: Wochenvorschau */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Wochenplan-Vorschau */}
                     <div className="bg-neutral-900 rounded-xl border border-neutral-800">
@@ -404,86 +397,6 @@ export default function AdminDashboardPage() {
                                     )
                                 })}
                             </div>
-                        </div>
-                    </div>
-
-                    {/* Offene Unterschriften */}
-                    <div className="bg-neutral-900 rounded-xl border border-neutral-800">
-                        <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-                            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                                <PenLine size={18} className="text-amber-400" />
-                                Offene Unterschriften
-                            </h2>
-                            <Link href="/admin/employee-timesheets" className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
-                                Nachweise <ChevronRight size={14} />
-                            </Link>
-                        </div>
-                        <div className="p-4 space-y-2 max-h-64 overflow-y-auto">
-                            {data.pendingSignaturesList.length === 0 ? (
-                                <p className="text-neutral-500 text-sm py-4 text-center">Alle Nachweise abgeschlossen</p>
-                            ) : (
-                                data.pendingSignaturesList.map((entry, i) => (
-                                    <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-neutral-800/50">
-                                        <div className="flex items-center gap-3">
-                                            <span className={`w-2 h-2 rounded-full shrink-0 ${
-                                                entry.status === "NOT_SUBMITTED" ? "bg-red-400" :
-                                                entry.status === "PENDING_EMPLOYEES" ? "bg-amber-400" :
-                                                "bg-blue-400"
-                                            }`} />
-                                            <span className="text-sm text-white">{entry.clientName}</span>
-                                        </div>
-                                        <span className={`text-xs ${
-                                            entry.status === "NOT_SUBMITTED" ? "text-red-400" :
-                                            entry.status === "PENDING_EMPLOYEES" ? "text-amber-400" :
-                                            "text-blue-400"
-                                        }`}>
-                                            {entry.detail}
-                                        </span>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Reihe 5: Schnellzugriff + Klienten-Abdeckung */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Quick Actions */}
-                    <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-4">
-                        <h2 className="text-lg font-semibold text-white mb-4">Schnellzugriff</h2>
-                        <div className="grid grid-cols-2 gap-3">
-                            <Link href="/admin/schedule" className="flex items-center gap-3 p-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors">
-                                <CalendarCheck size={18} className="text-violet-400" />
-                                <span className="text-sm text-neutral-200">Schicht erstellen</span>
-                            </Link>
-                            <Link href="/admin/employee-timesheets" className="flex items-center gap-3 p-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors">
-                                <CheckCircle2 size={18} className="text-green-400" />
-                                <span className="text-sm text-neutral-200">Nachweise pruefen</span>
-                            </Link>
-                            <Link href="/admin/vacations" className="flex items-center gap-3 p-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors">
-                                <Palmtree size={18} className="text-cyan-400" />
-                                <span className="text-sm text-neutral-200">Urlaub / Krank</span>
-                            </Link>
-                        </div>
-                    </div>
-
-                    {/* Klienten-Abdeckung */}
-                    <div className="bg-neutral-900 rounded-xl border border-neutral-800">
-                        <div className="p-4 border-b border-neutral-800">
-                            <h2 className="text-lg font-semibold text-white">Klienten-Abdeckung</h2>
-                        </div>
-                        <div className="p-4 space-y-2 max-h-60 overflow-y-auto">
-                            {data.clientCoverage.map(client => (
-                                <div key={client.id} className="flex items-center justify-between py-1.5">
-                                    <span className="text-sm text-neutral-300">{client.name}</span>
-                                    <span className={`text-sm font-medium ${
-                                        client.employeeCount === 0 ? "text-red-400" :
-                                        client.employeeCount < 2 ? "text-amber-400" : "text-green-400"
-                                    }`}>
-                                        {client.employeeCount} MA
-                                    </span>
-                                </div>
-                            ))}
                         </div>
                     </div>
                 </div>
