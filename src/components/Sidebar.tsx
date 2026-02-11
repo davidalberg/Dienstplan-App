@@ -7,11 +7,9 @@ import { useState, useCallback, useRef } from "react"
 import { useSWRConfig } from "swr"
 import {
     Calendar,
-    CalendarRange,
     FileText,
     UserCircle,
     Settings,
-    SlidersHorizontal,
     ChevronLeft,
     ChevronRight,
     LogOut,
@@ -79,14 +77,12 @@ export function Sidebar({ onExportClick }: SidebarProps) {
     const navItems: NavItem[] = [
         { icon: LayoutDashboard, label: "Dashboard", href: "/admin/dashboard" },
         { icon: Calendar, label: "Kalender", href: "/admin/schedule" },
-        { icon: CalendarRange, label: "Wochen-Übersicht", href: "/admin/team-overview" },
         { icon: UserCog, label: "Assistenten", href: "/admin/assistants" },
         { icon: UserCircle, label: "Klienten", href: "/admin/clients" },
         { icon: ClipboardList, label: "Stundennachweise", href: "/admin/employee-timesheets" },
         { icon: FileText, label: "Gesamtstundennachweise", href: "/admin/timesheets" },
         { icon: Palmtree, label: "Urlaub / Krank", href: "/admin/vacations" },
         { icon: Wallet, label: "Lohnliste", href: "/admin/payroll" },
-        { icon: SlidersHorizontal, label: "Dienstplan-Konfig", href: "/admin/dienstplan-config" },
         { icon: Settings, label: "Einstellungen", href: "/admin/settings" },
     ]
 
