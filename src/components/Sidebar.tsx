@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback } from "react"
 import { useSWRConfig } from "swr"
 import {
     Calendar,
@@ -49,30 +49,32 @@ export function Sidebar({ onExportClick }: SidebarProps) {
     const pathname = usePathname()
     const [collapsed, setCollapsed] = useState(false)
     const { mutate } = useSWRConfig()
-    const prefetchedRef = useRef<Set<string>>(new Set())
 
-    // Extrahiere month/year aus aktueller URL oder verwende aktuellen Monat
-    const currentMonth = (() => {
-        const match = pathname?.match(/month=(\d+)/)
-        return match ? parseInt(match[1], 10) : new Date().getMonth() + 1
-    })()
-    const currentYear = (() => {
-        const match = pathname?.match(/year=(\d+)/)
-        return match ? parseInt(match[1], 10) : new Date().getFullYear()
-    })()
-
+    // Hover-Prefetch: Liest Monat/Jahr aus localStorage (wird von allen Admin-Seiten geschrieben)
+    // SWR dedupliciert automatisch über dedupingInterval (5 Min), daher kein manuelles Tracking nötig
     const prefetchPageData = useCallback((href: string) => {
         const apiUrl = sidebarPrefetchMap[href]
         if (!apiUrl) return
-        if (prefetchedRef.current.has(apiUrl)) return
-        prefetchedRef.current.add(apiUrl)
 
-        // Baue die vollständige URL mit month/year Parametern
+        // Monat/Jahr aus localStorage lesen (aktuellster Wert vom User)
+        let month = new Date().getMonth() + 1
+        let year = new Date().getFullYear()
+        try {
+            const saved = localStorage.getItem('admin-selected-month')
+            if (saved) {
+                const parsed = JSON.parse(saved)
+                if (parsed.month >= 1 && parsed.month <= 12) {
+                    month = parsed.month
+                    year = parsed.year
+                }
+            }
+        } catch { /* ignore */ }
+
         const separator = apiUrl.includes("?") ? "&" : "?"
-        const fullUrl = `${apiUrl}${separator}month=${currentMonth}&year=${currentYear}`
+        const fullUrl = `${apiUrl}${separator}month=${month}&year=${year}`
 
         mutate(fullUrl, fetch(fullUrl).then(res => res.ok ? res.json() : undefined), { revalidate: false })
-    }, [currentMonth, currentYear, mutate])
+    }, [mutate])
 
     const navItems: NavItem[] = [
         { icon: LayoutDashboard, label: "Dashboard", href: "/admin/dashboard" },

@@ -17,8 +17,8 @@ const fetcher = (url: string) => fetch(url).then(res => {
 const swrConfig = {
     revalidateOnFocus: false,       // NICHT bei jedem Tab-Wechsel
     revalidateOnReconnect: false,   // Kein Refetch bei Reconnect
-    dedupingInterval: 60000,        // 1 Minute - verhindert doppelte Requests bei schneller Navigation
-    revalidateIfStale: true,        // Background-Refetch wenn Daten stale sind (mit keepPreviousData = sofortige Anzeige)
+    dedupingInterval: 300000,       // 5 Minuten - wie AdminDataProvider (Cache bleibt zwischen Seitenwechseln)
+    revalidateIfStale: false,       // KEIN automatischer Refetch - Daten werden nur via mutate() aktualisiert
     keepPreviousData: true,         // Show cached data while loading new data (better UX)
     errorRetryCount: 0,             // KEINE Retries - verhindert Connection Pool Overflow
 }

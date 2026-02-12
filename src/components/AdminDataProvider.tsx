@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, ReactNode, useMemo } from 'react'
+import { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react'
 import useSWR from 'swr'
 
 // SWR fetcher function
@@ -21,6 +21,25 @@ const preloadConfig = {
     revalidateIfStale: false,     // Keine automatische Revalidierung
     focusThrottleInterval: 300000, // 5 Minuten zwischen Focus-Revalidierungen
     errorRetryCount: 1,           // Nur 1x Retry bei Fehlern
+}
+
+// Helper: Liest Monat/Jahr aus localStorage oder Fallback auf aktuellen Monat
+function getSelectedMonth(): { month: number; year: number } {
+    if (typeof window === 'undefined') {
+        const now = new Date()
+        return { month: now.getMonth() + 1, year: now.getFullYear() }
+    }
+    try {
+        const saved = localStorage.getItem('admin-selected-month')
+        if (saved) {
+            const parsed = JSON.parse(saved)
+            if (parsed.month >= 1 && parsed.month <= 12 && parsed.year >= 2020) {
+                return parsed
+            }
+        }
+    } catch { /* ignore */ }
+    const now = new Date()
+    return { month: now.getMonth() + 1, year: now.getFullYear() }
 }
 
 // Types
@@ -75,10 +94,43 @@ const AdminDataContext = createContext<AdminDataContextType | null>(null)
 /**
  * AdminDataProvider - Zentrale Datenverwaltung für Admin-Bereich
  *
- * Lädt Master-Daten (Employees, Clients, Teams) PARALLEL beim ersten Mount.
- * 3 parallele Requests sind kein Problem für den Connection Pool (limit=10).
+ * Lädt Master-Daten (Employees, Clients, Teams) UND monats-spezifische Daten
+ * (Submissions, Payroll, Vacations, Timesheets) PARALLEL beim ersten Mount.
+ * 7 parallele Requests sind sicher für den Connection Pool (limit=10).
  */
 export function AdminDataProvider({ children }: { children: ReactNode }) {
+    // Monat/Jahr State für Prefetch — aus localStorage initialisiert
+    const [selectedMonth, setSelectedMonth] = useState(getSelectedMonth)
+
+    // Lausche auf Monatswechsel (CustomEvent von Admin-Seiten + storage-Event von anderen Tabs)
+    useEffect(() => {
+        const handleMonthChanged = (e: Event) => {
+            const detail = (e as CustomEvent).detail
+            if (detail?.month && detail?.year) {
+                setSelectedMonth({ month: detail.month, year: detail.year })
+            }
+        }
+
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === 'admin-selected-month' && e.newValue) {
+                try {
+                    const parsed = JSON.parse(e.newValue)
+                    if (parsed.month >= 1 && parsed.month <= 12) {
+                        setSelectedMonth(parsed)
+                    }
+                } catch { /* ignore */ }
+            }
+        }
+
+        window.addEventListener('admin-month-changed', handleMonthChanged)
+        window.addEventListener('storage', handleStorage)
+        return () => {
+            window.removeEventListener('admin-month-changed', handleMonthChanged)
+            window.removeEventListener('storage', handleStorage)
+        }
+    }, [])
+
+    // === Master Data (nicht monats-abhängig) ===
     const {
         data: employeesData,
         isLoading: isLoadingEmployees,
@@ -96,6 +148,15 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
         isLoading: isLoadingTeams,
         mutate: mutateTeams
     } = useSWR('/api/admin/teams', fetcher, preloadConfig)
+
+    // === Monats-spezifische Prefetches (wärmen SWR-Cache für Seiten) ===
+    const { month, year } = selectedMonth
+
+    // Diese Hooks fetchen die Daten in den SWR-Cache, die Seiten nutzen dann denselben Cache-Key
+    useSWR(`/api/admin/submissions?month=${month}&year=${year}`, fetcher, preloadConfig)
+    useSWR(`/api/admin/payroll?month=${month}&year=${year}`, fetcher, preloadConfig)
+    useSWR(`/api/admin/vacations/absences?month=${month}&year=${year}`, fetcher, preloadConfig)
+    useSWR(`/api/admin/timesheets?month=${month}&year=${year}`, fetcher, preloadConfig)
 
     // Extrahiere Daten aus Response
     const employees = employeesData?.employees || []

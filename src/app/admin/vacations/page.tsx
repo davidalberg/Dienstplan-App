@@ -89,6 +89,7 @@ function VacationsContent() {
 
         try {
             localStorage.setItem('admin-selected-month', JSON.stringify({ month, year }))
+            window.dispatchEvent(new CustomEvent('admin-month-changed', { detail: { month, year } }))
         } catch {
             // Ignore
         }
