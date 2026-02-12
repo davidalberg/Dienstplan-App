@@ -22,7 +22,8 @@ import {
     RotateCcw,
     AlertTriangle,
     Info,
-    Copy
+    Copy,
+    Undo2
 } from "lucide-react"
 import { showToast } from "@/lib/toast-utils"
 import { formatTimeRange } from "@/lib/time-utils"
@@ -103,6 +104,14 @@ interface Client {
     employees: { id: string; name: string }[]
 }
 
+interface UndoAction {
+    type: 'create' | 'update' | 'delete' | 'bulk-create'
+    createdShiftIds?: string[]
+    previousShift?: Shift
+    deletedShift?: Shift
+    timestamp: number
+}
+
 function SchedulePageContent() {
     const { data: session, status } = useSession()
     const router = useRouter()
@@ -144,7 +153,21 @@ function SchedulePageContent() {
         return new Date()
     })
     const [selectedTeam, setSelectedTeam] = useState<string>("")
-    const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
+    const [expandedClients, setExpandedClients] = useState<Set<string>>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem('admin-expanded-schedule')
+                if (saved) return new Set(JSON.parse(saved))
+            } catch { /* ignore */ }
+        }
+        return new Set()
+    })
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('admin-expanded-schedule', JSON.stringify([...expandedClients]))
+        } catch { /* ignore */ }
+    }, [expandedClients])
 
     const month = currentDate.getMonth() + 1
     const year = currentDate.getFullYear()
@@ -200,6 +223,10 @@ function SchedulePageContent() {
 
     // AbortController-Map für pending Delete-Requests (abort bei Unmount/Navigation)
     const deleteAbortControllers = useRef<Map<string, AbortController>>(new Map())
+
+    // Undo: Letzte rückgängig-machbare Aktion (Ref für Performance, State für UI-Hint)
+    const lastUndoAction = useRef<UndoAction | null>(null)
+    const [hasUndoAction, setHasUndoAction] = useState(false)
 
     // Sync SWR data to local state
     // ✅ OPTIMIZATION: Nutze globale Employees/Teams wenn Schedule-API keine liefert
@@ -484,6 +511,12 @@ function SchedulePageContent() {
         setAdditionalDates([])
     }, [])
 
+    // Helper: Set undo action (updates both ref and state)
+    const setUndoAction = useCallback((action: UndoAction | null) => {
+        lastUndoAction.current = action
+        setHasUndoAction(action !== null)
+    }, [])
+
     const handleCreateOrUpdate = useCallback(async () => {
         // Frontend-Validierung
         if (!formData.employeeId) {
@@ -549,11 +582,16 @@ function SchedulePageContent() {
                     return s
                 }))
 
-                // 2. Modal sofort schließen und Formular zurücksetzen
+                // 2. Undo-Action speichern (vor Modal-Close)
+                if (originalShift) {
+                    setUndoAction({ type: 'update', previousShift: { ...originalShift }, timestamp: Date.now() })
+                }
+
+                // 3. Modal sofort schließen und Formular zurücksetzen
                 closeModal()
                 showToast("success", "Schicht aktualisiert")
 
-                // 3. API-Call im Hintergrund (kein await blockiert UI)
+                // 4. API-Call im Hintergrund (kein await blockiert UI)
                 fetch("/api/admin/schedule", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
@@ -739,10 +777,12 @@ function SchedulePageContent() {
                     }
 
                     // Ersetze temp IDs mit echten IDs für erfolgreiche Shifts
+                    const realIds: string[] = []
                     succeeded.forEach(r => {
                         const responseData = (r as { data?: { id?: string; date?: string; status?: string } }).data
                         if (responseData?.id) {
                             const realId = responseData.id
+                            realIds.push(realId)
                             const realDate = responseData.date
                             const realStatus = responseData.status
                             setShifts(prev => prev.map(s =>
@@ -750,6 +790,11 @@ function SchedulePageContent() {
                             ))
                         }
                     })
+
+                    // Undo-Action mit echten IDs setzen
+                    if (realIds.length > 0) {
+                        setUndoAction({ type: 'bulk-create', createdShiftIds: realIds, timestamp: Date.now() })
+                    }
 
                     // Background-Revalidierung für Konsistenz
                     mutate()
@@ -792,6 +837,7 @@ function SchedulePageContent() {
                     // Replace temp IDs with real IDs from server
                     if (responseData.shifts && Array.isArray(responseData.shifts)) {
                         // Bulk response - replace all temp shifts with real data
+                        const realShiftIds = responseData.shifts.map((s: Shift) => s.id)
                         setShifts(prev => {
                             const withoutTemp = prev.filter(s => !tempIds.includes(s.id))
                             const realShifts: Shift[] = responseData.shifts.map((s: Shift) => ({
@@ -811,6 +857,8 @@ function SchedulePageContent() {
                                 new Date(a.date).getTime() - new Date(b.date).getTime()
                             )
                         })
+                        // Undo-Action mit echten IDs (bulk-create)
+                        setUndoAction({ type: 'bulk-create', createdShiftIds: realShiftIds, timestamp: Date.now() })
                     } else if (responseData.id) {
                         // Single response - replace temp shift with real data
                         setShifts(prev => prev.map(s =>
@@ -821,6 +869,8 @@ function SchedulePageContent() {
                                 status: responseData.status || s.status,
                             } : s
                         ))
+                        // Undo-Action mit echter ID (single create)
+                        setUndoAction({ type: 'create', createdShiftIds: [responseData.id], timestamp: Date.now() })
                     }
 
                     // Background-Revalidierung für Konsistenz
@@ -839,7 +889,7 @@ function SchedulePageContent() {
         } finally {
             setLoading(false)
         }
-    }, [editingShift, formData, additionalDates, fetchData, mutate, clients, employees, teams, selectedClientId, shifts, closeModal])
+    }, [editingShift, formData, additionalDates, fetchData, mutate, clients, employees, teams, selectedClientId, shifts, closeModal, setUndoAction])
 
     // Cleanup-Funktion für Undo-Queue
     useEffect(() => {
@@ -892,6 +942,146 @@ function SchedulePageContent() {
             { revalidate: true }
         )
     }, [mutate, globalMutate])
+
+    // Undo subfunctions
+    const undoCreate = useCallback(async (shiftIds: string[]) => {
+        // Optimistic: remove from UI
+        setShifts(prev => prev.filter(s => !shiftIds.includes(s.id)))
+        showToast("success", "Erstellen rückgängig gemacht")
+
+        // Delete each created shift via API
+        const results = await Promise.allSettled(
+            shiftIds.map(id =>
+                fetch(`/api/admin/schedule?id=${id}`, { method: "DELETE" })
+            )
+        )
+
+        const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok))
+        if (failed.length > 0) {
+            showToast("error", `${failed.length} Schicht(en) konnten nicht rückgängig gemacht werden`)
+        }
+
+        invalidateRelatedCaches()
+    }, [invalidateRelatedCaches])
+
+    const undoUpdate = useCallback(async (previousShift: Shift) => {
+        // Optimistic: restore old values in UI
+        setShifts(prev => prev.map(s =>
+            s.id === previousShift.id ? previousShift : s
+        ))
+        showToast("success", "Bearbeitung rückgängig gemacht")
+
+        // PUT with old values
+        const res = await fetch("/api/admin/schedule", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                id: previousShift.id,
+                plannedStart: previousShift.plannedStart,
+                plannedEnd: previousShift.plannedEnd,
+                backupEmployeeId: previousShift.backupEmployee?.id || null,
+                note: previousShift.note || null,
+                absenceType: previousShift.absenceType || null
+            })
+        })
+
+        if (!res.ok) {
+            showToast("error", "Fehler beim Rückgängig machen")
+        }
+        mutate()
+    }, [mutate])
+
+    const undoDelete = useCallback(async (deletedShift: Shift) => {
+        // Prüfe ob der Delete noch in der 5-Sekunden-Warteschlange ist
+        // (dann wurde die Schicht noch gar nicht aus der DB gelöscht)
+        setDeletedShifts(prev => {
+            const pendingDelete = prev.find(item => item.id === deletedShift.id)
+            if (pendingDelete) {
+                // Timeout abbrechen
+                clearTimeout(pendingDelete.timeout)
+                // Pending Delete-Request abbrechen
+                const controller = deleteAbortControllers.current.get(deletedShift.id)
+                if (controller) {
+                    controller.abort()
+                    deleteAbortControllers.current.delete(deletedShift.id)
+                }
+            }
+            return prev.filter(item => item.id !== deletedShift.id)
+        })
+
+        // Optimistic: add shift back to UI
+        setShifts(prev => {
+            // Prüfe ob Schicht nicht schon vorhanden ist (Doppel-Undo-Schutz)
+            if (prev.some(s => s.id === deletedShift.id)) return prev
+            return [...prev, deletedShift].sort((a, b) =>
+                new Date(a.date).getTime() - new Date(b.date).getTime()
+            )
+        })
+        showToast("success", "Löschen rückgängig gemacht")
+
+        // POST to re-create the shift (nur wenn bereits aus DB gelöscht)
+        // Wir versuchen erst ein GET um zu prüfen ob die Schicht noch existiert
+        const res = await fetch("/api/admin/schedule", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                employeeId: deletedShift.employee.id,
+                date: deletedShift.date.split("T")[0],
+                plannedStart: deletedShift.plannedStart,
+                plannedEnd: deletedShift.plannedEnd,
+                backupEmployeeId: deletedShift.backupEmployee?.id || null,
+                note: deletedShift.note || null,
+                absenceType: deletedShift.absenceType || null
+            })
+        })
+
+        if (!res.ok) {
+            // Schicht war vielleicht noch gar nicht gelöscht (409/conflict) - das ist OK
+            const data = await res.json().catch(() => ({}))
+            if (res.status !== 409) {
+                showToast("error", data.error || "Fehler beim Wiederherstellen")
+            }
+        } else {
+            // Replace temp shift with real data from server
+            const data = await res.json().catch(() => ({}))
+            if (data.id && data.id !== deletedShift.id) {
+                setShifts(prev => prev.map(s =>
+                    s.id === deletedShift.id ? { ...s, id: data.id, date: data.date || s.date, status: data.status || s.status } : s
+                ))
+            }
+        }
+        invalidateRelatedCaches()
+    }, [invalidateRelatedCaches])
+
+    // Main Ctrl+Z handler
+    const handleCtrlZUndo = useCallback(() => {
+        const action = lastUndoAction.current
+        if (!action) {
+            showToast("error", "Nichts zum Rückgängig machen")
+            return
+        }
+        // Expire after 2 minutes
+        if (Date.now() - action.timestamp > 2 * 60 * 1000) {
+            setUndoAction(null)
+            showToast("error", "Undo abgelaufen")
+            return
+        }
+        // Clear undo (single-use)
+        setUndoAction(null)
+
+        switch (action.type) {
+            case 'create':
+            case 'bulk-create':
+                undoCreate(action.createdShiftIds!)
+                break
+            case 'update':
+                undoUpdate(action.previousShift!)
+                break
+            case 'delete':
+                undoDelete(action.deletedShift!)
+                break
+        }
+    }, [undoCreate, undoUpdate, undoDelete, setUndoAction])
 
     // Commit-Delete: Tatsächlich löschen nach Timeout
     const commitDelete = useCallback(async (id: string) => {
@@ -959,6 +1149,9 @@ function SchedulePageContent() {
         // Optimistic removal from UI
         setShifts(prev => prev.filter(s => s.id !== id))
 
+        // Ctrl+Z Undo-Action speichern
+        setUndoAction({ type: 'delete', deletedShift: { ...shiftToDelete }, timestamp: Date.now() })
+
         // Schedule commit-delete after 5 seconds
         const timeout = setTimeout(() => {
             commitDelete(id)
@@ -976,7 +1169,7 @@ function SchedulePageContent() {
                 onClick: () => handleUndo(id)
             }
         })
-    }, [shifts, commitDelete, handleUndo])
+    }, [shifts, commitDelete, handleUndo, setUndoAction])
 
     const handleBulkDelete = async () => {
         if (selectedShiftIds.size === 0 || isBulkDeleting) return
@@ -1198,13 +1391,13 @@ function SchedulePageContent() {
         deleteAbortControllers.current.forEach((controller) => controller.abort())
         deleteAbortControllers.current.clear()
         setDeletedShifts([])
+        // Undo-Action zurücksetzen bei Monatswechsel
+        setUndoAction(null)
 
         // Wichtig: Zuerst auf den 1. des Monats setzen, um Month-Skipping zu vermeiden
         // (z.B. 31. Januar + 1 Monat = 3. März, weil 31. Februar nicht existiert)
         const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1)
         setCurrentDate(newDate)
-        setExpandedClients(new Set()) // Alle Teams zugeklappt beim Monatswechsel
-        setHasInitialExpand(false)
     }
 
     // Duplicate Shift Handler - Direkt nächsten Tag duplizieren (kein Modal)
@@ -1286,6 +1479,8 @@ function SchedulePageContent() {
                         status: responseData.status || s.status,
                     } : s
                 ))
+                // Undo-Action für Duplikat
+                setUndoAction({ type: 'create', createdShiftIds: [responseData.id], timestamp: Date.now() })
             }
 
             // Background revalidation for consistency
@@ -1295,7 +1490,7 @@ function SchedulePageContent() {
             setShifts(prev => prev.filter(s => s.id !== tempId))
             showToast("error", "Netzwerkfehler beim Duplizieren")
         })
-    }, [shifts, mutate])
+    }, [shifts, mutate, setUndoAction])
 
     // Keyboard Shortcuts Handlers
     const handleCloseModal = useCallback(() => {
@@ -1326,6 +1521,20 @@ function SchedulePageContent() {
         onCalendarView: () => !showModal && setViewMode("calendar"),
         onHelp: () => setShowShortcutsHelp(true)
     }, true)
+
+    // Ctrl+Z / Cmd+Z: Letzte Aktion rückgängig machen
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                // Nicht auslösen wenn Modal offen ist (Textfeld-Undo soll funktionieren)
+                if (showModal || showTemplateManager) return
+                e.preventDefault()
+                handleCtrlZUndo()
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [showModal, showTemplateManager, handleCtrlZUndo])
 
     // Show shortcuts tip on first visit
     useEffect(() => {
@@ -1432,6 +1641,18 @@ function SchedulePageContent() {
                                     {isBulkDeleting ? "Lösche..." : `${selectedShiftIds.size} Schichten löschen`}
                                 </span>
                                 <span className="sm:hidden">{selectedShiftIds.size}</span>
+                            </button>
+                        )}
+
+                        {/* Undo-Button (nur sichtbar wenn Undo verfügbar) */}
+                        {hasUndoAction && (
+                            <button
+                                onClick={handleCtrlZUndo}
+                                className="flex items-center gap-2 bg-neutral-700 text-neutral-200 px-3 sm:px-4 py-2 rounded-lg hover:bg-neutral-600 transition font-medium"
+                                title="Rückgängig (Strg+Z)"
+                            >
+                                <Undo2 size={18} />
+                                <span className="hidden sm:inline">Rückgängig</span>
                             </button>
                         )}
 

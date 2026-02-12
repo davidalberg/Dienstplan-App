@@ -95,7 +95,22 @@ function AssistantsContent() {
     const [draggedClient, setDraggedClient] = useState<Client | null>(null)
     const [dropTarget, setDropTarget] = useState<string | null>(null)
     const [clientDropTarget, setClientDropTarget] = useState<string | null>(null)
-    const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
+    const [expandedClients, setExpandedClients] = useState<Set<string>>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem('admin-expanded-assistants')
+                if (saved) return new Set(JSON.parse(saved))
+            } catch { /* ignore */ }
+        }
+        return new Set()
+    })
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('admin-expanded-assistants', JSON.stringify([...expandedClients]))
+        } catch { /* ignore */ }
+    }, [expandedClients])
+
     const [highlightedEmployees, setHighlightedEmployees] = useState<Set<string>>(new Set())
 
     // Modal states

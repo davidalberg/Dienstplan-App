@@ -317,7 +317,22 @@ function TimesheetsPageContent() {
         return new Date()
     })
     const [isRefreshing, setIsRefreshing] = useState(false)
-    const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
+    const [expandedClients, setExpandedClients] = useState<Set<string>>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem('admin-expanded-timesheets')
+                if (saved) return new Set(JSON.parse(saved))
+            } catch { /* ignore */ }
+        }
+        return new Set()
+    })
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('admin-expanded-timesheets', JSON.stringify([...expandedClients]))
+        } catch { /* ignore */ }
+    }, [expandedClients])
+
     const [showCombinedModal, setShowCombinedModal] = useState(false)
     const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null)
 
@@ -425,7 +440,6 @@ function TimesheetsPageContent() {
     const navigateMonth = (delta: number) => {
         const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1)
         setCurrentDate(newDate)
-        setExpandedClients(new Set()) // Reset expanded state on month change
     }
 
     // Open Combined Timesheet Modal
