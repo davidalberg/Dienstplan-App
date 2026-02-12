@@ -238,8 +238,8 @@ function SchedulePageContent() {
         const lastPrefetch = sessionStorage.getItem(cacheKey)
         const now = Date.now()
 
-        // Skip wenn innerhalb der letzten 10 Minuten bereits prefetched
-        if (lastPrefetch && (now - parseInt(lastPrefetch, 10)) < 10 * 60 * 1000) {
+        // Skip wenn innerhalb der letzten 3 Minuten bereits prefetched
+        if (lastPrefetch && (now - parseInt(lastPrefetch, 10)) < 3 * 60 * 1000) {
             return
         }
 
@@ -267,6 +267,16 @@ function SchedulePageContent() {
 
         prefetchAll()
     }, [month, year, globalMutate])
+
+    // ✅ Periodic re-prefetch: Clear sessionStorage guard every 3 minutes
+    // so next prefetch useEffect run will re-fetch fresh data into SWR cache
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const cacheKey = `prefetch-${month}-${year}`
+            sessionStorage.removeItem(cacheKey)
+        }, 3 * 60 * 1000)
+        return () => clearInterval(interval)
+    }, [month, year])
 
     // ✅ PERFORMANCE FIX: Memoize grouping logic (was recalculating on every render)
     const groupedShifts = useMemo(() => {
@@ -1145,10 +1155,13 @@ function SchedulePageContent() {
 
     // ✅ PERFORMANCE: Prefetch TimesheetDetail data on hover
     // Nutzt globalMutate um direkt in den SWR-Cache zu schreiben
+    // Prüft erst ob Daten bereits im Cache sind, um unnötige Requests zu vermeiden
     const prefetchTimesheetDetail = useCallback((employeeId: string, clientId: string) => {
         const url = `/api/admin/submissions/detail?employeeId=${employeeId}&clientId=${clientId}&month=${month}&year=${year}`
-        // Prefetch und in SWR-Cache speichern (revalidate: false verhindert doppelten Request)
-        globalMutate(url, fetch(url).then(res => res.json()), { revalidate: false })
+        globalMutate(url, (current: unknown) => {
+            if (current) return current // Already cached, skip fetch
+            return fetch(url).then(res => res.json())
+        }, { revalidate: false })
     }, [month, year, globalMutate])
 
     // ✅ PERFORMANCE FIX: Memoize event handler

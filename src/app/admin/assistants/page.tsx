@@ -95,7 +95,7 @@ function AssistantsContent() {
     const [draggedClient, setDraggedClient] = useState<Client | null>(null)
     const [dropTarget, setDropTarget] = useState<string | null>(null)
     const [clientDropTarget, setClientDropTarget] = useState<string | null>(null)
-    const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set(["unassigned"]))
+    const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
     const [highlightedEmployees, setHighlightedEmployees] = useState<Set<string>>(new Set())
 
     // Modal states
@@ -139,12 +139,7 @@ function AssistantsContent() {
         }
     }, [swrEmployees])
 
-    // Expand all clients by default after loading
-    useEffect(() => {
-        if (clients.length > 0) {
-            setExpandedClients(new Set(["unassigned", ...clients.map(c => c.id)]))
-        }
-    }, [clients.length])
+    // All client tabs start collapsed (no auto-expand)
 
     // Auto-open edit modal if employeeId in URL params
     useEffect(() => {

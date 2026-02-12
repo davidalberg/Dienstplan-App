@@ -405,14 +405,7 @@ function TimesheetsPageContent() {
         return { totalCount, completedCount, pendingCount }
     }, [allSubmissions])
 
-    // Expand all clients by default when data loads (only on initial load per month)
-    const [hasInitialExpand, setHasInitialExpand] = useState(false)
-    useEffect(() => {
-        if (groupedByClient.length > 0 && !hasInitialExpand) {
-            setExpandedClients(new Set(groupedByClient.map(g => g.clientId)))
-            setHasInitialExpand(true)
-        }
-    }, [groupedByClient, hasInitialExpand])
+    // All client tabs start collapsed (no auto-expand)
 
     // Toggle client expansion
     const toggleClient = (clientId: string) => {
@@ -431,7 +424,7 @@ function TimesheetsPageContent() {
     const navigateMonth = (delta: number) => {
         const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1)
         setCurrentDate(newDate)
-        setHasInitialExpand(false) // Re-expand when navigating to new month
+        setExpandedClients(new Set()) // Reset expanded state on month change
     }
 
     // Open Combined Timesheet Modal
@@ -606,6 +599,16 @@ function TimesheetsPageContent() {
                                         </div>
 
                                         <div className="flex items-center gap-3">
+                                            <div className="w-24 h-2 bg-neutral-700 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full rounded-full transition-all ${
+                                                        completedInGroup === group.submissions.length && group.submissions.length > 0
+                                                            ? "bg-emerald-500"
+                                                            : "bg-violet-500"
+                                                    }`}
+                                                    style={{ width: `${group.submissions.length > 0 ? (completedInGroup / group.submissions.length) * 100 : 0}%` }}
+                                                />
+                                            </div>
                                             <SignatureProgress
                                                 completed={completedInGroup}
                                                 total={group.submissions.length}
