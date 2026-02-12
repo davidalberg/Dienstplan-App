@@ -64,16 +64,18 @@ export async function POST(req: NextRequest) {
                 .filter(s => !(s.actualStart && s.actualEnd))
                 .map(s => s.id)
 
+            // IMPORTANT: Only update shifts that are STILL "SUBMITTED"
+            // This prevents overwriting shifts that an admin marked COMPLETED between query and update
             const results = await Promise.all([
                 confirmedIds.length > 0
                     ? tx.timesheet.updateMany({
-                        where: { id: { in: confirmedIds } },
+                        where: { id: { in: confirmedIds }, status: "SUBMITTED" },
                         data: { status: "CONFIRMED", lastUpdatedBy: user.email }
                     })
                     : { count: 0 },
                 changedIds.length > 0
                     ? tx.timesheet.updateMany({
-                        where: { id: { in: changedIds } },
+                        where: { id: { in: changedIds }, status: "SUBMITTED" },
                         data: { status: "CHANGED", lastUpdatedBy: user.email }
                     })
                     : { count: 0 },

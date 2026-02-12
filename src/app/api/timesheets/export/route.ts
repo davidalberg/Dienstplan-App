@@ -57,6 +57,11 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
         }
 
+        // Safety: Non-ADMIN users MUST always have a targetEmployeeId
+        if (user.role !== "ADMIN" && !targetEmployeeId) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        }
+
         const where: any = { month, year, status: { in: ALL_TIMESHEET_STATUSES } }
         if (targetEmployeeId) where.employeeId = targetEmployeeId
 

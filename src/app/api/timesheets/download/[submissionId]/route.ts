@@ -207,10 +207,14 @@ export async function GET(
             // Calculate planned hours from planned times
             let plannedHours = 0
             for (const ts of empData.timesheets) {
-                if (ts.plannedStart && ts.plannedEnd && !ts.absenceType) {
-                    const minutes = calculateMinutesBetween(ts.plannedStart, ts.plannedEnd)
-                    if (minutes !== null && minutes > 0) {
-                        plannedHours += Math.round(minutes / 60 * 100) / 100
+                if (!ts.absenceType) {
+                    const start = ts.plannedStart || ts.actualStart
+                    const end = ts.plannedEnd || ts.actualEnd
+                    if (start && end) {
+                        const minutes = calculateMinutesBetween(start, end)
+                        if (minutes !== null && minutes > 0) {
+                            plannedHours += Math.round(minutes / 60 * 100) / 100
+                        }
                     }
                 }
             }
