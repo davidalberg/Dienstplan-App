@@ -18,7 +18,8 @@ import {
     Wallet,
     Palmtree,
     LayoutDashboard,
-    ClipboardList
+    ClipboardList,
+    Sparkles
 } from "lucide-react"
 
 interface NavItem {
@@ -85,6 +86,7 @@ export function Sidebar({ onExportClick }: SidebarProps) {
         { icon: FileText, label: "Gesamtstundennachweise", href: "/admin/timesheets" },
         { icon: Palmtree, label: "Urlaub / Krank", href: "/admin/vacations" },
         { icon: Wallet, label: "Lohnliste", href: "/admin/payroll" },
+        { icon: Sparkles, label: "KI-Assistent", href: "/admin/ai-assistant" },
         { icon: Settings, label: "Einstellungen", href: "/admin/settings" },
     ]
 

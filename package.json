@@ -17,6 +17,7 @@
     "DANGER_test:db:reset": "echo '⚠️ WARNUNG: Dieser Befehl löscht die PRODUCTION-Datenbank! Drücke Ctrl+C zum Abbrechen...' && timeout /t 10 && npx prisma db push --force-reset && tsx prisma/seed-test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.2.1",
     "bcryptjs": "^3.0.3",
