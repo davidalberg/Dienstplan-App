@@ -252,8 +252,9 @@ export async function GET(req: NextRequest) {
         const excelBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" })
 
         // Return as downloadable file
+        const sanitize = (s: string) => s.replace(/[\/\\:*?"<>|]/g, '_')
         const filename = source
-            ? `Stundennachweis_${source}_${month}_${year}.xlsx`
+            ? `Stundennachweis_${sanitize(source)}_${month}_${year}.xlsx`
             : `Stundennachweis_${month}_${year}.xlsx`
 
         return new NextResponse(excelBuffer, {

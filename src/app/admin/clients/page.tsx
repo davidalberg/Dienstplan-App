@@ -95,6 +95,7 @@ export default function ClientsPage() {
     }
 
     const [showModal, setShowModal] = useState(false)
+    const [isSaving, setIsSaving] = useState(false)
     const [editingClient, setEditingClient] = useState<Client | null>(null)
     const [activeTab, setActiveTab] = useState<"active" | "inactive">("active")
     const [searchQuery, setSearchQuery] = useState("")
@@ -146,12 +147,9 @@ export default function ClientsPage() {
             return
         }
 
-        // Modal sofort schließen für bessere UX
-        setShowModal(false)
-
+        setIsSaving(true)
         try {
             if (editingClient) {
-                // Update
                 const res = await fetch(`/api/clients/${editingClient.id}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
@@ -159,6 +157,7 @@ export default function ClientsPage() {
                 })
 
                 if (res.ok) {
+                    setShowModal(false)
                     showToast("success", "Klient aktualisiert")
                     fetchClients()
                 } else {
@@ -166,7 +165,6 @@ export default function ClientsPage() {
                     showToast("error", err.error)
                 }
             } else {
-                // Create
                 const res = await fetch("/api/clients", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -174,6 +172,7 @@ export default function ClientsPage() {
                 })
 
                 if (res.ok) {
+                    setShowModal(false)
                     showToast("success", "Klient erstellt")
                     fetchClients()
                 } else {
@@ -183,6 +182,8 @@ export default function ClientsPage() {
             }
         } catch {
             showToast("error", "Fehler beim Speichern")
+        } finally {
+            setIsSaving(false)
         }
     }
 
@@ -577,11 +578,11 @@ export default function ClientsPage() {
                                     </button>
                                     <button
                                         onClick={handleSave}
-                                        disabled={loading}
-                                        className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition flex items-center justify-center gap-2"
+                                        disabled={isSaving}
+                                        className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition flex items-center justify-center gap-2"
                                     >
                                         <Save size={18} />
-                                        {loading ? "Speichert..." : (editingClient ? "Speichern" : "Erstellen")}
+                                        {isSaving ? "Speichert..." : (editingClient ? "Speichern" : "Erstellen")}
                                     </button>
                                 </div>
                             </div>

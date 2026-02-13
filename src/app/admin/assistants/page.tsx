@@ -138,6 +138,7 @@ function AssistantsContent() {
     })
     const [sendInvitation, setSendInvitation] = useState(true)
     const [invitingEmployeeId, setInvitingEmployeeId] = useState<string | null>(null)
+    const [isSaving, setIsSaving] = useState(false)
 
 
     // Sync SWR data to local state
@@ -369,6 +370,7 @@ function AssistantsContent() {
             return
         }
 
+        setIsSaving(true)
         try {
             const formData = { ...employeeForm }
             if (sendInvitation) {
@@ -414,6 +416,8 @@ function AssistantsContent() {
             }
         } catch {
             showToast("error", "Fehler beim Erstellen")
+        } finally {
+            setIsSaving(false)
         }
     }
 
@@ -448,6 +452,7 @@ function AssistantsContent() {
         const originalEmail = showEditEmployee?.email
         const emailChanged = originalEmail && originalEmail !== employeeForm.email
 
+        setIsSaving(true)
         try {
             const res = await fetch("/api/admin/employees", {
                 method: "PUT",
@@ -485,6 +490,8 @@ function AssistantsContent() {
             }
         } catch {
             showToast("error", "Fehler beim Speichern")
+        } finally {
+            setIsSaving(false)
         }
     }
 
@@ -1035,16 +1042,27 @@ function AssistantsContent() {
                                             setShowCreateEmployee(false)
                                             setShowEditEmployee(null)
                                         }}
-                                        className="flex-1 px-4 py-2 border border-neutral-700 text-neutral-300 rounded-lg hover:bg-neutral-800 transition"
+                                        disabled={isSaving}
+                                        className="flex-1 px-4 py-2 border border-neutral-700 text-neutral-300 rounded-lg hover:bg-neutral-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         Abbrechen
                                     </button>
                                     <button
                                         onClick={showEditEmployee ? handleEditEmployee : handleCreateEmployee}
-                                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center justify-center gap-2"
+                                        disabled={isSaving}
+                                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        <Save size={18} />
-                                        {showEditEmployee ? "Speichern" : "Erstellen"}
+                                        {isSaving ? (
+                                            <>
+                                                <Loader2 size={18} className="animate-spin" />
+                                                Speichert...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Save size={18} />
+                                                {showEditEmployee ? "Speichern" : "Erstellen"}
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                             </div>

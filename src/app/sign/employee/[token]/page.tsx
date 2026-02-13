@@ -40,7 +40,7 @@ interface SignatureProgress {
 }
 
 const MONTH_NAMES = [
-    "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
+    "Januar", "Februar", "März", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember"
 ]
 
@@ -106,7 +106,7 @@ export default function EmployeeSignPage() {
                 setLoading(false)
             } catch (err) {
                 console.error(err)
-                setError("Netzwerkfehler. Bitte spaeter erneut versuchen.")
+                setError("Netzwerkfehler. Bitte später erneut versuchen.")
                 setLoading(false)
             }
         }
@@ -308,7 +308,7 @@ export default function EmployeeSignPage() {
                 {/* Timesheet Table */}
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div className="p-4 border-b border-gray-100">
-                        <h2 className="font-bold text-gray-900">Tagesuebersicht</h2>
+                        <h2 className="font-bold text-gray-900">Tagesübersicht</h2>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
@@ -360,7 +360,7 @@ export default function EmployeeSignPage() {
                 <div className="bg-white rounded-2xl shadow-xl p-6">
                     <h2 className="font-bold text-gray-900 mb-2">Deine Unterschrift</h2>
                     <p className="text-sm text-gray-600 mb-4">
-                        Bitte unterschreibe unten mit deinem Finger oder der Maus, um deine Stunden zu bestaetigen.
+                        Bitte unterschreibe unten mit deinem Finger oder der Maus, um deine Stunden zu bestätigen.
                     </p>
 
                     <SignaturePad
@@ -372,7 +372,7 @@ export default function EmployeeSignPage() {
                         <div className="flex gap-2">
                             <Clock className="text-amber-600 shrink-0" size={20} />
                             <p className="text-sm text-amber-800">
-                                <strong>Hinweis:</strong> Mit deiner Unterschrift bestaetigst du die Richtigkeit der oben aufgefuehrten Arbeitszeiten.
+                                <strong>Hinweis:</strong> Mit deiner Unterschrift bestätigst du die Richtigkeit der oben aufgeführten Arbeitszeiten.
                             </p>
                         </div>
                     </div>

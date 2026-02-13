@@ -89,6 +89,14 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
+        // E-Mail-Format validieren
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(client.email)) {
+            return NextResponse.json({
+                error: "Ungültige E-Mail-Adresse"
+            }, { status: 400 })
+        }
+
         const clientName = `${client.firstName} ${client.lastName}`
 
         // Determine the sheetFileName to use

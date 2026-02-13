@@ -12,7 +12,8 @@ import {
     Download,
     Check,
     Mail,
-    RefreshCw
+    RefreshCw,
+    AlertTriangle
 } from "lucide-react"
 import { useAdminSubmissions } from "@/hooks/use-admin-data"
 import EmployeeAvatarStack from "@/components/EmployeeAvatarStack"
@@ -358,7 +359,7 @@ function TimesheetsPageContent() {
     }, [month, year, pathname, router, searchParams])
 
     // Fetch submissions data
-    const { submissions, pendingDienstplaene, targetMonth, targetYear, isLoading, mutate } = useAdminSubmissions(month, year)
+    const { submissions, pendingDienstplaene, targetMonth, targetYear, isLoading, isError, mutate } = useAdminSubmissions(month, year)
 
     const handleRefresh = async () => {
         setIsRefreshing(true)
@@ -567,8 +568,23 @@ function TimesheetsPageContent() {
                     </div>
                 </div>
 
+                {/* Error State */}
+                {isError && (
+                    <div className="text-center py-12 text-red-400">
+                        <AlertTriangle size={48} className="mx-auto mb-4 opacity-70" />
+                        <p className="text-lg font-medium">Fehler beim Laden der Daten</p>
+                        <p className="text-sm mt-2 text-neutral-500">Bitte versuche es erneut.</p>
+                        <button
+                            onClick={() => mutate()}
+                            className="mt-4 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition"
+                        >
+                            Erneut laden
+                        </button>
+                    </div>
+                )}
+
                 {/* Loading State - nur beim allerersten Laden */}
-                {isLoading && groupedByClient.length === 0 && (
+                {!isError && isLoading && groupedByClient.length === 0 && (
                     <div className="space-y-3">
                         {[1, 2, 3].map(i => (
                             <div key={i} className="h-16 bg-neutral-800 animate-pulse rounded-lg" />
@@ -577,7 +593,7 @@ function TimesheetsPageContent() {
                 )}
 
                 {/* Empty State */}
-                {!isLoading && groupedByClient.length === 0 && (
+                {!isError && !isLoading && groupedByClient.length === 0 && (
                     <div className="text-center py-12 text-neutral-500">
                         <FileText size={48} className="mx-auto mb-4 opacity-50" />
                         <p className="text-lg font-medium">Keine Dienste im {MONTH_NAMES[month - 1]} {year}</p>

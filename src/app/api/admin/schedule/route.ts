@@ -282,6 +282,13 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ created: 0, shifts: [] })
             }
 
+            // Bulk-Create Limit: max 90 Schichten pro Request
+            if (newDates.length > 90) {
+                return NextResponse.json({
+                    error: `Maximal 90 Schichten pro Bulk-Erstellung erlaubt (${newDates.length} angefordert)`
+                }, { status: 400 })
+            }
+
             // BATCH: Alle Schichten in einem einzigen createMany-Aufruf erstellen (1 Query statt N)
             const shiftsToCreate = newDates.map(shiftDate => {
                 const m = shiftDate.getUTCMonth() + 1

@@ -432,7 +432,8 @@ export async function POST(
             const result = await tx.teamSubmission.updateMany({
                 where: {
                     id: teamSubmission.id,
-                    status: "PENDING_RECIPIENT" // CRITICAL: Only update if status is PENDING_RECIPIENT
+                    status: "PENDING_RECIPIENT", // CRITICAL: Only update if status is PENDING_RECIPIENT
+                    recipientSignedAt: null       // ATOMIC: Prevent race condition - only sign if not yet signed
                 },
                 data: {
                     recipientSignature: signature,

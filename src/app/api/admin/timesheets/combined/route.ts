@@ -201,6 +201,7 @@ export async function GET(req: NextRequest) {
                     sheetFileName,
                     month,
                     year,
+                    // ALL_TIMESHEET_STATUSES inkl. COMPLETED — gewollt, da Combined-View die Gesamtübersicht zeigt
                     status: { in: [...ALL_TIMESHEET_STATUSES] }
                 },
                 orderBy: { date: "asc" },

@@ -33,7 +33,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
 
     const handleAction = async (action: "CONFIRM" | "UPDATE" | "UNCONFIRM") => {
         // Zeit-Validierung bei UPDATE (Nachtschichten erlaubt: End < Start = über Mitternacht)
-        if (action === "UPDATE" && editData.actualStart && editData.actualEnd) {
+        if (action === "UPDATE" && editData.actualStart && editData.actualEnd && !editData.absenceType) {
             if (editData.actualStart === editData.actualEnd) {
                 showToast("error", "Start- und Endzeit dürfen nicht identisch sein")
                 return
@@ -159,7 +159,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
             case "SUBMITTED": return "Eingereicht"
             case "COMPLETED": return "Abgeschlossen"  // Klient hat unterschrieben
             case "CONFIRMED": return isOptimistic ? "Wird bestätigt..." : "Bestätigt"
-            case "CHANGED": return "Bestätigt"  // Vereinfacht: CHANGED = Bestätigt
+            case "CHANGED": return "Geändert"
             default: return isOptimistic ? "Wird zurückgesetzt..." : "Geplant"
         }
     }

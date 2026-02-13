@@ -20,7 +20,7 @@ interface HistoryShift {
 }
 
 const MONTH_NAMES = [
-    "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
+    "Januar", "Februar", "März", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember"
 ]
 
@@ -103,7 +103,7 @@ export default function HistoryPage() {
                     <div className="py-10 text-center text-gray-500">Lade Daten...</div>
                 ) : shifts.length === 0 ? (
                     <div className="py-10 text-center text-gray-500">
-                        Keine Schichten fuer diesen Monat
+                        Keine Schichten für diesen Monat
                     </div>
                 ) : (
                     <div className="space-y-2">
@@ -151,8 +151,8 @@ export default function HistoryPage() {
                                         }`}>
                                             {shift.status === "COMPLETED" ? "Abgeschlossen" :
                                              shift.status === "SUBMITTED" ? "Eingereicht" :
-                                             shift.status === "CONFIRMED" ? "Bestaetigt" :
-                                             shift.status === "CHANGED" ? "Geaendert" :
+                                             shift.status === "CONFIRMED" ? "Bestätigt" :
+                                             shift.status === "CHANGED" ? "Geändert" :
                                              "Geplant"}
                                         </span>
                                     </div>
