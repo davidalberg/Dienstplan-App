@@ -39,7 +39,8 @@ interface ClientContext {
  */
 export function buildSystemPrompt(
     employees: EmployeeContext[],
-    clients: ClientContext[]
+    clients: ClientContext[],
+    targetClient?: { id: string; name: string } | null
 ): string {
     const today = new Date().toISOString().split("T")[0]
 
@@ -56,11 +57,16 @@ export function buildSystemPrompt(
         .map(c => `  - ID: ${c.id}, Name: ${c.name}`)
         .join("\n")
 
+    const targetClientBlock = targetClient
+        ? `\nZIEL-KLIENT: ${targetClient.name} (ID: ${targetClient.id})
+WICHTIG: Alle erkannten Schichten sind für diesen Klienten bestimmt. Setze clientId auf "${targetClient.id}" und clientName auf "${targetClient.name}" für alle Schichten. Bevorzuge Mitarbeiter, die diesem Klienten bereits zugeordnet sind.\n`
+        : ""
+
     return `Du bist ein Assistent für die Dienstplanung in einem Assistenzdienst-Unternehmen.
 Deine Aufgabe ist es, aus Freitext, Bildern oder Dokumenten Schichtdaten zu extrahieren.
 
 HEUTIGES DATUM: ${today}
-
+${targetClientBlock}
 VERFÜGBARE MITARBEITER:
 ${employeeList}
 

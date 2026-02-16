@@ -34,11 +34,13 @@ export async function POST(req: NextRequest) {
 
     try {
         const body = await req.json()
-        const { type, content, mimeType, fileName } = body as {
+        const { type, content, mimeType, fileName, clientId, clientName } = body as {
             type: "text" | "image" | "pdf" | "xlsx"
             content: string
             mimeType?: string
             fileName?: string
+            clientId?: string
+            clientName?: string
         }
 
         if (!type || !content) {
@@ -95,7 +97,10 @@ export async function POST(req: NextRequest) {
             name: `${c.firstName} ${c.lastName}`,
         }))
 
-        const systemPrompt = buildSystemPrompt(employeeContext, clientContext)
+        const targetClient = clientId && clientName
+            ? { id: clientId, name: clientName }
+            : null
+        const systemPrompt = buildSystemPrompt(employeeContext, clientContext, targetClient)
 
         // Build messages for Claude API based on content type
         const userContent: Anthropic.MessageCreateParams["messages"][0]["content"] = []

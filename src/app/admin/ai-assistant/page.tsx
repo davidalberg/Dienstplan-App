@@ -22,6 +22,12 @@ interface CreationResult {
 interface EmployeeOption {
     id: string
     name: string
+    clientIds: string[]
+}
+
+interface ClientOption {
+    id: string
+    name: string
 }
 
 export default function AIAssistantPage() {
@@ -34,20 +40,34 @@ export default function AIAssistantPage() {
     const [warnings, setWarnings] = useState<string[]>([])
     const [results, setResults] = useState<CreationResult[]>([])
     const [employees, setEmployees] = useState<EmployeeOption[]>([])
+    const [clients, setClients] = useState<ClientOption[]>([])
+    const [selectedClientId, setSelectedClientId] = useState<string>("")
     const [dragOver, setDragOver] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const fileContentRef = useRef<{ type: string; content: string; mimeType?: string } | null>(null)
 
-    // Load employees for dropdown
+    // Load employees and clients for dropdowns
     useEffect(() => {
         fetch("/api/admin/employees")
             .then(res => res.json())
             .then(data => {
-                if (Array.isArray(data)) {
-                    setEmployees(data.map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })))
-                } else if (data.employees && Array.isArray(data.employees)) {
-                    setEmployees(data.employees.map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })))
-                }
+                const list = Array.isArray(data) ? data : (data.employees || [])
+                setEmployees(list.map((e: { id: string; name: string; clients?: { id: string }[] }) => ({
+                    id: e.id,
+                    name: e.name,
+                    clientIds: (e.clients || []).map((c: { id: string }) => c.id),
+                })))
+            })
+            .catch(() => {/* ignore */})
+
+        fetch("/api/clients")
+            .then(res => res.json())
+            .then(data => {
+                const list = Array.isArray(data) ? data : (data.clients || [])
+                setClients(list.map((c: { id: string; firstName: string; lastName: string }) => ({
+                    id: c.id,
+                    name: `${c.firstName} ${c.lastName}`.trim(),
+                })))
             })
             .catch(() => {/* ignore */})
     }, [])
@@ -128,7 +148,8 @@ export default function AIAssistantPage() {
         setPageState("loading")
 
         try {
-            let requestBody: { type: string; content: string; mimeType?: string; fileName?: string }
+            const selectedClient = clients.find(c => c.id === selectedClientId)
+            let requestBody: { type: string; content: string; mimeType?: string; fileName?: string; clientId?: string; clientName?: string }
 
             if (fileContentRef.current && (fileContentRef.current.type === "image" || fileContentRef.current.type === "pdf")) {
                 requestBody = {
@@ -136,6 +157,8 @@ export default function AIAssistantPage() {
                     content: fileContentRef.current.content,
                     mimeType: fileContentRef.current.mimeType,
                     fileName: fileName || undefined,
+                    clientId: selectedClientId || undefined,
+                    clientName: selectedClient?.name || undefined,
                 }
             } else {
                 // Text or XLSX (pre-parsed to text)
@@ -143,6 +166,8 @@ export default function AIAssistantPage() {
                     type: fileType === "xlsx" ? "xlsx" : "text",
                     content: textInput,
                     fileName: fileName || undefined,
+                    clientId: selectedClientId || undefined,
+                    clientName: selectedClient?.name || undefined,
                 }
             }
 
@@ -236,15 +261,20 @@ export default function AIAssistantPage() {
         }
     }
 
-    const handleReset = () => {
+    const handleBack = () => {
         setPageState("input")
-        setTextInput("")
-        setFileName(null)
-        setFileType(null)
         setShifts([])
         setSummary("")
         setWarnings([])
         setResults([])
+    }
+
+    const handleReset = () => {
+        handleBack()
+        setTextInput("")
+        setFileName(null)
+        setFileType(null)
+        setSelectedClientId("")
         fileContentRef.current = null
         if (fileInputRef.current) fileInputRef.current.value = ""
     }
@@ -267,6 +297,31 @@ export default function AIAssistantPage() {
             {/* Input State */}
             {pageState === "input" && (
                 <div className="space-y-4">
+                    {/* Client Selection */}
+                    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">
+                            Klient (optional)
+                        </label>
+                        <div className="relative">
+                            <select
+                                value={selectedClientId}
+                                onChange={(e) => setSelectedClientId(e.target.value)}
+                                className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm appearance-none"
+                            >
+                                <option value="">Kein Klient ausgewählt — KI erkennt automatisch</option>
+                                {clients.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+                        </div>
+                        {selectedClientId && (
+                            <p className="mt-1.5 text-xs text-violet-400">
+                                Schichten werden für diesen Klienten erstellt. Mitarbeiter-Vorschläge werden priorisiert.
+                            </p>
+                        )}
+                    </div>
+
                     {/* Text Input */}
                     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
                         <label className="block text-sm font-medium text-neutral-300 mb-2">
@@ -291,7 +346,7 @@ export default function AIAssistantPage() {
 
                     {/* File Upload */}
                     <div
-                        className={`bg-neutral-900 border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                        className={`bg-neutral-900 border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
                             dragOver
                                 ? "border-violet-500 bg-violet-500/10"
                                 : "border-neutral-700 hover:border-neutral-600"
@@ -299,6 +354,7 @@ export default function AIAssistantPage() {
                         onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                         onDragLeave={() => setDragOver(false)}
                         onDrop={handleDrop}
+                        onClick={() => { if (!fileName) fileInputRef.current?.click() }}
                     >
                         {fileName ? (
                             <div className="flex items-center justify-center gap-3">
@@ -306,7 +362,7 @@ export default function AIAssistantPage() {
                                 <span className="text-white font-medium">{fileName}</span>
                                 <button
                                     type="button"
-                                    onClick={clearFile}
+                                    onClick={(e) => { e.stopPropagation(); clearFile() }}
                                     className="p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-red-400 transition-colors"
                                 >
                                     <X size={16} />
@@ -327,24 +383,12 @@ export default function AIAssistantPage() {
                             ref={fileInputRef}
                             type="file"
                             accept=".png,.jpg,.jpeg,.webp,.pdf,.xlsx,.xls"
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            style={{ position: "absolute" }}
+                            className="hidden"
                             onChange={(e) => {
                                 const file = e.target.files?.[0]
                                 if (file) handleFileSelect(file)
                             }}
                         />
-                        <div className="relative">
-                            {!fileName && (
-                                <button
-                                    type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="mt-3 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg text-sm transition-colors"
-                                >
-                                    Datei auswählen
-                                </button>
-                            )}
-                        </div>
                     </div>
 
                     {/* Analyze Button */}
@@ -423,6 +467,7 @@ export default function AIAssistantPage() {
                                             key={shift.index}
                                             shift={shift}
                                             employees={employees}
+                                            selectedClientId={selectedClientId}
                                             onUpdate={(updates) => updateShift(shift.index, updates)}
                                         />
                                     ))}
@@ -435,7 +480,7 @@ export default function AIAssistantPage() {
                     <div className="flex gap-3">
                         <button
                             type="button"
-                            onClick={handleReset}
+                            onClick={handleBack}
                             className="flex items-center gap-2 px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors"
                         >
                             <ArrowLeft size={16} />
@@ -537,18 +582,32 @@ export default function AIAssistantPage() {
 function ShiftRow({
     shift,
     employees,
+    selectedClientId,
     onUpdate,
 }: {
     shift: EditableShift
     employees: EmployeeOption[]
+    selectedClientId: string
     onUpdate: (updates: Partial<EditableShift>) => void
 }) {
+    const [showAllEmployees, setShowAllEmployees] = useState(false)
     const isMatched = !!shift.employeeId
     const confidenceColor = {
         high: "text-green-400",
         medium: "text-amber-400",
         low: "text-red-400",
     }[shift.confidence]
+
+    // Filter employees by client if one is selected
+    const filteredByClient = selectedClientId && !showAllEmployees
+        ? employees.filter(e => e.clientIds.includes(selectedClientId))
+        : employees
+    // Always include the currently matched employee in the list (even if not assigned to this client)
+    const currentEmpInList = shift.employeeId && filteredByClient.some(e => e.id === shift.employeeId)
+    const clientEmployees = (!currentEmpInList && shift.employeeId)
+        ? [...filteredByClient, ...employees.filter(e => e.id === shift.employeeId)]
+        : filteredByClient
+    const hasClientFilter = selectedClientId && !showAllEmployees && filteredByClient.length < employees.length
 
     return (
         <tr className={`border-b border-neutral-800/50 ${!shift.selected ? "opacity-40" : ""}`}>
@@ -562,42 +621,50 @@ function ShiftRow({
                 />
             </td>
 
-            {/* Employee */}
+            {/* Employee — always editable */}
             <td className="px-4 py-2">
-                {isMatched ? (
+                <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
-                        <span className="text-white">{shift.employeeName}</span>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${isMatched ? "bg-green-400" : "bg-red-400"}`} />
+                        <span className={`text-xs ${isMatched ? "text-neutral-400" : "text-red-300"}`}>
+                            {shift.employeeName}
+                        </span>
                     </div>
-                ) : (
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
-                            <span className="text-red-300">{shift.employeeName}</span>
-                        </div>
-                        <div className="relative">
-                            <select
-                                value=""
-                                onChange={(e) => {
-                                    const emp = employees.find(em => em.id === e.target.value)
-                                    if (emp) {
-                                        onUpdate({ employeeId: emp.id, employeeName: emp.name, matchIssue: null, confidence: "high" })
-                                    }
-                                }}
-                                className="w-full pl-2 pr-7 py-1 bg-neutral-800 border border-red-500/50 rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 appearance-none"
-                            >
-                                <option value="">Mitarbeiter zuordnen...</option>
-                                {employees.map(e => (
-                                    <option key={e.id} value={e.id}>{e.name}</option>
-                                ))}
-                            </select>
-                            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
-                        </div>
-                        {shift.matchIssue && (
-                            <p className="text-xs text-amber-400">{shift.matchIssue}</p>
-                        )}
+                    <div className="relative">
+                        <select
+                            value={shift.employeeId || ""}
+                            onChange={(e) => {
+                                const emp = employees.find(em => em.id === e.target.value)
+                                if (emp) {
+                                    onUpdate({ employeeId: emp.id, employeeName: emp.name, matchIssue: null, confidence: "high" })
+                                } else if (!e.target.value) {
+                                    onUpdate({ employeeId: null, matchIssue: "Kein Mitarbeiter zugeordnet" })
+                                }
+                            }}
+                            className={`w-full pl-2 pr-7 py-1 bg-neutral-800 border rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 appearance-none ${
+                                isMatched ? "border-neutral-700" : "border-red-500/50"
+                            }`}
+                        >
+                            <option value="">Mitarbeiter zuordnen...</option>
+                            {clientEmployees.map(e => (
+                                <option key={e.id} value={e.id}>{e.name}</option>
+                            ))}
+                        </select>
+                        <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
                     </div>
-                )}
+                    {hasClientFilter && (
+                        <button
+                            type="button"
+                            onClick={() => setShowAllEmployees(true)}
+                            className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
+                        >
+                            Alle Mitarbeiter anzeigen ({employees.length})
+                        </button>
+                    )}
+                    {shift.matchIssue && (
+                        <p className="text-xs text-amber-400">{shift.matchIssue}</p>
+                    )}
+                </div>
             </td>
 
             {/* Date */}
