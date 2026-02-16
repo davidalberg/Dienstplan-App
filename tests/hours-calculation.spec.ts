@@ -12,11 +12,11 @@ import { test, expect } from './fixtures'
  */
 
 test.describe('Stundenberechnungen', () => {
-    test.beforeEach(async ({ page, loginPage, testUsers }) => {
-        // Login als Admin für Schicht-Erstellung
-        await loginPage.goto()
-        await loginPage.login(testUsers.admin.email, testUsers.admin.password)
-        await page.waitForURL(/\/admin/)
+    test.use({ storageState: 'tests/.auth/admin.json' })
+
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/admin/schedule')
+        await page.waitForLoadState('domcontentloaded')
     })
 
     test('8h Tagschicht (8:00-16:00) = 8h regulär, 0h Nacht', async ({ page, prisma, testUsers }) => {
@@ -28,8 +28,27 @@ test.describe('Stundenberechnungen', () => {
         testDate.setHours(0, 0, 0, 0)
 
         // Erstelle Schicht direkt in der DB
-        const shift = await prisma.timesheet.create({
-            data: {
+        const shift = await prisma.timesheet.upsert({
+            where: {
+                employeeId_date: {
+                    employeeId: employee!.id,
+                    date: testDate
+                }
+            },
+            update: {
+                plannedStart: '08:00',
+                plannedEnd: '16:00',
+                actualStart: '08:00',
+                actualEnd: '16:00',
+                status: 'CONFIRMED',
+                month: testDate.getMonth() + 1,
+                year: testDate.getFullYear(),
+                breakMinutes: 0,
+                absenceType: null,
+                backupEmployeeId: null,
+                note: null
+            },
+            create: {
                 employeeId: employee!.id,
                 date: testDate,
                 plannedStart: '08:00',
@@ -61,8 +80,27 @@ test.describe('Stundenberechnungen', () => {
         const testDate = new Date()
         testDate.setHours(0, 0, 0, 0)
 
-        const shift = await prisma.timesheet.create({
-            data: {
+        const shift = await prisma.timesheet.upsert({
+            where: {
+                employeeId_date: {
+                    employeeId: employee!.id,
+                    date: testDate
+                }
+            },
+            update: {
+                plannedStart: '22:00',
+                plannedEnd: '06:00',
+                actualStart: '22:00',
+                actualEnd: '06:00',
+                status: 'CONFIRMED',
+                month: testDate.getMonth() + 1,
+                year: testDate.getFullYear(),
+                breakMinutes: 0,
+                absenceType: null,
+                backupEmployeeId: null,
+                note: null
+            },
+            create: {
                 employeeId: employee!.id,
                 date: testDate,
                 plannedStart: '22:00',
@@ -89,12 +127,31 @@ test.describe('Stundenberechnungen', () => {
         const testDate = new Date()
         testDate.setHours(0, 0, 0, 0)
 
-        const shift = await prisma.timesheet.create({
-            data: {
+        const shift = await prisma.timesheet.upsert({
+            where: {
+                employeeId_date: {
+                    employeeId: employee!.id,
+                    date: testDate
+                }
+            },
+            update: {
+                plannedStart: '00:00',
+                plannedEnd: '00:00',
+                actualStart: '00:00',
+                actualEnd: '00:00',
+                status: 'CONFIRMED',
+                month: testDate.getMonth() + 1,
+                year: testDate.getFullYear(),
+                breakMinutes: 0,
+                absenceType: null,
+                backupEmployeeId: null,
+                note: null
+            },
+            create: {
                 employeeId: employee!.id,
                 date: testDate,
                 plannedStart: '00:00',
-                plannedEnd: '00:00', // Gleich = 24h
+                plannedEnd: '00:00',
                 actualStart: '00:00',
                 actualEnd: '00:00',
                 status: 'CONFIRMED',
@@ -116,8 +173,27 @@ test.describe('Stundenberechnungen', () => {
         const testDate = new Date()
         testDate.setHours(0, 0, 0, 0)
 
-        const shift = await prisma.timesheet.create({
-            data: {
+        const shift = await prisma.timesheet.upsert({
+            where: {
+                employeeId_date: {
+                    employeeId: employee!.id,
+                    date: testDate
+                }
+            },
+            update: {
+                plannedStart: '23:00',
+                plannedEnd: '07:00',
+                actualStart: '23:00',
+                actualEnd: '07:00',
+                status: 'CONFIRMED',
+                month: testDate.getMonth() + 1,
+                year: testDate.getFullYear(),
+                breakMinutes: 0,
+                absenceType: null,
+                backupEmployeeId: null,
+                note: null
+            },
+            create: {
                 employeeId: employee!.id,
                 date: testDate,
                 plannedStart: '23:00',
@@ -144,8 +220,27 @@ test.describe('Stundenberechnungen', () => {
         const testDate = new Date()
         testDate.setHours(0, 0, 0, 0)
 
-        const shift = await prisma.timesheet.create({
-            data: {
+        const shift = await prisma.timesheet.upsert({
+            where: {
+                employeeId_date: {
+                    employeeId: employee!.id,
+                    date: testDate
+                }
+            },
+            update: {
+                plannedStart: '20:00',
+                plannedEnd: '04:00',
+                actualStart: '20:00',
+                actualEnd: '04:00',
+                status: 'CONFIRMED',
+                month: testDate.getMonth() + 1,
+                year: testDate.getFullYear(),
+                breakMinutes: 0,
+                absenceType: null,
+                backupEmployeeId: null,
+                note: null
+            },
+            create: {
                 employeeId: employee!.id,
                 date: testDate,
                 plannedStart: '20:00',
@@ -176,8 +271,27 @@ test.describe('Stundenberechnungen', () => {
         }
         testDate.setHours(0, 0, 0, 0)
 
-        const shift = await prisma.timesheet.create({
-            data: {
+        const shift = await prisma.timesheet.upsert({
+            where: {
+                employeeId_date: {
+                    employeeId: employee!.id,
+                    date: testDate
+                }
+            },
+            update: {
+                plannedStart: '08:00',
+                plannedEnd: '16:00',
+                actualStart: '08:00',
+                actualEnd: '16:00',
+                status: 'CONFIRMED',
+                month: testDate.getMonth() + 1,
+                year: testDate.getFullYear(),
+                breakMinutes: 0,
+                absenceType: null,
+                backupEmployeeId: null,
+                note: null
+            },
+            create: {
                 employeeId: employee!.id,
                 date: testDate,
                 plannedStart: '08:00',
@@ -205,14 +319,33 @@ test.describe('Stundenberechnungen', () => {
         const testDate = new Date()
         testDate.setHours(0, 0, 0, 0)
 
-        const shift = await prisma.timesheet.create({
-            data: {
+        const shift = await prisma.timesheet.upsert({
+            where: {
+                employeeId_date: {
+                    employeeId: employee!.id,
+                    date: testDate
+                }
+            },
+            update: {
+                plannedStart: '08:00',
+                plannedEnd: '16:00',
+                actualStart: '07:00',
+                actualEnd: '17:00',
+                status: 'CHANGED',
+                month: testDate.getMonth() + 1,
+                year: testDate.getFullYear(),
+                breakMinutes: 0,
+                absenceType: null,
+                backupEmployeeId: null,
+                note: null
+            },
+            create: {
                 employeeId: employee!.id,
                 date: testDate,
                 plannedStart: '08:00',
                 plannedEnd: '16:00',
-                actualStart: '07:00', // 1h früher angefangen
-                actualEnd: '17:00',   // 1h länger gearbeitet
+                actualStart: '07:00',
+                actualEnd: '17:00',
                 status: 'CHANGED',
                 month: testDate.getMonth() + 1,
                 year: testDate.getFullYear(),
@@ -238,8 +371,27 @@ test.describe('Stundenberechnungen', () => {
         testDate.setHours(0, 0, 0, 0)
 
         // Hauptmitarbeiter ist krank
-        const mainShift = await prisma.timesheet.create({
-            data: {
+        const mainShift = await prisma.timesheet.upsert({
+            where: {
+                employeeId_date: {
+                    employeeId: mainEmployee!.id,
+                    date: testDate
+                }
+            },
+            update: {
+                backupEmployeeId: backupEmployee!.id,
+                plannedStart: '08:00',
+                plannedEnd: '16:00',
+                actualStart: null,
+                actualEnd: null,
+                status: 'PLANNED',
+                absenceType: 'SICK',
+                month: testDate.getMonth() + 1,
+                year: testDate.getFullYear(),
+                breakMinutes: 0,
+                note: null
+            },
+            create: {
                 employeeId: mainEmployee!.id,
                 backupEmployeeId: backupEmployee!.id,
                 date: testDate,
@@ -254,8 +406,27 @@ test.describe('Stundenberechnungen', () => {
         })
 
         // Backup springt ein
-        const backupShift = await prisma.timesheet.create({
-            data: {
+        const backupShift = await prisma.timesheet.upsert({
+            where: {
+                employeeId_date: {
+                    employeeId: backupEmployee!.id,
+                    date: testDate
+                }
+            },
+            update: {
+                plannedStart: '08:00',
+                plannedEnd: '16:00',
+                actualStart: '08:00',
+                actualEnd: '16:00',
+                status: 'CONFIRMED',
+                note: 'Backup-Schicht anfallend wegen Krankheit',
+                month: testDate.getMonth() + 1,
+                year: testDate.getFullYear(),
+                breakMinutes: 0,
+                absenceType: null,
+                backupEmployeeId: null
+            },
+            create: {
                 employeeId: backupEmployee!.id,
                 date: testDate,
                 plannedStart: '08:00',

@@ -287,13 +287,14 @@ test.describe('Combined Timesheets - Stundennachweise Page', () => {
         await page.waitForTimeout(1000) // Warte auf API-Requests
 
         // Click on "Stundennachweise" in sidebar - use specific link selector
-        const stundennachwLink = page.getByRole('link', { name: 'Stundennachweise' })
+        const stundennachwLink = page.getByRole('link', { name: 'Stundennachweise', exact: true })
 
         await expect(stundennachwLink).toBeVisible()
-        await stundennachwLink.click()
+        await Promise.all([
+            page.waitForURL(/\/admin\/employee-timesheets/, { timeout: 10000 }),
+            stundennachwLink.click()
+        ])
 
-        // Verify we're on the timesheets page (URL may have query params)
-        await expect(page).toHaveURL(/\/admin\/timesheets/)
         await expect(page.getByRole('heading', { name: /Stundennachweise/i })).toBeVisible()
     })
 })

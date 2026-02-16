@@ -40,7 +40,23 @@ export async function POST(req: NextRequest) {
         }, { status: 400 })
     }
 
-    // 2. Update all to SUBMITTED and create audit log (transactional)
+    // 2. Verify there are confirmed timesheets to submit
+    const confirmedCount = await prisma.timesheet.count({
+        where: {
+            employeeId: user.id,
+            month,
+            year,
+            status: { in: [...CONFIRMED_TIMESHEET_STATUSES] }
+        }
+    })
+
+    if (confirmedCount === 0) {
+        return NextResponse.json({
+            error: "Keine bestätigten Schichten zum Einreichen vorhanden.",
+        }, { status: 400 })
+    }
+
+    // 3. Update all to SUBMITTED and create audit log (transactional)
     await prisma.$transaction(async (tx) => {
         await tx.timesheet.updateMany({
             where: {

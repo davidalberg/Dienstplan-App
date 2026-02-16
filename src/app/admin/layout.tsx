@@ -4,7 +4,7 @@ import { SessionProvider } from "next-auth/react"
 import { Sidebar } from "@/components/Sidebar"
 import { AdminDataProvider } from "@/components/AdminDataProvider"
 import { useState } from "react"
-import { Download, X } from "lucide-react"
+import { Download, X, Menu } from "lucide-react"
 
 function ExportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
     const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1)
@@ -103,11 +103,30 @@ function ExportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void
 
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const [showExportModal, setShowExportModal] = useState(false)
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
     return (
         <div className="flex min-h-screen bg-neutral-950">
-            <Sidebar onExportClick={() => setShowExportModal(true)} />
-            <main className="flex-1 overflow-auto">
+            <Sidebar
+                onExportClick={() => setShowExportModal(true)}
+                mobileSidebarOpen={mobileSidebarOpen}
+                onMobileSidebarClose={() => setMobileSidebarOpen(false)}
+            />
+
+            {/* Mobile Header */}
+            <div className="fixed top-0 left-0 right-0 z-30 bg-neutral-900 border-b border-neutral-800 h-12 flex items-center px-3 md:hidden">
+                <button
+                    type="button"
+                    onClick={() => setMobileSidebarOpen(true)}
+                    className="p-1.5 rounded hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
+                    aria-label="Menu öffnen"
+                >
+                    <Menu size={20} />
+                </button>
+                <span className="ml-3 font-semibold text-white text-sm">AssistenzPlus</span>
+            </div>
+
+            <main className="flex-1 overflow-auto pt-12 md:pt-0">
                 {children}
             </main>
             <ExportModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} />

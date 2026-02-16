@@ -148,3 +148,14 @@ select option:hover {
   outline: none;
   box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
 }
+
+/* Globale Focus-Visible Styles für Accessibility */
+:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+
+/* Checkboxen behalten eigenen Focus-Style */
+.admin-dark input[type="checkbox"]:focus-visible {
+  outline: none;
+}

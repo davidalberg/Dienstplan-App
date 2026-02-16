@@ -19,6 +19,14 @@ export async function GET(
     try {
         const { token } = await params
 
+        // Rate limit GET requests to prevent enumeration
+        const headersList = await headers()
+        const ip = headersList.get("x-forwarded-for")?.split(",")[0] || "unknown"
+        const rateLimited = checkRateLimit(`sign-get:${ip}`, 15, 60_000)
+        if (!rateLimited) {
+            return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+        }
+
         // Look for TeamSubmission (new multi-employee system)
         const teamSubmission = await prisma.teamSubmission.findUnique({
             where: { signatureToken: token },

@@ -116,7 +116,6 @@ export async function GET(req: NextRequest) {
             },
             include: {
                 team: { include: { client: true } },
-                employee: { select: { name: true } }
             },
             orderBy: { date: "asc" },
         })
@@ -130,7 +129,7 @@ export async function GET(req: NextRequest) {
                 date: s.date,
                 plannedStart: s.plannedStart,
                 plannedEnd: s.plannedEnd,
-                employeeName: s.employee?.name || "Unbekannt",
+                clientName: s.team?.client ? `${s.team.client.firstName} ${s.team.client.lastName}` : "Unbekannt",
             }))
 
         return NextResponse.json({
@@ -257,6 +256,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "CONFIRM") {
+        if (!existing.plannedStart || !existing.plannedEnd) {
+            return NextResponse.json(
+                { error: "Schicht hat keine geplanten Zeiten - kann nicht bestätigt werden" },
+                { status: 400 }
+            )
+        }
         updateData.actualStart = existing.plannedStart
         updateData.actualEnd = existing.plannedEnd
         updateData.status = "CONFIRMED"
@@ -264,12 +269,14 @@ export async function POST(req: NextRequest) {
         // Reset status back to PLANNED
         updateData.actualStart = null
         updateData.actualEnd = null
+        updateData.absenceType = null
         updateData.status = "PLANNED"
     } else {
-        // Check if changed
-        const isChanged =
-            (actualStart && actualStart !== existing.plannedStart) ||
-            (actualEnd && actualEnd !== existing.plannedEnd)
+        // Check if changed (only if planned times exist to compare against)
+        const isChanged = existing.plannedStart && existing.plannedEnd
+            ? (actualStart && actualStart !== existing.plannedStart) ||
+              (actualEnd && actualEnd !== existing.plannedEnd)
+            : false
 
         updateData.status = isChanged ? "CHANGED" : "CONFIRMED"
     }
@@ -321,9 +328,8 @@ export async function POST(req: NextRequest) {
 
                 if (backupExisting) {
                     // Only overwrite if existing shift is a system-created backup shift
-                    // Check BOTH note content AND lastUpdatedBy to prevent overwriting manually edited shifts
+                    // Note stays stable even after employee confirms the shift (lastUpdatedBy changes)
                     const isSystemBackup = backupExisting.note?.includes("Backup-Schicht anfallend")
-                        && backupExisting.lastUpdatedBy === "SYSTEM_BACKUP_ACTIVATION"
                     if (isSystemBackup) {
                         await prisma.timesheet.update({
                             where: { id: backupExisting.id },
@@ -369,11 +375,18 @@ export async function POST(req: NextRequest) {
 
             if (backupShift && backupShift.note?.includes("Backup-Schicht anfallend")) {
                 if (backupShift.status === "PLANNED") {
+                    // Nicht bestätigt — sicher löschen
                     await prisma.timesheet.delete({
                         where: { id: backupShift.id }
                     })
-                } else {
-                    // Backup shift already confirmed - do NOT delete
+                } else if (backupShift.status === "CONFIRMED" || backupShift.status === "CHANGED") {
+                    // Bereits bestätigt — Note anpassen statt löschen
+                    await prisma.timesheet.update({
+                        where: { id: backupShift.id },
+                        data: {
+                            note: `${backupShift.note} (Original-MA wieder verfügbar)`,
+                        }
+                    })
                 }
             }
         } catch (error) {

@@ -15,39 +15,37 @@ interface LogActivityParams {
 }
 
 /**
- * Aktivität im Protokoll loggen
+ * Aktivität im Protokoll loggen (fire-and-forget)
  * Kann von API Routes aufgerufen werden
+ * Blockiert NICHT den Request - DB-Write läuft im Hintergrund
  */
-export async function logActivity(params: LogActivityParams): Promise<void> {
-    try {
-        await prisma.activityLog.create({
-            data: {
-                type: params.type,
-                category: params.category,
-                action: params.action,
-                details: params.details ? JSON.stringify(params.details) : null,
-                userId: params.userId,
-                userName: params.userName,
-                entityId: params.entityId,
-                entityType: params.entityType,
-            }
-        })
-    } catch (error) {
-        // Silently fail - logging should not break the main operation
-        console.error("[logActivity] Failed to log activity:", error)
-    }
+export function logActivity(params: LogActivityParams): void {
+    prisma.activityLog.create({
+        data: {
+            type: params.type,
+            category: params.category,
+            action: params.action,
+            details: params.details ? JSON.stringify(params.details) : null,
+            userId: params.userId,
+            userName: params.userName,
+            entityId: params.entityId,
+            entityType: params.entityType,
+        }
+    }).catch(error => {
+        console.error("[logActivity] Failed:", error)
+    })
 }
 
 /**
  * Hilfsfunktion für Schicht-Aktivitäten
  */
-export async function logShiftActivity(
+export function logShiftActivity(
     action: string,
     details: Record<string, unknown>,
     userId?: string,
     userName?: string
-) {
-    return logActivity({
+): void {
+    logActivity({
         type: "INFO",
         category: "SHIFT",
         action,
@@ -61,13 +59,13 @@ export async function logShiftActivity(
 /**
  * Hilfsfunktion für Fehler-Logging
  */
-export async function logError(
+export function logError(
     category: ActivityCategory,
     action: string,
     error: Error | string,
     details?: Record<string, unknown>
-) {
-    return logActivity({
+): void {
+    logActivity({
         type: "ERROR",
         category,
         action,

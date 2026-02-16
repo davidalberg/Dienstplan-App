@@ -10,7 +10,7 @@ export class EmployeesPage {
 
     constructor(page: Page) {
         this.page = page
-        this.createButton = page.locator('button:has-text("Neuer Mitarbeiter")')
+        this.createButton = page.locator('button:has-text("Neuer Assistent"), button:has-text("Neuer Mitarbeiter")')
         this.employeesTable = page.locator('table')
         this.modal = page.locator('[class*="fixed inset-0"]')
         this.teamGroups = page.locator('[class*="bg-blue-50"]')
@@ -18,10 +18,10 @@ export class EmployeesPage {
     }
 
     async goto() {
-        await this.page.goto('/admin/employees')
+        await this.page.goto('/admin/assistants')
         await this.page.waitForLoadState('domcontentloaded')
         // Warte auf spezifisches UI-Element das anzeigt dass die Seite geladen ist
-        await this.page.waitForSelector('h1, [data-testid="page-loaded"], button:has-text("Neuer Mitarbeiter")', { timeout: 15000 })
+        await this.page.waitForSelector('h1, [data-testid="page-loaded"], button:has-text("Neuer Assistent"), button:has-text("Neuer Mitarbeiter")', { timeout: 15000 })
     }
 
     async createEmployee(data: {

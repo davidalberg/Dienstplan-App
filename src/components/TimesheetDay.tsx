@@ -3,11 +3,11 @@
 import { useState } from "react"
 import { format } from "date-fns"
 import { de } from "date-fns/locale"
-import { CheckCircle2, AlertCircle, Clock, Edit3, RotateCcw, Loader2 } from "lucide-react"
+import { CheckCircle2, AlertCircle, Clock, Edit3, RotateCcw, Loader2, ChevronDown } from "lucide-react"
 import { showToast } from '@/lib/toast-utils'
 import { formatTimeRange } from '@/lib/time-utils'
 
-interface TimesheetDayData {
+export interface TimesheetDayData {
     id: string
     date: string
     plannedStart: string | null
@@ -19,7 +19,15 @@ interface TimesheetDayData {
     status: string
 }
 
-export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesheet: TimesheetDayData, onUpdate: (updatedTimesheet: TimesheetDayData) => void, onDelete?: (id: string) => void }) {
+interface TimesheetDayProps {
+    timesheet: TimesheetDayData
+    onUpdate: (updatedTimesheet: TimesheetDayData) => void
+    onDelete?: (id: string) => void
+    isExpanded?: boolean
+    onToggleExpand?: () => void
+}
+
+export default function TimesheetDay({ timesheet, onUpdate, onDelete, isExpanded = true, onToggleExpand }: TimesheetDayProps) {
     const [isEditing, setIsEditing] = useState(false)
     const [loading, setLoading] = useState(false)
     const [editData, setEditData] = useState({
@@ -166,21 +174,33 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
 
     return (
         <div className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 transition-all ${isEditing ? 'ring-2 ring-blue-500' : ''}`}>
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 p-4">
-                <div>
-                    <p className="font-bold text-black">
-                        {format(new Date(timesheet.date), "EEEE, dd.MM.", { locale: de })}
-                    </p>
-                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold ${getStatusColor()}`}>
-                        {getStatusLabel()}
-                    </span>
+            <div
+                className={`flex items-center justify-between border-b border-gray-100 bg-gray-50/50 p-4 ${onToggleExpand ? 'cursor-pointer select-none' : ''}`}
+                onClick={() => onToggleExpand?.()}
+            >
+                <div className="flex items-center gap-3 min-w-0">
+                    {onToggleExpand && (
+                        <ChevronDown
+                            size={18}
+                            className={`text-gray-400 shrink-0 transition-transform duration-200 ${isExpanded ? '' : '-rotate-90'}`}
+                        />
+                    )}
+                    <div className="min-w-0">
+                        <p className="font-bold text-black">
+                            {format(new Date(timesheet.date), "EEEE, dd.MM.", { locale: de })}
+                        </p>
+                        <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold ${getStatusColor()}`}>
+                            {getStatusLabel()}
+                        </span>
+                    </div>
                 </div>
-                <div className="text-right text-sm">
+                <div className="text-right text-sm shrink-0">
                     <p className="text-gray-900 font-bold">Plan</p>
                     <p className="font-black text-black">{formatTimeRange(timesheet.plannedStart, timesheet.plannedEnd)}</p>
                 </div>
             </div>
 
+            <div className={`transition-[max-height] duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[600px]' : 'max-h-0'}`}>
             <div className="p-4">
                 {!isEditing ? (
                     <div className="flex items-end justify-between">
@@ -196,7 +216,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
                                 <button
                                     type="button"
                                     onClick={() => handleAction("CONFIRM")}
-                                    disabled={loading || isOptimistic}
+                                    disabled={loading || isOptimistic || !timesheet.plannedStart || !timesheet.plannedEnd}
                                     className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 disabled:bg-green-400 transition-colors"
                                 >
                                     {loading ? (
@@ -361,6 +381,7 @@ export default function TimesheetDay({ timesheet, onUpdate, onDelete }: { timesh
                         </div>
                     </div>
                 )}
+            </div>
             </div>
         </div>
     )

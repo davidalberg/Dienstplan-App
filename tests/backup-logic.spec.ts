@@ -226,10 +226,9 @@ test.describe('Backup-Logik (KRITISCH)', () => {
             },
         })
 
-        // Login als Hauptmitarbeiter und entferne Krankheitsstatus
-        await loginPage.goto()
-        await loginPage.login(testUsers.employee.email, testUsers.employee.password)
-        await page.waitForURL('**/dashboard')
+        // Navigate to dashboard (uses stored employee auth)
+        await page.goto('/dashboard')
+        await page.waitForLoadState('domcontentloaded')
 
         // API-Call: Hauptmitarbeiter ist wieder gesund
         const response = await page.request.post('/api/timesheets', {

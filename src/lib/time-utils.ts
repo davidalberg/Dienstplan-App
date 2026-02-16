@@ -138,6 +138,7 @@ export function calculateHoursBreakdown(timesheets: Array<{
     actualStart?: string | null
     actualEnd?: string | null
     absenceType?: string | null
+    breakMinutes?: number | null
 }>): HoursBreakdown {
     let workMinutes = 0
     let vacationMinutes = 0
@@ -145,8 +146,9 @@ export function calculateHoursBreakdown(timesheets: Array<{
 
     for (const ts of timesheets) {
         if (ts.actualStart && ts.actualEnd) {
-            const minutes = calculateMinutesBetween(ts.actualStart, ts.actualEnd)
-            if (minutes !== null && minutes > 0) {
+            const rawMinutes = calculateMinutesBetween(ts.actualStart, ts.actualEnd)
+            if (rawMinutes !== null && rawMinutes > 0) {
+                const minutes = Math.max(0, rawMinutes - (ts.breakMinutes || 0))
                 if (ts.absenceType === 'VACATION') {
                     vacationMinutes += minutes
                 } else if (ts.absenceType === 'SICK') {

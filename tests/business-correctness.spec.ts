@@ -326,10 +326,24 @@ test.describe('Business-Correctness Tests', () => {
         test('22:00-06:00 = 8h total, 7h Nacht', async ({ prisma, testUsers, page }) => {
             const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })
 
-            await prisma.timesheet.create({
-                data: {
+            const testDate = createLocalDate(2026, 2, 10)
+            await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: testDate
+                    }
+                },
+                update: {
+                    plannedStart: '22:00', plannedEnd: '06:00',
+                    actualStart: '22:00', actualEnd: '06:00',
+                    status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
+                    note: `${TEST_NOTE_PREFIX}_NIGHT_22_06`,
+                    absenceType: null, backupEmployeeId: null
+                },
+                create: {
                     employeeId: employee!.id,
-                    date: createLocalDate(2026, 2, 10), // Tuesday, Feb
+                    date: testDate,
                     plannedStart: '22:00', plannedEnd: '06:00',
                     actualStart: '22:00', actualEnd: '06:00',
                     status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
@@ -350,10 +364,24 @@ test.describe('Business-Correctness Tests', () => {
         test('18:00-02:00 = 8h total, 3h Nacht', async ({ prisma, testUsers, page }) => {
             const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })
 
-            await prisma.timesheet.create({
-                data: {
+            const testDate = createLocalDate(2026, 2, 11)
+            await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: testDate
+                    }
+                },
+                update: {
+                    plannedStart: '18:00', plannedEnd: '02:00',
+                    actualStart: '18:00', actualEnd: '02:00',
+                    status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
+                    note: `${TEST_NOTE_PREFIX}_NIGHT_18_02`,
+                    absenceType: null, backupEmployeeId: null
+                },
+                create: {
                     employeeId: employee!.id,
-                    date: createLocalDate(2026, 2, 11),
+                    date: testDate,
                     plannedStart: '18:00', plannedEnd: '02:00',
                     actualStart: '18:00', actualEnd: '02:00',
                     status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
@@ -374,10 +402,24 @@ test.describe('Business-Correctness Tests', () => {
         test('23:00-07:00 = 8h total, 7h Nacht', async ({ prisma, testUsers, page }) => {
             const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })
 
-            await prisma.timesheet.create({
-                data: {
+            const testDate = createLocalDate(2026, 2, 12)
+            await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: testDate
+                    }
+                },
+                update: {
+                    plannedStart: '23:00', plannedEnd: '07:00',
+                    actualStart: '23:00', actualEnd: '07:00',
+                    status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
+                    note: `${TEST_NOTE_PREFIX}_NIGHT_23_07`,
+                    absenceType: null, backupEmployeeId: null
+                },
+                create: {
                     employeeId: employee!.id,
-                    date: createLocalDate(2026, 2, 12),
+                    date: testDate,
                     plannedStart: '23:00', plannedEnd: '07:00',
                     actualStart: '23:00', actualEnd: '07:00',
                     status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
@@ -398,10 +440,24 @@ test.describe('Business-Correctness Tests', () => {
         test('00:00-00:00 (24h) = 24h total, 7h Nacht', async ({ prisma, testUsers, page }) => {
             const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })
 
-            await prisma.timesheet.create({
-                data: {
+            const testDate = createLocalDate(2026, 2, 13)
+            await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: testDate
+                    }
+                },
+                update: {
+                    plannedStart: '00:00', plannedEnd: '00:00',
+                    actualStart: '00:00', actualEnd: '00:00',
+                    status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
+                    note: `${TEST_NOTE_PREFIX}_NIGHT_24H`,
+                    absenceType: null, backupEmployeeId: null
+                },
+                create: {
                     employeeId: employee!.id,
-                    date: createLocalDate(2026, 2, 13),
+                    date: testDate,
                     plannedStart: '00:00', plannedEnd: '00:00',
                     actualStart: '00:00', actualEnd: '00:00',
                     status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
@@ -422,10 +478,24 @@ test.describe('Business-Correctness Tests', () => {
         test('06:00-14:00 (Tagschicht) = 8h total, 0h Nacht', async ({ prisma, testUsers, page }) => {
             const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })
 
-            await prisma.timesheet.create({
-                data: {
+            const testDate = createLocalDate(2026, 2, 14)
+            await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: testDate
+                    }
+                },
+                update: {
+                    plannedStart: '06:00', plannedEnd: '14:00',
+                    actualStart: '06:00', actualEnd: '14:00',
+                    status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
+                    note: `${TEST_NOTE_PREFIX}_DAY`,
+                    absenceType: null, backupEmployeeId: null
+                },
+                create: {
                     employeeId: employee!.id,
-                    date: createLocalDate(2026, 2, 14),
+                    date: testDate,
                     plannedStart: '06:00', plannedEnd: '14:00',
                     actualStart: '06:00', actualEnd: '14:00',
                     status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
@@ -446,10 +516,24 @@ test.describe('Business-Correctness Tests', () => {
         test('20:00-04:00 = 8h total, 5h Nacht', async ({ prisma, testUsers, page }) => {
             const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })
 
-            await prisma.timesheet.create({
-                data: {
+            const testDate = createLocalDate(2026, 2, 15)
+            await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: testDate
+                    }
+                },
+                update: {
+                    plannedStart: '20:00', plannedEnd: '04:00',
+                    actualStart: '20:00', actualEnd: '04:00',
+                    status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
+                    note: `${TEST_NOTE_PREFIX}_NIGHT_20_04`,
+                    absenceType: null, backupEmployeeId: null
+                },
+                create: {
                     employeeId: employee!.id,
-                    date: createLocalDate(2026, 2, 15),
+                    date: testDate,
                     plannedStart: '20:00', plannedEnd: '04:00',
                     actualStart: '20:00', actualEnd: '04:00',
                     status: 'CONFIRMED', month: 2, year: 2026, breakMinutes: 0,
@@ -513,9 +597,10 @@ test.describe('Business-Correctness Tests', () => {
                 const rows = await parseExcelResponse(response)
                 expect(rows[0]['J_Feiertagsstunden']).toBe(8)
 
-                // Special case: Allerheiligen 2026 is a Sunday - should also have Sunday hours
+                // Special case: Allerheiligen 2026 is a Sunday
+                // Holiday takes priority over Sunday (no double counting), so Sunday hours = 0
                 if (holiday.date === '2026-11-01') {
-                    expect(rows[0]['I_Sonntagsstunden']).toBe(8)
+                    expect(rows[0]['I_Sonntagsstunden']).toBe(0)
                 }
             })
         }
@@ -525,6 +610,21 @@ test.describe('Business-Correctness Tests', () => {
     // SUITE 4: Krankheit/Urlaub Zählung (5 Tests)
     // ============================================================
     test.describe('Suite 4: Krankheit/Urlaub Zählung', () => {
+
+        // Clean up before each test to ensure isolation
+        test.beforeEach(async ({ prisma, testUsers }) => {
+            const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })
+            if (employee) {
+                await prisma.timesheet.deleteMany({
+                    where: {
+                        employeeId: employee.id,
+                        month: 3,
+                        year: 2026,
+                        note: { contains: TEST_NOTE_PREFIX }
+                    }
+                })
+            }
+        })
 
         test('1 Schicht SICK = sickDays=1, sickHours=8', async ({ prisma, testUsers, page }) => {
             const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })

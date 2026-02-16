@@ -20,8 +20,27 @@ test.describe('Edge-Cases und kritische Szenarien', () => {
             tomorrow.setHours(0, 0, 0, 0)
 
             // Schicht ohne Zeiten (theoretisch ungültig)
-            const shift = await prisma.timesheet.create({
-                data: {
+            const shift = await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: tomorrow
+                    }
+                },
+                update: {
+                    plannedStart: null,
+                    plannedEnd: null,
+                    actualStart: null,
+                    actualEnd: null,
+                    status: 'PLANNED',
+                    month: tomorrow.getMonth() + 1,
+                    year: tomorrow.getFullYear(),
+                    breakMinutes: 0,
+                    absenceType: null,
+                    backupEmployeeId: null,
+                    note: null
+                },
+                create: {
                     employeeId: employee!.id,
                     date: tomorrow,
                     plannedStart: null,
@@ -91,8 +110,27 @@ test.describe('Edge-Cases und kritische Szenarien', () => {
             tomorrow.setDate(tomorrow.getDate() + 1)
             tomorrow.setHours(0, 0, 0, 0)
 
-            const otherShift = await prisma.timesheet.create({
-                data: {
+            const otherShift = await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: teamlead!.id,
+                        date: tomorrow
+                    }
+                },
+                update: {
+                    plannedStart: '08:00',
+                    plannedEnd: '16:00',
+                    actualStart: null,
+                    actualEnd: null,
+                    status: 'PLANNED',
+                    month: tomorrow.getMonth() + 1,
+                    year: tomorrow.getFullYear(),
+                    breakMinutes: 0,
+                    absenceType: null,
+                    backupEmployeeId: null,
+                    note: null
+                },
+                create: {
                     employeeId: teamlead!.id,
                     date: tomorrow,
                     plannedStart: '08:00',
@@ -145,13 +183,32 @@ test.describe('Edge-Cases und kritische Szenarien', () => {
             tomorrow.setHours(0, 0, 0, 0)
 
             // Bereits eingereichte Schicht
-            const shift = await prisma.timesheet.create({
-                data: {
+            const shift = await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: tomorrow
+                    }
+                },
+                update: {
+                    plannedStart: '08:00',
+                    plannedEnd: '16:00',
+                    actualStart: null,
+                    actualEnd: null,
+                    status: 'SUBMITTED',
+                    month: tomorrow.getMonth() + 1,
+                    year: tomorrow.getFullYear(),
+                    breakMinutes: 0,
+                    absenceType: null,
+                    backupEmployeeId: null,
+                    note: null
+                },
+                create: {
                     employeeId: employee!.id,
                     date: tomorrow,
                     plannedStart: '08:00',
                     plannedEnd: '16:00',
-                    status: 'SUBMITTED', // Bereits eingereicht
+                    status: 'SUBMITTED',
                     month: tomorrow.getMonth() + 1,
                     year: tomorrow.getFullYear(),
                     breakMinutes: 0
@@ -188,8 +245,27 @@ test.describe('Edge-Cases und kritische Szenarien', () => {
             tomorrow.setHours(0, 0, 0, 0)
 
             // Schicht über Mitternacht
-            const shift = await prisma.timesheet.create({
-                data: {
+            const shift = await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: tomorrow
+                    }
+                },
+                update: {
+                    plannedStart: '23:00',
+                    plannedEnd: '01:00',
+                    actualStart: '23:00',
+                    actualEnd: '01:00',
+                    status: 'CONFIRMED',
+                    month: tomorrow.getMonth() + 1,
+                    year: tomorrow.getFullYear(),
+                    breakMinutes: 0,
+                    absenceType: null,
+                    backupEmployeeId: null,
+                    note: null
+                },
+                create: {
                     employeeId: employee!.id,
                     date: tomorrow,
                     plannedStart: '23:00',
@@ -222,8 +298,27 @@ test.describe('Edge-Cases und kritische Szenarien', () => {
             tomorrow.setDate(tomorrow.getDate() + 1)
             tomorrow.setHours(0, 0, 0, 0)
 
-            const shift = await prisma.timesheet.create({
-                data: {
+            const shift = await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: tomorrow
+                    }
+                },
+                update: {
+                    plannedStart: '00:00',
+                    plannedEnd: '00:00',
+                    actualStart: '00:00',
+                    actualEnd: '00:00',
+                    status: 'CONFIRMED',
+                    month: tomorrow.getMonth() + 1,
+                    year: tomorrow.getFullYear(),
+                    breakMinutes: 0,
+                    absenceType: null,
+                    backupEmployeeId: null,
+                    note: null
+                },
+                create: {
                     employeeId: employee!.id,
                     date: tomorrow,
                     plannedStart: '00:00',
@@ -262,8 +357,27 @@ test.describe('Edge-Cases und kritische Szenarien', () => {
             firstOfMonth.setDate(1)
             firstOfMonth.setHours(0, 0, 0, 0)
 
-            const shift = await prisma.timesheet.create({
-                data: {
+            const shift = await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: firstOfMonth
+                    }
+                },
+                update: {
+                    plannedStart: '08:00',
+                    plannedEnd: '16:00',
+                    actualStart: null,
+                    actualEnd: null,
+                    status: 'PLANNED',
+                    month: firstOfMonth.getMonth() + 1,
+                    year: firstOfMonth.getFullYear(),
+                    breakMinutes: 0,
+                    absenceType: null,
+                    backupEmployeeId: null,
+                    note: null
+                },
+                create: {
                     employeeId: employee!.id,
                     date: firstOfMonth,
                     plannedStart: '08:00',
@@ -291,8 +405,27 @@ test.describe('Edge-Cases und kritische Szenarien', () => {
             lastOfMonth.setDate(0) // Letzter Tag des Vormonats
             lastOfMonth.setHours(0, 0, 0, 0)
 
-            const shift = await prisma.timesheet.create({
-                data: {
+            const shift = await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: lastOfMonth
+                    }
+                },
+                update: {
+                    plannedStart: '08:00',
+                    plannedEnd: '16:00',
+                    actualStart: null,
+                    actualEnd: null,
+                    status: 'PLANNED',
+                    month: lastOfMonth.getMonth() + 1,
+                    year: lastOfMonth.getFullYear(),
+                    breakMinutes: 0,
+                    absenceType: null,
+                    backupEmployeeId: null,
+                    note: null
+                },
+                create: {
                     employeeId: employee!.id,
                     date: lastOfMonth,
                     plannedStart: '08:00',
@@ -316,26 +449,42 @@ test.describe('Edge-Cases und kritische Szenarien', () => {
         test('PLANNED → CONFIRMED ist erlaubt', async ({ page, loginPage, testUsers, prisma }) => {
             const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })
 
-            const tomorrow = new Date()
-            tomorrow.setDate(tomorrow.getDate() + 1)
-            tomorrow.setHours(0, 0, 0, 0)
+            const testDate = new Date('2029-03-15T00:00:00Z')
 
-            const shift = await prisma.timesheet.create({
-                data: {
+            const shift = await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: testDate
+                    }
+                },
+                update: {
+                    plannedStart: '08:00',
+                    plannedEnd: '16:00',
+                    actualStart: null,
+                    actualEnd: null,
+                    status: 'PLANNED',
+                    month: 3,
+                    year: 2029,
+                    breakMinutes: 0,
+                    absenceType: null,
+                    backupEmployeeId: null,
+                    note: null
+                },
+                create: {
                     employeeId: employee!.id,
-                    date: tomorrow,
+                    date: testDate,
                     plannedStart: '08:00',
                     plannedEnd: '16:00',
                     status: 'PLANNED',
-                    month: tomorrow.getMonth() + 1,
-                    year: tomorrow.getFullYear(),
+                    month: 3,
+                    year: 2029,
                     breakMinutes: 0
                 }
             })
 
-            await loginPage.goto()
-            await loginPage.login(testUsers.employee.email, testUsers.employee.password)
-            await page.waitForURL(/\/dashboard/)
+            await page.goto('/dashboard')
+            await page.waitForLoadState('domcontentloaded')
 
             const response = await page.request.post('/api/timesheets', {
                 data: {
@@ -356,28 +505,44 @@ test.describe('Edge-Cases und kritische Szenarien', () => {
         test('CONFIRMED → PLANNED via UNCONFIRM ist erlaubt', async ({ page, loginPage, testUsers, prisma }) => {
             const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })
 
-            const tomorrow = new Date()
-            tomorrow.setDate(tomorrow.getDate() + 1)
-            tomorrow.setHours(0, 0, 0, 0)
+            const testDate = new Date('2029-03-16T00:00:00Z')
 
-            const shift = await prisma.timesheet.create({
-                data: {
-                    employeeId: employee!.id,
-                    date: tomorrow,
+            const shift = await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: testDate
+                    }
+                },
+                update: {
                     plannedStart: '08:00',
                     plannedEnd: '16:00',
                     actualStart: '08:00',
                     actualEnd: '16:00',
                     status: 'CONFIRMED',
-                    month: tomorrow.getMonth() + 1,
-                    year: tomorrow.getFullYear(),
+                    month: 3,
+                    year: 2029,
+                    breakMinutes: 0,
+                    absenceType: null,
+                    backupEmployeeId: null,
+                    note: null
+                },
+                create: {
+                    employeeId: employee!.id,
+                    date: testDate,
+                    plannedStart: '08:00',
+                    plannedEnd: '16:00',
+                    actualStart: '08:00',
+                    actualEnd: '16:00',
+                    status: 'CONFIRMED',
+                    month: 3,
+                    year: 2029,
                     breakMinutes: 0
                 }
             })
 
-            await loginPage.goto()
-            await loginPage.login(testUsers.employee.email, testUsers.employee.password)
-            await page.waitForURL(/\/dashboard/)
+            await page.goto('/dashboard')
+            await page.waitForLoadState('domcontentloaded')
 
             const response = await page.request.post('/api/timesheets', {
                 data: {
@@ -400,26 +565,42 @@ test.describe('Edge-Cases und kritische Szenarien', () => {
         test('CHANGED Status bei geänderten Zeiten', async ({ page, loginPage, testUsers, prisma }) => {
             const employee = await prisma.user.findUnique({ where: { email: testUsers.employee.email } })
 
-            const tomorrow = new Date()
-            tomorrow.setDate(tomorrow.getDate() + 1)
-            tomorrow.setHours(0, 0, 0, 0)
+            const testDate = new Date('2029-03-17T00:00:00Z')
 
-            const shift = await prisma.timesheet.create({
-                data: {
+            const shift = await prisma.timesheet.upsert({
+                where: {
+                    employeeId_date: {
+                        employeeId: employee!.id,
+                        date: testDate
+                    }
+                },
+                update: {
+                    plannedStart: '08:00',
+                    plannedEnd: '16:00',
+                    actualStart: null,
+                    actualEnd: null,
+                    status: 'PLANNED',
+                    month: 3,
+                    year: 2029,
+                    breakMinutes: 0,
+                    absenceType: null,
+                    backupEmployeeId: null,
+                    note: null
+                },
+                create: {
                     employeeId: employee!.id,
-                    date: tomorrow,
+                    date: testDate,
                     plannedStart: '08:00',
                     plannedEnd: '16:00',
                     status: 'PLANNED',
-                    month: tomorrow.getMonth() + 1,
-                    year: tomorrow.getFullYear(),
+                    month: 3,
+                    year: 2029,
                     breakMinutes: 0
                 }
             })
 
-            await loginPage.goto()
-            await loginPage.login(testUsers.employee.email, testUsers.employee.password)
-            await page.waitForURL(/\/dashboard/)
+            await page.goto('/dashboard')
+            await page.waitForLoadState('domcontentloaded')
 
             // Andere Zeiten als geplant
             const response = await page.request.post('/api/timesheets', {

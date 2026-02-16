@@ -32,6 +32,8 @@ interface NavItem {
 
 interface SidebarProps {
     onExportClick?: () => void
+    mobileSidebarOpen?: boolean
+    onMobileSidebarClose?: () => void
 }
 
 // Mapping: Sidebar-Href → API-URL die vorgeladen werden soll
@@ -45,7 +47,7 @@ const sidebarPrefetchMap: Record<string, string> = {
     "/admin/payroll": "/api/admin/payroll",
 }
 
-export function Sidebar({ onExportClick }: SidebarProps) {
+export function Sidebar({ onExportClick, mobileSidebarOpen, onMobileSidebarClose }: SidebarProps) {
     const { data: session } = useSession()
     const pathname = usePathname()
     const [collapsed, setCollapsed] = useState(false)
@@ -104,7 +106,7 @@ export function Sidebar({ onExportClick }: SidebarProps) {
             transition-colors duration-150 ease-in-out
             ${active
                 ? "bg-neutral-800 text-white"
-                : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200"
+                : "text-neutral-300 hover:bg-neutral-800/50 hover:text-neutral-200"
             }
         `
 
@@ -129,6 +131,9 @@ export function Sidebar({ onExportClick }: SidebarProps) {
                     className={baseClasses}
                     prefetch={true}
                     onMouseEnter={() => prefetchPageData(item.href!)}
+                    onClick={() => {
+                        if (onMobileSidebarClose) onMobileSidebarClose()
+                    }}
                 >
                     {content}
                 </Link>
@@ -143,13 +148,28 @@ export function Sidebar({ onExportClick }: SidebarProps) {
     }
 
     return (
-        <aside
-            className={`
-                flex flex-col bg-neutral-900 border-r border-neutral-800
-                transition-all duration-200 ease-in-out
-                ${collapsed ? "w-16" : "w-60"}
-            `}
-        >
+        <>
+            {/* Mobile backdrop */}
+            {mobileSidebarOpen && (
+                <div
+                    className="fixed inset-0 z-40 bg-black/50 md:hidden"
+                    onClick={onMobileSidebarClose}
+                    aria-hidden="true"
+                />
+            )}
+
+            <aside
+                className={`
+                    flex flex-col bg-neutral-900 border-r border-neutral-800
+                    transition-all duration-200 ease-in-out
+                    ${collapsed && !mobileSidebarOpen ? "w-16" : "w-60"}
+
+                    ${mobileSidebarOpen
+                        ? "fixed inset-y-0 left-0 z-50 md:relative md:z-auto"
+                        : "hidden md:flex"
+                    }
+                `}
+            >
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-neutral-800">
                 <div className="flex items-center gap-2 min-w-0">
@@ -163,8 +183,9 @@ export function Sidebar({ onExportClick }: SidebarProps) {
                 <button
                     type="button"
                     onClick={() => setCollapsed(!collapsed)}
-                    className="p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
+                    className="p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors hidden md:block"
                     title={collapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}
+                    aria-label={collapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}
                 >
                     {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
                 </button>
@@ -185,7 +206,7 @@ export function Sidebar({ onExportClick }: SidebarProps) {
             )}
 
             {/* Main Navigation */}
-            <nav className="flex-1 p-3 space-y-1">
+            <nav className="flex-1 p-3 space-y-1" aria-label="Hauptnavigation">
                 {navItems.map((item) => (
                     <NavLink key={item.label} item={item} />
                 ))}
@@ -221,6 +242,7 @@ export function Sidebar({ onExportClick }: SidebarProps) {
                     </div>
                 )}
             </div>
-        </aside>
+            </aside>
+        </>
     )
 }

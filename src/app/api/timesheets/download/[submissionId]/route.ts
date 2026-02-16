@@ -4,7 +4,6 @@ import prisma from "@/lib/prisma"
 import { generateCombinedTeamPdf } from "@/lib/pdf-generator"
 import { aggregateMonthlyData } from "@/lib/premium-calculator"
 import { calculateMinutesBetween } from "@/lib/time-utils"
-import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
 
 /**
  * GET /api/timesheets/download/[submissionId]
@@ -80,7 +79,7 @@ export async function GET(
                 sheetFileName: teamSubmission.sheetFileName,
                 month: teamSubmission.month,
                 year: teamSubmission.year,
-                status: { in: [...ALL_TIMESHEET_STATUSES] }
+                status: { in: ["CONFIRMED", "CHANGED", "SUBMITTED", "COMPLETED"] }
             },
             include: {
                 employee: {
@@ -204,12 +203,12 @@ export async function GET(
 
         // Prepare employee stats for the PDF
         const employeeStats = allEmployeeData.map(empData => {
-            // Calculate planned hours from planned times
+            // Calculate planned hours from planned times ONLY (no actual-time fallback)
             let plannedHours = 0
             for (const ts of empData.timesheets) {
                 if (!ts.absenceType) {
-                    const start = ts.plannedStart || ts.actualStart
-                    const end = ts.plannedEnd || ts.actualEnd
+                    const start = ts.plannedStart
+                    const end = ts.plannedEnd
                     if (start && end) {
                         const minutes = calculateMinutesBetween(start, end)
                         if (minutes !== null && minutes > 0) {

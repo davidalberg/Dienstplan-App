@@ -1,15 +1,17 @@
 "use client"
 
 import { useSession, signOut } from "next-auth/react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns"
 import { de } from "date-fns/locale"
 import TimesheetDay from "@/components/TimesheetDay"
+import TimesheetCalendar from "@/components/TimesheetCalendar"
 import MonthlySummary from "@/components/MonthlySummary"
-import { ChevronDown, ChevronRight, Shield, CalendarDays, Clock, CheckCircle2, RefreshCw } from "lucide-react"
+import { ChevronDown, ChevronRight, Shield, CalendarDays, Clock, CheckCircle2, RefreshCw, List } from "lucide-react"
 import { formatTimeRange } from "@/lib/time-utils"
 import ConnectionStatus from "@/components/ConnectionStatus"
+import { SkeletonCard } from "@/components/Skeleton"
 
 interface DashboardClient {
     id: string
@@ -59,7 +61,7 @@ interface BackupShift {
     date: string
     plannedStart: string | null
     plannedEnd: string | null
-    employeeName: string
+    clientName: string
 }
 
 export default function DashboardPage() {
@@ -81,6 +83,9 @@ export default function DashboardPage() {
     const [fetchError, setFetchError] = useState<string | null>(null)
     const [currentDate, setCurrentDate] = useState(new Date())
     const [availableMonths, setAvailableMonths] = useState<{month: number, year: number}[]>([])
+    const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
+    const [manualToggles, setManualToggles] = useState<Set<string>>(new Set())
+    const [viewMode, setViewMode] = useState<"list" | "calendar">("list")
 
     const fetchAvailableMonths = async () => {
         try {
@@ -169,6 +174,115 @@ export default function DashboardPage() {
         }
     }
 
+    // Auto-expand logic: PLANNED = open, confirmed/submitted/completed/absence = closed
+    // The next unconfirmed day from today is always open
+    useEffect(() => {
+        if (timesheets.length === 0) return
+
+        const autoExpanded = new Set<string>()
+        const today = new Date().toISOString().slice(0, 10)
+
+        // Find the first PLANNED shift from today onwards
+        let firstPlannedFromToday: string | null = null
+        for (const ts of timesheets) {
+            const tsDate = ts.date.slice(0, 10)
+            if (tsDate >= today && ts.status === "PLANNED" && !ts.absenceType) {
+                firstPlannedFromToday = ts.id
+                break
+            }
+        }
+
+        for (const ts of timesheets) {
+            // Skip manually toggled cards
+            if (manualToggles.has(ts.id)) continue
+
+            const isPlanned = ts.status === "PLANNED" && !ts.absenceType
+            if (isPlanned) {
+                autoExpanded.add(ts.id)
+            }
+            // The first planned shift from today is always expanded
+            if (ts.id === firstPlannedFromToday) {
+                autoExpanded.add(ts.id)
+            }
+        }
+
+        setExpandedCards(prev => {
+            // Merge: keep manual toggles, apply auto for the rest
+            const next = new Set<string>()
+            for (const ts of timesheets) {
+                if (manualToggles.has(ts.id)) {
+                    // Keep whatever the user set
+                    if (prev.has(ts.id)) next.add(ts.id)
+                } else {
+                    if (autoExpanded.has(ts.id)) next.add(ts.id)
+                }
+            }
+            return next
+        })
+    }, [timesheets])
+
+    const toggleCard = useCallback((id: string) => {
+        setManualToggles(prev => new Set(prev).add(id))
+        setExpandedCards(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) {
+                next.delete(id)
+            } else {
+                next.add(id)
+            }
+            return next
+        })
+    }, [])
+
+    // After a confirm action: collapse that card, expand next planned
+    const handleTimesheetUpdate = useCallback((updatedTimesheet: any) => {
+        updateSingleTimesheet(updatedTimesheet)
+
+        // If it just became CONFIRMED, auto-collapse it and open next PLANNED
+        if (updatedTimesheet.status === "CONFIRMED" || updatedTimesheet.status === "CHANGED") {
+            // Use setTimesheets callback to read fresh state (avoids stale closure)
+            setTimesheets(currentTimesheets => {
+                setExpandedCards(prev => {
+                    const next = new Set(prev)
+                    next.delete(updatedTimesheet.id)
+
+                    // Find the next PLANNED shift after this one
+                    const idx = currentTimesheets.findIndex(ts => ts.id === updatedTimesheet.id)
+                    for (let i = idx + 1; i < currentTimesheets.length; i++) {
+                        if (currentTimesheets[i].status === "PLANNED" && !currentTimesheets[i].absenceType) {
+                            next.add(currentTimesheets[i].id)
+                            // Scroll to it after a brief delay
+                            setTimeout(() => {
+                                document.getElementById(`ts-${currentTimesheets[i].id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })
+                            }, 350)
+                            break
+                        }
+                    }
+
+                    return next
+                })
+                // Mark as manually toggled so auto-expand doesn't override
+                setManualToggles(prev => {
+                    const next = new Set(prev)
+                    next.add(updatedTimesheet.id)
+                    return next
+                })
+                return currentTimesheets // Don't modify timesheets, just reading
+            })
+        }
+    }, [])
+
+    // Calendar day click: switch to list, expand card, scroll to it
+    const handleCalendarDayClick = useCallback((ts: any) => {
+        setViewMode("list")
+        setExpandedCards(prev => new Set(prev).add(ts.id))
+        setManualToggles(prev => new Set(prev).add(ts.id))
+        // Scroll after view switch renders
+        setTimeout(() => {
+            document.getElementById(`ts-${ts.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })
+        }, 100)
+    }, [])
+
     useEffect(() => {
         if (session) {
             fetchAvailableMonths()
@@ -176,7 +290,11 @@ export default function DashboardPage() {
     }, [session])
 
     useEffect(() => {
-        if (session) fetchTimesheets()
+        if (session) {
+            // Reset manual toggles on month change
+            setManualToggles(new Set())
+            fetchTimesheets()
+        }
     }, [session, currentDate])
 
     if (!session) return null
@@ -270,7 +388,8 @@ export default function DashboardPage() {
                                 const [eh, em] = end.split(":").map(Number)
                                 let diff = (eh * 60 + em) - (sh * 60 + sm)
                                 if (diff < 0) diff += 24 * 60
-                                return sum + diff / 60
+                                diff -= (ts.breakMinutes || 0)
+                                return sum + Math.max(0, diff) / 60
                             }, 0)
                             const allSubmitted = timesheets.every(ts => ts.status === "SUBMITTED" || ts.status === "COMPLETED")
 
@@ -335,7 +454,7 @@ export default function DashboardPage() {
                                         {potentialBackupShifts.map(shift => (
                                             <div key={shift.id} className="flex justify-between items-center text-sm bg-white rounded-lg p-3 shadow-sm">
                                                 <span className="text-gray-600">
-                                                    Backup für <span className="font-medium text-gray-800">{shift.employeeName}</span>
+                                                    Backup bei <span className="font-medium text-gray-800">{shift.clientName}</span>
                                                 </span>
                                                 <span className="font-medium text-gray-800">
                                                     {format(new Date(shift.date), "EE dd.MM.", { locale: de })} {formatTimeRange(shift.plannedStart, shift.plannedEnd)}
@@ -347,9 +466,38 @@ export default function DashboardPage() {
                             </div>
                         )}
 
-                        {/* Days List */}
+                        {/* View Toggle + Days List / Calendar */}
                         <div className="mt-6 space-y-4">
-                            <h2 className="text-lg font-bold text-black">Tageskarten</h2>
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold text-black">
+                                    {viewMode === "list" ? "Tageskarten" : "Kalender"}
+                                </h2>
+                                <div className="flex rounded-lg bg-gray-100 p-0.5">
+                                    <button
+                                        onClick={() => setViewMode("list")}
+                                        className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                                            viewMode === "list"
+                                                ? "bg-blue-600 text-white shadow-sm"
+                                                : "text-gray-600 hover:text-gray-900"
+                                        }`}
+                                    >
+                                        <List size={14} />
+                                        Liste
+                                    </button>
+                                    <button
+                                        onClick={() => setViewMode("calendar")}
+                                        className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                                            viewMode === "calendar"
+                                                ? "bg-blue-600 text-white shadow-sm"
+                                                : "text-gray-600 hover:text-gray-900"
+                                        }`}
+                                    >
+                                        <CalendarDays size={14} />
+                                        Kalender
+                                    </button>
+                                </div>
+                            </div>
+
                             {fetchError ? (
                                 <div className="rounded-xl border-2 border-red-200 bg-red-50 py-6 text-center">
                                     <p className="text-red-700 font-medium">{fetchError}</p>
@@ -362,15 +510,28 @@ export default function DashboardPage() {
                                     </button>
                                 </div>
                             ) : loading ? (
-                                <div className="py-10 text-center text-black font-medium">Lade Daten...</div>
+                                <div className="space-y-4">
+                                    <SkeletonCard />
+                                    <SkeletonCard />
+                                    <SkeletonCard />
+                                </div>
+                            ) : viewMode === "calendar" ? (
+                                <TimesheetCalendar
+                                    timesheets={timesheets}
+                                    currentDate={currentDate}
+                                    onDayClick={handleCalendarDayClick}
+                                />
                             ) : (
                                 timesheets.map((ts) => (
-                                    <TimesheetDay
-                                        key={ts.id}
-                                        timesheet={ts}
-                                        onUpdate={updateSingleTimesheet}
-                                        onDelete={deleteSingleTimesheet}
-                                    />
+                                    <div key={ts.id} id={`ts-${ts.id}`}>
+                                        <TimesheetDay
+                                            timesheet={ts}
+                                            onUpdate={handleTimesheetUpdate}
+                                            onDelete={deleteSingleTimesheet}
+                                            isExpanded={expandedCards.has(ts.id)}
+                                            onToggleExpand={() => toggleCard(ts.id)}
+                                        />
+                                    </div>
                                 ))
                             )}
 

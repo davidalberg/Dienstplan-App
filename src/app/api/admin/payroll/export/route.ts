@@ -45,45 +45,61 @@ export async function GET(req: NextRequest) {
     const { month, year } = validationResult.data
 
     try {
-        // Fetch all employees with their team/client relationships
-        const employees = await prisma.user.findMany({
-            where: {
-                role: "EMPLOYEE"
-            },
-            include: {
-                team: {
-                    include: {
-                        client: true
+        // Fetch employees and timesheets in parallel
+        const [employees, timesheets] = await Promise.all([
+            prisma.user.findMany({
+                where: {
+                    role: "EMPLOYEE"
+                },
+                include: {
+                    team: {
+                        include: {
+                            client: true
+                        }
                     }
+                },
+                orderBy: {
+                    name: "asc"
                 }
-            },
-            orderBy: {
-                name: "asc"
-            }
-        })
+            }),
+            prisma.timesheet.findMany({
+                where: {
+                    month,
+                    year,
+                    status: { in: [...ALL_TIMESHEET_STATUSES] }
+                },
+                orderBy: { date: "asc" }
+            })
+        ])
 
-        // Fetch all timesheets for this month
-        const timesheets = await prisma.timesheet.findMany({
-            where: {
-                month,
-                year,
-                status: { in: [...ALL_TIMESHEET_STATUSES] }
-            },
-            orderBy: { date: "asc" }
-        })
+        // O(n) Gruppierung statt O(n²) Filter in der Schleife
+        const timesheetsByEmployee = new Map<string, typeof timesheets>()
+        const backupDaysByEmployee = new Map<string, number>()
+
+        for (const ts of timesheets) {
+            const existing = timesheetsByEmployee.get(ts.employeeId) || []
+            existing.push(ts)
+            timesheetsByEmployee.set(ts.employeeId, existing)
+
+            if (ts.backupEmployeeId) {
+                backupDaysByEmployee.set(
+                    ts.backupEmployeeId,
+                    (backupDaysByEmployee.get(ts.backupEmployeeId) || 0) + 1
+                )
+            }
+        }
 
         // Process each employee's payroll data
         const excelData: any[] = []
 
         for (const employee of employees) {
-            // Get employee's timesheets
-            const employeeTimesheets = timesheets.filter(ts => ts.employeeId === employee.id)
+            // O(1) Lookup statt O(n) Filter
+            const employeeTimesheets = timesheetsByEmployee.get(employee.id) || []
 
             // Skip employees with no activity
             if (employeeTimesheets.length === 0) {
-                // Also check if they appear as backup (ANY backup, not just SICK/VACATION)
-                const asBackup = timesheets.filter(ts => ts.backupEmployeeId === employee.id)
-                if (asBackup.length === 0) continue
+                const hasBackup = (backupDaysByEmployee.get(employee.id) || 0) > 0
+                if (!hasBackup) continue
             }
 
             // Nutze aggregateMonthlyData für konsistente Berechnung (inkl. Backup-Stunden)
@@ -102,10 +118,8 @@ export async function GET(req: NextRequest) {
                 timesheets  // ALLE Timesheets für Backup-Suche
             )
 
-            // Backup-Tage separat zählen (ALLE Einträge, nicht nur bei Abwesenheit)
-            const backupDays = timesheets.filter(ts =>
-                ts.backupEmployeeId === employee.id
-            ).length
+            // O(1) Lookup für Backup-Tage
+            const backupDays = backupDaysByEmployee.get(employee.id) || 0
 
             // Skip if no activity at all
             if (aggregated.totalHours === 0 && aggregated.sickHours === 0 && aggregated.vacationHours === 0 && backupDays === 0) {

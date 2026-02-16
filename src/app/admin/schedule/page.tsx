@@ -30,6 +30,7 @@ import { formatTimeRange } from "@/lib/time-utils"
 import { useAdminSchedule } from "@/hooks/use-admin-data"
 import { useAdminData } from "@/components/AdminDataProvider"
 import TimesheetDetail from "@/components/TimesheetDetail"
+import ConfirmDialog from "@/components/ConfirmDialog"
 
 import ShiftTemplateManager from "@/components/ShiftTemplateManager"
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
@@ -358,6 +359,9 @@ function SchedulePageContent() {
     const [editingShift, setEditingShift] = useState<Shift | null>(null)
     const [showTemplateManager, setShowTemplateManager] = useState(false)
     const [selectedClientId, setSelectedClientId] = useState<string>("")
+
+    // Confirm Dialog State
+    const [confirmAction, setConfirmAction] = useState<{ action: () => void; message: string; title: string; isBulk?: boolean } | null>(null)
     const [formData, setFormData] = useState({
         employeeId: "",
         date: "",
@@ -1142,70 +1146,79 @@ function SchedulePageContent() {
         if (!shiftToDelete) return
 
         // Bestätigungsdialog
-        if (!window.confirm("Schicht wirklich löschen?")) {
-            return
-        }
+        setConfirmAction({
+            action: () => {
+                // Optimistic removal from UI
+                setShifts(prev => prev.filter(s => s.id !== id))
 
-        // Optimistic removal from UI
-        setShifts(prev => prev.filter(s => s.id !== id))
+                // Ctrl+Z Undo-Action speichern
+                setUndoAction({ type: 'delete', deletedShift: { ...shiftToDelete }, timestamp: Date.now() })
 
-        // Ctrl+Z Undo-Action speichern
-        setUndoAction({ type: 'delete', deletedShift: { ...shiftToDelete }, timestamp: Date.now() })
+                // Schedule commit-delete after 5 seconds
+                const timeout = setTimeout(() => {
+                    commitDelete(id)
+                }, 5000)
 
-        // Schedule commit-delete after 5 seconds
-        const timeout = setTimeout(() => {
-            commitDelete(id)
-        }, 5000)
+                // Add to deleted queue
+                setDeletedShifts(prev => [...prev, { id, shift: shiftToDelete, timeout }])
 
-        // Add to deleted queue
-        setDeletedShifts(prev => [...prev, { id, shift: shiftToDelete, timeout }])
+                // Show undo toast using sonner's action feature
+                toast.warning("Schicht gelöscht", {
+                    duration: 5000,
+                    icon: "⚠",
+                    action: {
+                        label: "Rückgängig",
+                        onClick: () => handleUndo(id)
+                    }
+                })
 
-        // Show undo toast using sonner's action feature
-        toast.warning("Schicht gelöscht", {
-            duration: 5000,
-            icon: "⚠",
-            action: {
-                label: "Rückgängig",
-                onClick: () => handleUndo(id)
-            }
+                setConfirmAction(null)
+            },
+            title: "Schicht löschen",
+            message: "Möchtest du diese Schicht wirklich löschen? Du kannst die Aktion 5 Sekunden lang rückgängig machen."
         })
     }, [shifts, commitDelete, handleUndo, setUndoAction])
 
     const handleBulkDelete = async () => {
         if (selectedShiftIds.size === 0 || isBulkDeleting) return
 
-        if (!window.confirm(`Wirklich ${selectedShiftIds.size} Schichten löschen?`)) {
-            return
-        }
+        setConfirmAction({
+            action: async () => {
+                setIsBulkDeleting(true)
+                try {
+                    const res = await fetch("/api/admin/schedule/bulk-delete", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ shiftIds: Array.from(selectedShiftIds) })
+                    })
 
-        setIsBulkDeleting(true)
-        try {
-            const res = await fetch("/api/admin/schedule/bulk-delete", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ shiftIds: Array.from(selectedShiftIds) })
-            })
+                    const data = await res.json()
 
-            const data = await res.json()
+                    if (res.ok) {
+                        showToast("success", `${data.deleted} Schichten gelöscht`)
+                        setSelectedShiftIds(new Set())
 
-            if (res.ok) {
-                showToast("success", `${data.deleted} Schichten gelöscht`)
-                setSelectedShiftIds(new Set())
+                        // Optimistisches Update
+                        setShifts(prev => prev.filter(s => !selectedShiftIds.has(s.id)))
 
-                // Optimistisches Update
-                setShifts(prev => prev.filter(s => !selectedShiftIds.has(s.id)))
+                        // Alle abhängigen Caches invalidieren
+                        invalidateRelatedCaches()
+                    } else {
+                        showToast("error", data.error || "Fehler beim Löschen")
+                    }
+                } catch (error) {
+                    console.error("Bulk delete error:", error)
+                    showToast("error", "Fehler beim Löschen")
+                } finally {
+                    setIsBulkDeleting(false)
+                }
 
-                // Alle abhängigen Caches invalidieren
-                invalidateRelatedCaches()
-            } else {
-                showToast("error", data.error || "Fehler beim Löschen")
-            }
-        } catch (error) {
-            console.error("Bulk delete error:", error)
-            showToast("error", "Fehler beim Löschen")
-        } finally {
-            setIsBulkDeleting(false)
-        }
+                setConfirmAction(null)
+            },
+            title: "Mehrere Schichten löschen",
+            message: `Möchtest du wirklich ${selectedShiftIds.size} Schichten endgültig löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
+            isBulk: true
+        })
     }
 
     // ✅ PERFORMANCE FIX: Memoize event handler for checkbox performance
@@ -2534,6 +2547,16 @@ function SchedulePageContent() {
                         mutate()
                         setShowTemplateManager(false)
                     }}
+                />
+
+                {/* Confirm Dialog */}
+                <ConfirmDialog
+                    isOpen={confirmAction !== null}
+                    title={confirmAction?.title || ""}
+                    message={confirmAction?.message || ""}
+                    variant="danger"
+                    onConfirm={() => confirmAction?.action()}
+                    onCancel={() => setConfirmAction(null)}
                 />
             </div>
         </div>
