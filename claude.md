@@ -1,6 +1,9 @@
 # Dienstplan-App - Claude Code Dokumentation
 
 ## Agents verwenden!
+
+**Nutze Agenten-Teams wenn es Sinn macht für beste Resultate.** Bei klaren, kleinen Änderungen (2-3 Dateien, Plan steht) direkt arbeiten. Bei komplexen Tasks, unklaren Anforderungen oder großflächigen Änderungen Agenten einsetzen.
+
 | Szenario | Agent |
 |----------|-------|
 | Codebase erkunden | `Explore` |

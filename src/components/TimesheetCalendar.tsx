@@ -16,8 +16,16 @@ interface CalendarTimesheet {
     note: string | null
 }
 
+interface BackupShift {
+    date: string
+    plannedStart: string | null
+    plannedEnd: string | null
+    clientName: string
+}
+
 interface TimesheetCalendarProps {
     timesheets: CalendarTimesheet[]
+    backupShifts?: BackupShift[]
     currentDate: Date
     onDayClick: (timesheet: CalendarTimesheet) => void
 }
@@ -67,7 +75,7 @@ function getShortTimeRange(start: string | null, end: string | null): string {
     return `${s}-${e}`
 }
 
-export default function TimesheetCalendar({ timesheets, currentDate, onDayClick }: TimesheetCalendarProps) {
+export default function TimesheetCalendar({ timesheets, backupShifts, currentDate, onDayClick }: TimesheetCalendarProps) {
     const monthStart = startOfMonth(currentDate)
     const monthEnd = endOfMonth(currentDate)
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
@@ -80,6 +88,15 @@ export default function TimesheetCalendar({ timesheets, currentDate, onDayClick 
     for (const ts of timesheets) {
         const dateKey = typeof ts.date === "string" ? ts.date.slice(0, 10) : format(new Date(ts.date), "yyyy-MM-dd")
         timesheetMap.set(dateKey, ts)
+    }
+
+    // Map backup shifts by date string for fast lookup
+    const backupMap = new Map<string, BackupShift>()
+    if (backupShifts) {
+        for (const bs of backupShifts) {
+            const dateKey = typeof bs.date === "string" ? bs.date.slice(0, 10) : format(new Date(bs.date), "yyyy-MM-dd")
+            backupMap.set(dateKey, bs)
+        }
     }
 
     return (
@@ -103,9 +120,11 @@ export default function TimesheetCalendar({ timesheets, currentDate, onDayClick 
                 {days.map((day) => {
                     const dateKey = format(day, "yyyy-MM-dd")
                     const ts = timesheetMap.get(dateKey)
+                    const backup = backupMap.get(dateKey)
                     const today = isToday(day)
                     const dayOfWeek = (getDay(day) + 6) % 7
                     const isWeekend = dayOfWeek >= 5
+                    const hasOnlyBackup = !ts && !!backup
 
                     return (
                         <div
@@ -125,13 +144,14 @@ export default function TimesheetCalendar({ timesheets, currentDate, onDayClick 
                                 transition-colors relative
                                 ${ts ? "cursor-pointer hover:bg-gray-50" : ""}
                                 ${today ? "ring-2 ring-inset ring-blue-400 bg-blue-50/30" : ""}
-                                ${!ts && isWeekend ? "bg-gray-50/50" : ""}
+                                ${hasOnlyBackup ? "bg-orange-50" : ""}
+                                ${!ts && !backup && isWeekend ? "bg-gray-50/50" : ""}
                             `}
                         >
                             {/* Day number */}
                             <span className={`
                                 text-xs font-bold leading-none
-                                ${today ? "text-blue-600" : ts ? "text-gray-900" : "text-gray-400"}
+                                ${today ? "text-blue-600" : ts || backup ? "text-gray-900" : "text-gray-400"}
                             `}>
                                 {format(day, "d")}
                             </span>
@@ -159,6 +179,26 @@ export default function TimesheetCalendar({ timesheets, currentDate, onDayClick 
                                             {formatTimeRange(ts.plannedStart, ts.plannedEnd)}
                                         </p>
                                     )}
+
+                                    {/* Small orange dot if also has backup */}
+                                    {backup && (
+                                        <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full bg-orange-500" title="Auch Backup" />
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Backup-only day */}
+                            {hasOnlyBackup && backup && (
+                                <div className="mt-0.5">
+                                    <div className="flex items-center gap-1">
+                                        <span className="inline-block h-2 w-2 rounded-full shrink-0 bg-orange-500" />
+                                        <span className="text-[9px] sm:text-[10px] font-semibold truncate leading-tight text-orange-600">
+                                            Backup
+                                        </span>
+                                    </div>
+                                    <p className="hidden sm:block text-[9px] text-orange-500/80 mt-0.5 leading-tight truncate">
+                                        {getShortTimeRange(backup.plannedStart, backup.plannedEnd)} {backup.clientName}
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -191,6 +231,10 @@ export default function TimesheetCalendar({ timesheets, currentDate, onDayClick 
                 <div className="flex items-center gap-1">
                     <span className="h-2 w-2 rounded-full bg-cyan-500" />
                     <span className="text-[10px] text-gray-500">Urlaub</span>
+                </div>
+                <div className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-orange-500" />
+                    <span className="text-[10px] text-gray-500">Backup</span>
                 </div>
             </div>
         </div>

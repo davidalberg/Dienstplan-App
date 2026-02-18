@@ -174,47 +174,25 @@ export default function DashboardPage() {
         }
     }
 
-    // Auto-expand logic: PLANNED = open, confirmed/submitted/completed/absence = closed
-    // The next unconfirmed day from today is always open
+    // Auto-expand logic: Only expand today's shift (if it exists and has no absence)
     useEffect(() => {
         if (timesheets.length === 0) return
 
-        const autoExpanded = new Set<string>()
         const today = new Date().toISOString().slice(0, 10)
 
-        // Find the first PLANNED shift from today onwards
-        let firstPlannedFromToday: string | null = null
-        for (const ts of timesheets) {
-            const tsDate = ts.date.slice(0, 10)
-            if (tsDate >= today && ts.status === "PLANNED" && !ts.absenceType) {
-                firstPlannedFromToday = ts.id
-                break
-            }
-        }
-
-        for (const ts of timesheets) {
-            // Skip manually toggled cards
-            if (manualToggles.has(ts.id)) continue
-
-            const isPlanned = ts.status === "PLANNED" && !ts.absenceType
-            if (isPlanned) {
-                autoExpanded.add(ts.id)
-            }
-            // The first planned shift from today is always expanded
-            if (ts.id === firstPlannedFromToday) {
-                autoExpanded.add(ts.id)
-            }
-        }
+        // Find today's shift (any status, no absence)
+        const todayShift = timesheets.find(ts =>
+            ts.date.slice(0, 10) === today && !ts.absenceType
+        )
 
         setExpandedCards(prev => {
-            // Merge: keep manual toggles, apply auto for the rest
             const next = new Set<string>()
             for (const ts of timesheets) {
                 if (manualToggles.has(ts.id)) {
                     // Keep whatever the user set
                     if (prev.has(ts.id)) next.add(ts.id)
-                } else {
-                    if (autoExpanded.has(ts.id)) next.add(ts.id)
+                } else if (todayShift && ts.id === todayShift.id) {
+                    next.add(ts.id)
                 }
             }
             return next
@@ -518,6 +496,7 @@ export default function DashboardPage() {
                             ) : viewMode === "calendar" ? (
                                 <TimesheetCalendar
                                     timesheets={timesheets}
+                                    backupShifts={potentialBackupShifts}
                                     currentDate={currentDate}
                                     onDayClick={handleCalendarDayClick}
                                 />
