@@ -37,14 +37,16 @@ interface SidebarProps {
 }
 
 // Mapping: Sidebar-Href → API-URL die vorgeladen werden soll
-const sidebarPrefetchMap: Record<string, string> = {
-    "/admin/schedule": "/api/admin/schedule",
-    "/admin/timesheets": "/api/admin/timesheets",
-    "/admin/employee-timesheets": "/api/admin/submissions",
-    "/admin/assistants": "/api/admin/employees",
-    "/admin/clients": "/api/clients",
-    "/admin/vacations": "/api/admin/vacations/absences",
-    "/admin/payroll": "/api/admin/payroll",
+// URLs mit {noMonthYear: true} werden direkt ohne month/year Parameter geladen
+const sidebarPrefetchMap: Record<string, { url: string; noMonthYear?: boolean }> = {
+    "/admin/dashboard": { url: "/api/admin/dashboard", noMonthYear: true },
+    "/admin/schedule": { url: "/api/admin/schedule" },
+    "/admin/timesheets": { url: "/api/admin/timesheets" },
+    "/admin/employee-timesheets": { url: "/api/admin/submissions" },
+    "/admin/assistants": { url: "/api/admin/employees" },
+    "/admin/clients": { url: "/api/clients" },
+    "/admin/vacations": { url: "/api/admin/vacations/absences" },
+    "/admin/payroll": { url: "/api/admin/payroll" },
 }
 
 export function Sidebar({ onExportClick, mobileSidebarOpen, onMobileSidebarClose }: SidebarProps) {
@@ -56,25 +58,30 @@ export function Sidebar({ onExportClick, mobileSidebarOpen, onMobileSidebarClose
     // Hover-Prefetch: Liest Monat/Jahr aus localStorage (wird von allen Admin-Seiten geschrieben)
     // SWR dedupliciert automatisch über dedupingInterval (5 Min), daher kein manuelles Tracking nötig
     const prefetchPageData = useCallback((href: string) => {
-        const apiUrl = sidebarPrefetchMap[href]
-        if (!apiUrl) return
+        const entry = sidebarPrefetchMap[href]
+        if (!entry) return
 
-        // Monat/Jahr aus localStorage lesen (aktuellster Wert vom User)
-        let month = new Date().getMonth() + 1
-        let year = new Date().getFullYear()
-        try {
-            const saved = localStorage.getItem('admin-selected-month')
-            if (saved) {
-                const parsed = JSON.parse(saved)
-                if (parsed.month >= 1 && parsed.month <= 12) {
-                    month = parsed.month
-                    year = parsed.year
+        let fullUrl: string
+        if (entry.noMonthYear) {
+            fullUrl = entry.url
+        } else {
+            // Monat/Jahr aus localStorage lesen (aktuellster Wert vom User)
+            let month = new Date().getMonth() + 1
+            let year = new Date().getFullYear()
+            try {
+                const saved = localStorage.getItem('admin-selected-month')
+                if (saved) {
+                    const parsed = JSON.parse(saved)
+                    if (parsed.month >= 1 && parsed.month <= 12) {
+                        month = parsed.month
+                        year = parsed.year
+                    }
                 }
-            }
-        } catch { /* ignore */ }
+            } catch { /* ignore */ }
 
-        const separator = apiUrl.includes("?") ? "&" : "?"
-        const fullUrl = `${apiUrl}${separator}month=${month}&year=${year}`
+            const separator = entry.url.includes("?") ? "&" : "?"
+            fullUrl = `${entry.url}${separator}month=${month}&year=${year}`
+        }
 
         mutate(fullUrl, fetch(fullUrl).then(res => res.ok ? res.json() : undefined), { revalidate: false })
     }, [mutate])
