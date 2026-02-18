@@ -314,7 +314,7 @@ export default function AIAssistantPage() {
                             <select
                                 value={selectedClientId}
                                 onChange={(e) => { setSelectedClientId(e.target.value); setSelectedEmployeeId("") }}
-                                className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm appearance-none"
+                                className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm appearance-none [color-scheme:dark]"
                             >
                                 <option value="">Kein Klient ausgewählt — KI erkennt automatisch</option>
                                 {clients.map(c => (
@@ -342,7 +342,7 @@ export default function AIAssistantPage() {
                                         <select
                                             value={selectedEmployeeId}
                                             onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                                            className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm appearance-none"
+                                            className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm appearance-none [color-scheme:dark]"
                                         >
                                             <option value="">Alle Mitarbeiter des Klienten</option>
                                             {clientEmployees.map(e => (
@@ -680,7 +680,7 @@ function ShiftRow({
                                     onUpdate({ employeeId: null, matchIssue: "Kein Mitarbeiter zugeordnet" })
                                 }
                             }}
-                            className={`w-full pl-2 pr-7 py-1 bg-neutral-800 border rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 appearance-none ${
+                            className={`w-full pl-2 pr-7 py-1 bg-neutral-800 border rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 appearance-none [color-scheme:dark] ${
                                 isMatched ? "border-neutral-700" : "border-red-500/50"
                             }`}
                         >
