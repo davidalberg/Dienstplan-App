@@ -11,10 +11,10 @@ const prismaClientSingleton = () => {
     let optimizedUrl = databaseUrl || ''
     if (optimizedUrl && !optimizedUrl.includes('pgbouncer=true')) {
         const separator = optimizedUrl.includes('?') ? '&' : '?'
-        optimizedUrl += `${separator}pgbouncer=true&connection_limit=5&pool_timeout=10`
+        optimizedUrl += `${separator}pgbouncer=true&connection_limit=1&pool_timeout=10`
     }
-    // Connection limit: 5 für Serverless mit 40-200 Nutzern (pgbouncer verwaltet den Pool)
-    optimizedUrl = optimizedUrl.replace(/connection_limit=\d+/, 'connection_limit=5')
+    // Connection limit: 1 für Vercel Serverless (jede Function braucht nur 1 Connection, pgbouncer verwaltet den Pool)
+    optimizedUrl = optimizedUrl.replace(/connection_limit=\d+/, 'connection_limit=1')
 
     return new PrismaClient({
         datasources: {
