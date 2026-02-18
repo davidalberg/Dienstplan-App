@@ -288,7 +288,7 @@ export default function AIAssistantPage() {
     }
 
     return (
-        <div className="p-6 max-w-6xl mx-auto">
+        <div className="admin-dark p-6 max-w-6xl mx-auto">
             {/* Header */}
             <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 rounded-lg bg-violet-600/20">
@@ -316,9 +316,9 @@ export default function AIAssistantPage() {
                                 onChange={(e) => { setSelectedClientId(e.target.value); setSelectedEmployeeId("") }}
                                 className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm appearance-none [color-scheme:dark]"
                             >
-                                <option value="">Kein Klient ausgewählt — KI erkennt automatisch</option>
+                                <option value="" className="bg-neutral-800 text-white">Kein Klient ausgewählt — KI erkennt automatisch</option>
                                 {clients.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                    <option key={c.id} value={c.id} className="bg-neutral-800 text-white">{c.name}</option>
                                 ))}
                             </select>
                             <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
@@ -344,9 +344,9 @@ export default function AIAssistantPage() {
                                             onChange={(e) => setSelectedEmployeeId(e.target.value)}
                                             className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm appearance-none [color-scheme:dark]"
                                         >
-                                            <option value="">Alle Mitarbeiter des Klienten</option>
+                                            <option value="" className="bg-neutral-800 text-white">Alle Mitarbeiter des Klienten</option>
                                             {clientEmployees.map(e => (
-                                                <option key={e.id} value={e.id}>{e.name}</option>
+                                                <option key={e.id} value={e.id} className="bg-neutral-800 text-white">{e.name}</option>
                                             ))}
                                         </select>
                                         <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
@@ -684,9 +684,9 @@ function ShiftRow({
                                 isMatched ? "border-neutral-700" : "border-red-500/50"
                             }`}
                         >
-                            <option value="">Mitarbeiter zuordnen...</option>
+                            <option value="" className="bg-neutral-800 text-white">Mitarbeiter zuordnen...</option>
                             {clientEmployees.map(e => (
-                                <option key={e.id} value={e.id}>{e.name}</option>
+                                <option key={e.id} value={e.id} className="bg-neutral-800 text-white">{e.name}</option>
                             ))}
                         </select>
                         <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
