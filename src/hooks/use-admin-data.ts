@@ -1,4 +1,5 @@
-import useSWR from 'swr'
+import useSWR, { preload } from 'swr'
+import { useEffect, useRef, useCallback } from 'react'
 
 // SWR fetcher function
 const fetcher = (url: string) => fetch(url).then(res => {
@@ -10,6 +11,38 @@ const fetcher = (url: string) => fetch(url).then(res => {
     if (!res.ok) throw new Error('Failed to fetch')
     return res.json()
 })
+
+// Helper: Berechne Vormonat und Nachmonat
+function getAdjacentMonths(month: number, year: number) {
+    const prev = month === 1 ? { month: 12, year: year - 1 } : { month: month - 1, year }
+    const next = month === 12 ? { month: 1, year: year + 1 } : { month: month + 1, year }
+    return [prev, next]
+}
+
+// Prefetch benachbarter Monate für sofortige Navigation
+// buildUrl nimmt (month, year) und gibt die exakte SWR-Cache-Key-URL zurück
+function usePrefetchAdjacentMonths(month: number, year: number, isLoading: boolean, buildUrl: (m: number, y: number) => string) {
+    const prefetchedRef = useRef<string>("")
+
+    useEffect(() => {
+        // Erst prefetchen wenn aktueller Monat fertig geladen ist
+        if (isLoading) return
+
+        const cacheKey = `${month}-${year}`
+        if (prefetchedRef.current === cacheKey) return
+        prefetchedRef.current = cacheKey
+
+        const adjacent = getAdjacentMonths(month, year)
+        // Kurze Verzögerung damit der aktuelle Render nicht blockiert wird
+        const timer = setTimeout(() => {
+            for (const { month: m, year: y } of adjacent) {
+                preload(buildUrl(m, y), fetcher)
+            }
+        }, 200)
+
+        return () => clearTimeout(timer)
+    }, [month, year, isLoading, buildUrl])
+}
 
 // SWR configuration for admin pages - Optimized for INSTANT navigation
 // WICHTIG: Keine automatischen Retries! Bei Supabase Session Mode Connection Pool Overflow
@@ -38,6 +71,13 @@ export function useAdminTimesheets(month: number, year: number, employeeId?: str
         swrConfig
     )
 
+    // Prefetch Vor- und Nachmonat
+    const buildTimesheetsUrl = useCallback((m: number, y: number) => {
+        const p = new URLSearchParams({ month: String(m), year: String(y), ...(employeeId && { employeeId }), ...(teamId && { teamId }) })
+        return `/api/admin/timesheets?${p}`
+    }, [employeeId, teamId])
+    usePrefetchAdjacentMonths(month, year, isLoading, buildTimesheetsUrl)
+
     return {
         timesheets: data?.timesheets || [],
         teams: data?.teams || [],
@@ -61,6 +101,13 @@ export function useAdminSchedule(month: number, year: number, teamId?: string) {
         fetcher,
         swrConfig
     )
+
+    // Prefetch Vor- und Nachmonat für sofortige Navigation
+    const buildScheduleUrl = useCallback((m: number, y: number) => {
+        const p = new URLSearchParams({ month: String(m), year: String(y), ...(teamId && { teamId }) })
+        return `/api/admin/schedule?${p}`
+    }, [teamId])
+    usePrefetchAdjacentMonths(month, year, isLoading, buildScheduleUrl)
 
     return {
         shifts: data?.shifts || [],
@@ -132,6 +179,17 @@ export function useAdminSubmissions(month?: number, year?: number) {
         swrConfig
     )
 
+    // Prefetch Vor- und Nachmonat
+    const effMonth = month || new Date().getMonth() + 1
+    const effYear = year || new Date().getFullYear()
+    const buildSubmissionsUrl = useCallback((m: number, y: number) => {
+        const p = new URLSearchParams()
+        p.set('month', String(m))
+        p.set('year', String(y))
+        return `/api/admin/submissions?${p}`
+    }, [])
+    usePrefetchAdjacentMonths(effMonth, effYear, isLoading, buildSubmissionsUrl)
+
     return {
         submissions: data?.submissions || [],
         pendingDienstplaene: data?.pendingDienstplaene || [],
@@ -180,6 +238,11 @@ export function useAdminPayroll(month: number, year: number) {
         swrConfig
     )
 
+    // Prefetch Vor- und Nachmonat
+    const buildPayrollUrl = useCallback((m: number, y: number) =>
+        `/api/admin/payroll?month=${m}&year=${y}`, [])
+    usePrefetchAdjacentMonths(month, year, isLoading, buildPayrollUrl)
+
     return {
         payroll: data?.payroll || [],
         totals: data?.totals || {},
@@ -215,6 +278,11 @@ export function useAdminVacations(month: number, year: number) {
         fetcher,
         swrConfig
     )
+
+    // Prefetch Vor- und Nachmonat
+    const buildVacationsUrl = useCallback((m: number, y: number) =>
+        `/api/admin/vacations/absences?month=${m}&year=${y}`, [])
+    usePrefetchAdjacentMonths(month, year, isLoading, buildVacationsUrl)
 
     return {
         absences: data?.absences || [],
