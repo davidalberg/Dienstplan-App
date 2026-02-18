@@ -495,20 +495,27 @@ function AssistantsContent() {
         }
     }
 
-    const handleDeleteEmployee = async (employee: Employee) => {
-        if (!confirm(`Assistent "${employee.name}" wirklich löschen?`)) return
+    const handleDeleteEmployee = async (employee: Employee, force = false) => {
+        if (!force && !confirm(`Assistent "${employee.name}" wirklich löschen?`)) return
 
         try {
-            const res = await fetch(`/api/admin/employees?id=${employee.id}`, {
-                method: "DELETE"
-            })
+            const url = force
+                ? `/api/admin/employees?id=${employee.id}&force=true`
+                : `/api/admin/employees?id=${employee.id}`
+            const res = await fetch(url, { method: "DELETE" })
 
             if (res.ok) {
                 showToast("success", "Assistent gelöscht")
                 mutateEmployees()
             } else {
                 const err = await res.json()
-                showToast("error", err.error)
+                if (err.needsConfirmation) {
+                    if (confirm(`${err.error}`)) {
+                        await handleDeleteEmployee(employee, true)
+                    }
+                } else {
+                    showToast("error", err.error)
+                }
             }
         } catch {
             showToast("error", "Fehler beim Löschen")
