@@ -42,6 +42,7 @@ export default function AIAssistantPage() {
     const [employees, setEmployees] = useState<EmployeeOption[]>([])
     const [clients, setClients] = useState<ClientOption[]>([])
     const [selectedClientId, setSelectedClientId] = useState<string>("")
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("")
     const [dragOver, setDragOver] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const fileContentRef = useRef<{ type: string; content: string; mimeType?: string } | null>(null)
@@ -184,7 +185,14 @@ export default function AIAssistantPage() {
 
             const data: AIAssistantResponse = await res.json()
 
-            setShifts(data.shifts.map((s, i) => ({ ...s, selected: true, index: i })))
+            const selectedEmp = selectedEmployeeId ? employees.find(e => e.id === selectedEmployeeId) : null
+            setShifts(data.shifts.map((s, i) => ({
+                ...s,
+                selected: true,
+                index: i,
+                // Override employee if one was pre-selected
+                ...(selectedEmp ? { employeeId: selectedEmp.id, employeeName: selectedEmp.name, confidence: "high" as const } : {}),
+            })))
             setSummary(data.summary)
             setWarnings(data.warnings)
             setPageState("preview")
@@ -305,7 +313,7 @@ export default function AIAssistantPage() {
                         <div className="relative">
                             <select
                                 value={selectedClientId}
-                                onChange={(e) => setSelectedClientId(e.target.value)}
+                                onChange={(e) => { setSelectedClientId(e.target.value); setSelectedEmployeeId("") }}
                                 className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm appearance-none"
                             >
                                 <option value="">Kein Klient ausgewählt — KI erkennt automatisch</option>
@@ -320,6 +328,37 @@ export default function AIAssistantPage() {
                                 Schichten werden für diesen Klienten erstellt. Mitarbeiter-Vorschläge werden priorisiert.
                             </p>
                         )}
+
+                        {/* Employee Selection - filtered by client */}
+                        {selectedClientId && (() => {
+                            const clientEmployees = employees.filter(e => e.clientIds.includes(selectedClientId))
+                            if (clientEmployees.length === 0) return null
+                            return (
+                                <div className="mt-3">
+                                    <label className="block text-sm font-medium text-neutral-300 mb-2">
+                                        Mitarbeiter (optional)
+                                    </label>
+                                    <div className="relative">
+                                        <select
+                                            value={selectedEmployeeId}
+                                            onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                                            className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm appearance-none"
+                                        >
+                                            <option value="">Alle Mitarbeiter des Klienten</option>
+                                            {clientEmployees.map(e => (
+                                                <option key={e.id} value={e.id}>{e.name}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+                                    </div>
+                                    {selectedEmployeeId && (
+                                        <p className="mt-1.5 text-xs text-violet-400">
+                                            Alle erkannten Schichten werden diesem Mitarbeiter zugewiesen.
+                                        </p>
+                                    )}
+                                </div>
+                            )
+                        })()}
                     </div>
 
                     {/* Text Input */}
