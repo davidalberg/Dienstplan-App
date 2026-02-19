@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { logActivity } from "@/lib/activity-logger"
+import { cached, invalidateCacheByPrefix } from "@/lib/cache"
 
 // Helper function to safely parse float values
 function safeParseFloat(value: any, defaultValue: number, fieldName: string): number {
@@ -41,72 +42,72 @@ export async function GET(req: NextRequest) {
     try {
         const where = { role: "EMPLOYEE" }
 
-        const employees = await prisma.user.findMany({
-            where,
-            ...(limit !== undefined && { take: limit }),
-            ...(offset !== undefined && { skip: offset }),
-            select: {
-                id: true,
-                email: true,
-                name: true,
-                employeeId: true,
-                entryDate: true,
-                exitDate: true,
-                hourlyWage: true,
-                travelCostType: true,
-                nightPremiumEnabled: true,
-                nightPremiumPercent: true,
-                sundayPremiumEnabled: true,
-                sundayPremiumPercent: true,
-                holidayPremiumEnabled: true,
-                holidayPremiumPercent: true,
-                assignedSheetId: true,
-                assignedPlanTab: true,
-                teamId: true,
-                team: {
-                    select: { name: true }
-                },
-                clients: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true
-                    }
-                },
-                _count: {
-                    select: { timesheets: true }
-                },
-                // ✅ PERFORMANCE FIX: Only fetch absence timesheets (much smaller subset)
-                timesheets: {
-                    select: {
-                        absenceType: true
+        const fetchEmployees = async () => {
+            const employees = await prisma.user.findMany({
+                where,
+                ...(limit !== undefined && { take: limit }),
+                ...(offset !== undefined && { skip: offset }),
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    employeeId: true,
+                    entryDate: true,
+                    exitDate: true,
+                    hourlyWage: true,
+                    travelCostType: true,
+                    nightPremiumEnabled: true,
+                    nightPremiumPercent: true,
+                    sundayPremiumEnabled: true,
+                    sundayPremiumPercent: true,
+                    holidayPremiumEnabled: true,
+                    holidayPremiumPercent: true,
+                    assignedSheetId: true,
+                    assignedPlanTab: true,
+                    teamId: true,
+                    team: {
+                        select: { name: true }
                     },
-                    where: {
-                        absenceType: { not: null }  // Only fetch SICK/VACATION (10-20% of data)
+                    clients: {
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true
+                        }
+                    },
+                    _count: {
+                        select: { timesheets: true }
+                    },
+                    timesheets: {
+                        select: {
+                            absenceType: true
+                        },
+                        where: {
+                            absenceType: { not: null }
+                        }
                     }
+                },
+                orderBy: { name: "asc" }
+            })
+
+            return employees.map(emp => {
+                const vacationDays = emp.timesheets.filter(ts => ts.absenceType === "VACATION").length
+                const sickDays = emp.timesheets.filter(ts => ts.absenceType === "SICK").length
+                const { timesheets, ...employeeData } = emp
+                return {
+                    ...employeeData,
+                    vacationDays,
+                    sickDays,
+                    clients: emp.clients || []
                 }
-            },
-            orderBy: { name: "asc" }
-        })
+            })
+        }
 
-        // Calculate vacation and sick days for each employee
-        const employeesWithAbsenceCounts = employees.map(emp => {
-            const vacationDays = emp.timesheets.filter(ts => ts.absenceType === "VACATION").length
-            const sickDays = emp.timesheets.filter(ts => ts.absenceType === "SICK").length
+        // Cache nur für den Standard-Aufruf ohne Pagination (häufigster Fall)
+        const employeesWithAbsenceCounts = usePagination
+            ? await fetchEmployees()
+            : await cached("employees:list", fetchEmployees, 2 * 60 * 1000) // 2 Min TTL
 
-            // Remove timesheets from response (we only needed them for counting)
-            // Keep clients for the Assistenten page
-            const { timesheets, ...employeeData } = emp
-
-            return {
-                ...employeeData,
-                vacationDays,
-                sickDays,
-                clients: emp.clients || []
-            }
-        })
-
-        // ✅ PERFORMANCE: Pagination-Metadaten nur wenn aktiviert
         if (usePagination) {
             const total = await prisma.user.count({ where })
             return NextResponse.json({
@@ -191,6 +192,9 @@ export async function POST(req: NextRequest) {
                 })
                 teamClientId = teamWithClient?.clientId || null
             }
+
+            // Cache invalidieren
+            invalidateCacheByPrefix("employees:")
 
             const employee = await prisma.user.create({
                 data: {
@@ -383,6 +387,9 @@ export async function PUT(req: NextRequest) {
             data: updateData
         })
 
+        // Cache invalidieren
+        invalidateCacheByPrefix("employees:")
+
         // Log activity
         await logActivity({
             type: "INFO",
@@ -474,6 +481,9 @@ export async function DELETE(req: NextRequest) {
                 where: { id }
             })
         })
+
+        // Cache invalidieren
+        invalidateCacheByPrefix("employees:")
 
         // Log activity
         await logActivity({

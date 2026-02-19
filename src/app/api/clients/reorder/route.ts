@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
+import { invalidateCacheByPrefix } from "@/lib/cache"
 
 // PUT - Klienten-Reihenfolge aktualisieren
 export async function PUT(req: NextRequest) {
@@ -27,6 +28,9 @@ export async function PUT(req: NextRequest) {
                 })
             )
         )
+
+        // Cache invalidieren (Reihenfolge geändert)
+        invalidateCacheByPrefix("clients:")
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

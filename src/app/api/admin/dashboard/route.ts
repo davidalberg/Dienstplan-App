@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { ALL_TIMESHEET_STATUSES } from "@/lib/constants"
+import { cached, invalidateCache } from "@/lib/cache"
 
 export const maxDuration = 25
 
@@ -12,6 +13,10 @@ export async function GET(req: NextRequest) {
     try {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
+        const dateKey = today.toISOString().split("T")[0]
+
+        const dashboardData = await cached(`dashboard:${dateKey}`, async () => {
+
         const tomorrow = new Date(today)
         tomorrow.setDate(tomorrow.getDate() + 1)
         const dayAfterTomorrow = new Date(tomorrow)
@@ -26,30 +31,22 @@ export async function GET(req: NextRequest) {
         const sevenDaysFromNow = new Date(today)
         sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
 
-        // === OPTIMIERT: 10 Queries statt 18 ===
         const [
-            // 1. Schichten heute + morgen in einer Query (date range statt 2 separate)
             todayTomorrowShifts,
-            // 2. Pending submissions count
             pendingSubmissions,
-            // 3. Unsigned employees count
             unsignedEmployees,
-            // 4. Monatsstatistiken per groupBy (1 Query statt 4 separate counts)
             monthStats,
-            // 5. Total employees
             totalEmployees,
-            // 6. Recent activities
             recentActivities,
-            // 7. Sick days per employee (groupBy statt findMany + manueller Aggregation)
             sickByEmployeeRaw,
-            // 8. Upcoming vacations
             upcomingVacations,
-            // 9. All employees (für "ohne Schichten" Post-Filter)
             allEmployees,
-            // 10. Woche + Submissions + Clients in einer Batch
             weekShifts,
             monthSubmissions,
-            activeClients
+            activeClients,
+            // Ehemals sequentielle Queries — jetzt parallel
+            employeeIdsWithMonthShifts,
+            pendingVacations
         ] = await Promise.all([
             // 1. Heute + Morgen kombiniert
             prisma.timesheet.findMany({
@@ -105,7 +102,7 @@ export async function GET(req: NextRequest) {
                     createdAt: true
                 }
             }),
-            // 7. Sick groupBy (statt findMany + manuelle Map)
+            // 7. Sick groupBy
             prisma.timesheet.groupBy({
                 by: ["employeeId"],
                 where: {
@@ -126,7 +123,7 @@ export async function GET(req: NextRequest) {
                 },
                 orderBy: { startDate: "asc" }
             }),
-            // 9. All employees (leichtgewichtig, für Post-Filter)
+            // 9. All employees
             prisma.user.findMany({
                 where: { role: "EMPLOYEE" },
                 select: { id: true, name: true }
@@ -140,7 +137,7 @@ export async function GET(req: NextRequest) {
                 },
                 select: { date: true }
             }),
-            // 11. Month submissions (ohne nested signatures — nur count)
+            // 11. Month submissions
             prisma.teamSubmission.findMany({
                 where: { month: currentMonth, year: currentYear },
                 select: {
@@ -162,6 +159,16 @@ export async function GET(req: NextRequest) {
                     lastName: true,
                     _count: { select: { employees: true } }
                 }
+            }),
+            // 13. Distinct employee IDs mit Schichten (ehemals sequentiell)
+            prisma.timesheet.findMany({
+                where: { month: currentMonth, year: currentYear },
+                select: { employeeId: true },
+                distinct: ["employeeId"]
+            }),
+            // 14. Pending vacation requests count (ehemals sequentiell)
+            prisma.vacationRequest.count({
+                where: { status: "PENDING" }
             })
         ])
 
@@ -196,28 +203,7 @@ export async function GET(req: NextRequest) {
             .map(s => ({ employeeName: employeeMap.get(s.employeeId) || "Unbekannt", days: s._count.id }))
             .sort((a, b) => b.days - a.days)
 
-        // Employees without shifts (Post-Filter statt NOT EXISTS subquery)
-        const employeeIdsWithShifts = new Set(
-            todayTomorrowShifts.map(s => s.employeeId)
-        )
-        // Wir brauchen alle, die diesen Monat KEINE Schicht haben
-        // Nutze die monthStats nicht direkt — lade employeeIds aus weekShifts + todayTomorrow
-        // Besser: Separate leichte Query für employeeIds mit Schichten in diesem Monat
-        // Aber um eine weitere Query zu vermeiden, nutzen wir die Tatsache, dass
-        // allEmployees klein ist (~20) und wir einfach prüfen können
-        const employeesWithTimesheets = new Set<string>()
-        // Aus den todayTomorrow-Schichten + Sick groupBy die IDs sammeln
-        for (const s of todayTomorrowShifts) employeesWithTimesheets.add(s.employeeId)
-        for (const s of sickByEmployeeRaw) employeesWithTimesheets.add(s.employeeId)
-        // Noch die Wochenschichten haben keine employeeId im select...
-        // Da wir keine vollständige Liste haben, machen wir doch eine leichte separate Query
-        // Aber: bei ~20 Mitarbeitern ist ein simpler count pro Employee schneller
-        // Alternative: Wir behalten die NOT EXISTS query aber als separate Query nach dem Promise.all
-        const employeeIdsWithMonthShifts = await prisma.timesheet.findMany({
-            where: { month: currentMonth, year: currentYear },
-            select: { employeeId: true },
-            distinct: ["employeeId"]
-        })
+        // Employees without shifts — employeeIdsWithMonthShifts kommt aus dem Promise.all
         const monthShiftEmployeeIds = new Set(employeeIdsWithMonthShifts.map(t => t.employeeId))
         const employeesWithoutShifts = allEmployees.filter(e => !monthShiftEmployeeIds.has(e.id))
 
@@ -278,12 +264,7 @@ export async function GET(req: NextRequest) {
             status: s.status
         })
 
-        // Pending vacations count aus upcomingVacations + separate Zählung
-        const pendingVacations = await prisma.vacationRequest.count({
-            where: { status: "PENDING" }
-        })
-
-        return NextResponse.json({
+        return {
             todayShifts: todayShifts.map(mapShift),
             tomorrowShifts: tomorrowShifts.map(mapShift),
             tomorrowDate: tomorrow.toISOString(),
@@ -315,7 +296,11 @@ export async function GET(req: NextRequest) {
             employeesWithoutShifts,
             pendingSignaturesList,
             weekPreview
-        })
+        }
+
+        }, 30 * 1000) // 30 Sekunden TTL
+
+        return NextResponse.json(dashboardData)
     } catch (error: unknown) {
         console.error("[GET /api/admin/dashboard] Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })

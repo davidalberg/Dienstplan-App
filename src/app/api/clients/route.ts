@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { logActivity } from "@/lib/activity-logger"
+import { cached, invalidateCacheByPrefix } from "@/lib/cache"
 import { z } from "zod"
 
 const createClientSchema = z.object({
@@ -27,7 +28,8 @@ export async function GET(req: NextRequest) {
             whereClause.isActive = isActive === "true"
         }
 
-        const clients = await prisma.client.findMany({
+        const cacheKey = `clients:${isActive ?? "all"}`
+        const clients = await cached(cacheKey, () => prisma.client.findMany({
             where: whereClause,
             include: {
                 employees: {
@@ -43,7 +45,7 @@ export async function GET(req: NextRequest) {
                 { lastName: "asc" },
                 { firstName: "asc" }
             ]
-        })
+        }), 5 * 60 * 1000) // 5 Minuten TTL
 
         return NextResponse.json({ clients })
     } catch (error: any) {
@@ -71,6 +73,9 @@ export async function POST(req: NextRequest) {
         }
 
         const { firstName, lastName, email, phone, state } = result.data
+
+        // Cache invalidieren
+        invalidateCacheByPrefix("clients:")
 
         // Klient erstellen
         const client = await prisma.client.create({

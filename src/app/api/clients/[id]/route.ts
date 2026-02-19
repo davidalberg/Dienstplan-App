@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 import { logActivity } from "@/lib/activity-logger"
+import { invalidateCacheByPrefix } from "@/lib/cache"
 
 // GET - Einzelnen Klienten abrufen
 export async function GET(
@@ -156,6 +157,9 @@ export async function PUT(
             }
         })
 
+        // Cache invalidieren
+        invalidateCacheByPrefix("clients:")
+
         // Log activity
         await logActivity({
             type: "INFO",
@@ -251,6 +255,9 @@ export async function DELETE(
                 entityType: "Client"
             })
         }
+
+        // Cache invalidieren
+        invalidateCacheByPrefix("clients:")
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

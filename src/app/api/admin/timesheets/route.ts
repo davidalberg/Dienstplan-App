@@ -25,12 +25,28 @@ export async function GET(req: NextRequest) {
         const [timesheets, teams, employees] = await Promise.all([
             prisma.timesheet.findMany({
                 where,
-                include: {
+                select: {
+                    id: true,
+                    date: true,
+                    plannedStart: true,
+                    plannedEnd: true,
+                    actualStart: true,
+                    actualEnd: true,
+                    status: true,
+                    absenceType: true,
+                    month: true,
+                    year: true,
+                    note: true,
+                    employeeId: true,
+                    teamId: true,
+                    breakMinutes: true,
+                    backupEmployeeId: true,
                     employee: {
-                        select: { name: true, email: true }
+                        select: { id: true, name: true, email: true }
                     },
                     team: {
                         select: {
+                            id: true,
                             name: true,
                             client: {
                                 select: { id: true, firstName: true, lastName: true }
