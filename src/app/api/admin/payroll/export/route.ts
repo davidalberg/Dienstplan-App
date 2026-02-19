@@ -21,6 +21,8 @@ const QueryParamsSchema = z.object({
  *
  * Exports payroll data as Excel file with 16 columns.
  */
+
+export const maxDuration = 25
 export async function GET(req: NextRequest) {
     // Auth check: Require ADMIN role
     const result = await requireAdmin()

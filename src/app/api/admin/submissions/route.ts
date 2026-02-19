@@ -49,6 +49,8 @@ function extractTeamNameFromSheetFileName(sheetFileName: string): string | null 
  * - In-memory grouping by sheetFileName
  * - Reduces 100+ queries to 4-5 queries total
  */
+
+export const maxDuration = 25
 export async function GET(req: NextRequest) {
     const startTime = performance.now()
 

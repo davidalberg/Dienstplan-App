@@ -41,6 +41,8 @@ const QueryParamsSchema = z.object({
  * - clientId: string (required) - CUID of the client
  * - format: "pdf" | "xlsx" | "csv" (default: "pdf")
  */
+
+export const maxDuration = 25
 export async function GET(req: NextRequest) {
     // Auth check: Require ADMIN role
     const result = await requireAdmin()

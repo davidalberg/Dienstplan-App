@@ -69,6 +69,8 @@ const bulkCreateSchema = z.object({
 })
 
 // GET - Alle Schichten für einen Zeitraum
+
+export const maxDuration = 25
 export async function GET(req: NextRequest) {
     const startTime = performance.now()
 

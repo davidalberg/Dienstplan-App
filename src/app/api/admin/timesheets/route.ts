@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/api-auth"
 import prisma from "@/lib/prisma"
 
+
+export const maxDuration = 25
 export async function GET(req: NextRequest) {
     const result = await requireAdmin()
     if (result instanceof NextResponse) return result

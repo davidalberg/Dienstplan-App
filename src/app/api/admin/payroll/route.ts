@@ -21,6 +21,8 @@ const QueryParamsSchema = z.object({
  * Returns payroll data for all employees for a given month/year.
  * Includes hours, premiums, sick/vacation periods, and backup days.
  */
+
+export const maxDuration = 25
 export async function GET(req: NextRequest) {
     // Auth check: Require ADMIN role
     const result = await requireAdmin()
